@@ -1,0 +1,389 @@
+---
+alwaysApply: true
+---
+1. Фундаментальные принципы разработки
+Строгая типизация TypeScript
+
+Все сущности, DTO, интерфейсы должны быть полностью типизированы во всех сервисах
+
+Использовать strict: true в tsconfig.json каждого сервиса
+
+Избегать any - вместо этого использовать unknown с валидацией
+
+Создать общие типы в shared-пакете для провайдеров, запросов, ответов и биллинга
+
+Микросервисная архитектура
+
+Каждый сервис независим и развертывается отдельно
+
+База данных на сервис (database per service)
+
+Асинхронная коммуникация через RabbitMQ для бизнес-процессов
+
+Синхронная коммуникация через gRPC для проверок и агрегации
+
+API Gateway как единая точка входа
+
+Общие библиотеки выносить в shared-пакет
+
+2. Технологический стек и рекомендации
+Backend Services
+
+NestJS - основной фреймворк для всех сервисов
+
+TypeScript - строгий режим (strict: true)
+
+Prisma - ORM для работы с БД (отдельная схема на сервис)
+
+RabbitMQ - асинхронная коммуникация между сервисами
+
+gRPC - для высоконагруженных синхронных вызовов
+
+JWT - аутентификация через auth-service
+
+Базы данных
+
+PostgreSQL - основная БД для сервисов
+
+Redis - для кэширования, сессий и rate limiting
+
+Каждая БД изолирована по сервисам
+
+Инфраструктура
+
+Docker + Docker Compose - контейнеризация всех сервисов
+
+Kubernetes - для оркестрации в production
+
+Prometheus + Grafana - мониторинг всех сервисов
+
+Jaeger - распределенная трассировка
+
+3. Архитектура микросервисов
+text
+services/
+├── api-gateway/                 # Единая точка входа (NestJS)
+├── auth-service/                # Аутентификация и пользователи (NestJS)
+├── provider-orchestrator/       # Управление провайдерами и маршрутизация (NestJS)
+├── proxy-service/               # Прокси к внешним ИИ-провайдерам (NestJS)
+├── billing-service/             # Биллинг, балансы, тарификация (NestJS)
+├── analytics-service/           # Метрики, логи, мониторинг (NestJS)
+└── shared/                      # Общие библиотеки и типы
+    ├── types/                   # Общие TypeScript типы
+    ├── contracts/               # gRPC контракты и DTO
+    └── utils/                   # Общие утилиты
+4. Последовательность разработки
+
+Настроить монорепозиторий с независимыми сервисами
+
+Создать shared-пакет с общими типами и утилитами
+
+Настроить Docker Compose для development среды
+
+Создать базовую конфигурацию для всех сервисов
+
+auth-service - аутентификация, пользователи, API keys
+
+provider-orchestrator - управление провайдерами, маршрутизация
+
+proxy-service - интеграция с внешними ИИ-провайдерами
+
+billing-service - биллинг, балансы, транзакции
+
+api-gateway - единая точка входа, агрегация запросов
+
+analytics-service - метрики, логирование, мониторинг
+
+5. Детальные инструкции по сервисам
+5.1. Auth Service
+typescript
+// Обязательно: отдельная БД для пользователей, gRPC для валидации
+@Injectable()
+export class AuthService {
+  async validateUser(email: string, password: string): Promise<User> {
+    // Логика аутентификации
+  }
+  
+  async generateApiKey(userId: string): Promise<ApiKey> {
+    // Генерация API ключей
+  }
+  
+  async validateApiKey(apiKey: string): Promise<ValidationResult> {
+    // gRPC endpoint для api-gateway
+  }
+}
+5.2. Provider Orchestrator
+typescript
+// Обязательно: коммуникация с proxy-service через RabbitMQ
+@Injectable()
+export class ProviderOrchestratorService {
+  async routeRequest(request: ProviderRequest): Promise<string> {
+    // Выбор оптимального провайдера
+    // Проверка доступности
+    // Маршрутизация запроса через RabbitMQ
+  }
+}
+5.3. Proxy Service
+typescript
+// Обязательно: retry логика, обработка ошибок, кэширование
+@Injectable()
+export class OpenAiProxyService {
+  async sendRequest(request: ProviderRequest): Promise<ProviderResponse> {
+    // Проксирование к внешним API
+    // Трансформация форматов
+    // Обработка квот и лимитов
+    // Отправка метрик в analytics-service через RabbitMQ
+  }
+}
+5.4. Billing Service
+typescript
+// Обязательно: транзакционность, аудит операций, идемпотентность
+@Injectable()
+export class BillingService {
+  async chargeForRequest(
+    userId: string, 
+    provider: string, 
+    usage: TokenUsage
+  ): Promise<void> {
+    // Расчет стоимости
+    // Списание баланса
+    // Запись транзакции
+    // Валидация через gRPC от provider-orchestrator
+  }
+}
+6. Коммуникация между сервисами
+Синхронная (HTTP/gRPC):
+
+typescript
+// API Gateway → Auth Service (валидация токена через gRPC)
+// Provider Orchestrator → Billing Service (проверка баланса через gRPC)
+Асинхронная (RabbitMQ):
+
+typescript
+// Proxy Service → Billing Service (списание средств)
+// Все сервисы → Analytics Service (логирование метрик)
+// Billing Service → Analytics Service (транзакции)
+// Provider Orchestrator → Proxy Service (маршрутизация запросов)
+7. Конфигурация и Environment
+Shared Configuration:
+
+typescript
+// shared/src/config/microservice.config.ts
+export interface MicroserviceConfig {
+  serviceName: string;
+  database: {
+    url: string;
+  };
+  rabbitmq: {
+    url: string;
+    queue: string;
+  };
+  grpc?: {
+    port: number;
+    protoPath: string;
+  };
+}
+Per-Service Environment:
+
+typescript
+// auth-service/src/config/config.service.ts
+export default () => ({
+  serviceName: 'auth-service',
+  database: {
+    url: process.env.AUTH_DATABASE_URL,
+  },
+  jwt: {
+    secret: process.env.JWT_SECRET,
+    expiresIn: '1h',
+  },
+  grpc: {
+    port: parseInt(process.env.GRPC_PORT || '50051'),
+  },
+});
+8. Базы данных (Database per Service)
+Auth Service Database:
+
+prisma
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  createdAt DateTime @default(now())
+  
+  apiKeys ApiKey[]
+}
+
+model ApiKey {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  userId    String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+}
+Billing Service Database:
+
+prisma
+model UserBalance {
+  id      String @id @default(uuid())
+  userId  String @unique
+  balance Float  @default(100.0)
+}
+
+model Transaction {
+  id        String   @id @default(uuid())
+  userId    String
+  type      TransactionType // DEBIT, CREDIT
+  amount    Float
+  provider  String?
+  createdAt DateTime @default(now())
+}
+Provider Orchestrator Database:
+
+prisma
+model Provider {
+  id      String   @id @default(uuid())
+  name    String   @unique
+  type    ProviderType // OPENAI, OPENROUTER, etc.
+  config  Json
+  isActive Boolean @default(true)
+}
+
+model RoutingRule {
+  id        String @id @default(uuid())
+  condition Json
+  providerId String
+  priority  Int
+}
+9. Docker конфигурация
+yaml
+version: '3.8'
+services:
+  api-gateway:
+    build: ./services/api-gateway
+    ports:
+      - "3000:3000"
+    environment:
+      - AUTH_SERVICE_GRPC_URL=auth-service:50051
+      
+  auth-service:
+    build: ./services/auth-service
+    environment:
+      - DATABASE_URL=postgresql://user:pass@auth-db:5432/auth
+      - GRPC_PORT=50051
+      
+  auth-db:
+    image: postgres:14
+    environment:
+      - POSTGRES_DB=auth
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=pass
+      
+  provider-orchestrator:
+    build: ./services/provider-orchestrator
+    environment:
+      - DATABASE_URL=postgresql://user:pass@orchestrator-db:5432/orchestrator
+      - RABBITMQ_URL=amqp://user:pass@rabbitmq:5672
+      
+  orchestrator-db:
+    image: postgres:14
+    environment:
+      - POSTGRES_DB=orchestrator
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=pass
+      
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+10. Инструкции для Cursor по выполнению запросов
+При создании сервиса:
+
+Сначала создай структуру сервиса в services/
+
+Настрой Dockerfile и конфигурацию
+
+Создай схему БД для этого сервиса
+
+Определи интерфейсы коммуникации с другими сервисами
+
+Реализуй бизнес-логику сервиса
+
+Пример запроса для создания сервиса:
+
+text
+Создай auth-service согласно микросервисной архитектуре.
+
+Требования:
+1. Структура: services/auth-service/ с NestJS
+2. База данных: PostgreSQL с изолированной схемой пользователей
+3. API: регистрация, логин, валидация JWT, управление API keys
+4. Коммуникация: gRPC для синхронных вызовов от api-gateway
+5. Конфигурация: отдельные env переменные для БД и JWT
+
+Следуй последовательности: структура → БД → API → интеграция.
+11. Эндпоинты API Gateway
+text
+# Аутентификация
+POST /v1/auth/register     → auth-service (gRPC)
+POST /v1/auth/login        → auth-service (gRPC)
+POST /v1/auth/api-keys     → auth-service (gRPC)
+
+# Прокси ИИ
+POST /v1/chat/completions  → provider-orchestrator (HTTP) → proxy-service (RabbitMQ)
+GET  /v1/models           → provider-orchestrator (HTTP)
+
+# Биллинг
+GET  /v1/billing/balance  → billing-service (gRPC)
+GET  /v1/billing/history  → billing-service (gRPC)
+12. Рекомендации по коду для микросервисов
+Нельзя:
+
+Прямые вызовы между сервисами (кроме через API/MQ)
+
+Общая БД между сервисами
+
+Жесткая связность между сервисами
+
+Игнорировать идемпотентность в обработчиках MQ
+
+Обязательно:
+
+Circuit breaker для межсервисных вызовов
+
+Retry логика для асинхронных операций
+
+Идемпотентность обработчиков сообщений
+
+Distributed tracing для отладки
+
+Health checks для каждого сервиса
+
+Graceful shutdown
+
+13. Приоритеты разработки
+Надежность - отказоустойчивость и обработка ошибок
+Производительность - кэширование, оптимизация запросов
+Масштабируемость - независимое масштабирование сервисов
+Безопасность - изоляция данных, валидация запросов
+Наблюдаемость - логи, метрики, трассировка
+
+14. MVP Особенности
+Для MVP сосредоточься на:
+
+api-gateway + auth-service + proxy-service как минимальный набор
+
+Проксирование к OpenRouter.ai и OpenAI
+
+Базовая аутентификация и тарификация
+
+Упрощенная коммуникация между сервисами
+
+Архитектурные упрощения для MVP:
+
+Минимальное количество сервисов
+
+Базовая RabbitMQ коммуникация
+
+Упрощенная gRPC для критичных проверок

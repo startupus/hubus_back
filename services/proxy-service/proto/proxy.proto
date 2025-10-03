@@ -1,0 +1,144 @@
+syntax = "proto3";
+
+package proxy;
+
+// Proxy Service Definition
+service ProxyService {
+  // Proxy request to external AI provider
+  rpc ProxyRequest(ProxyRequestRequest) returns (ProxyRequestResponse);
+  
+  // Get available models
+  rpc GetModels(GetModelsRequest) returns (GetModelsResponse);
+  
+  // Get model info
+  rpc GetModelInfo(GetModelInfoRequest) returns (GetModelInfoResponse);
+  
+  // Validate request
+  rpc ValidateRequest(ValidateRequestRequest) returns (ValidateRequestResponse);
+  
+  // Transform request
+  rpc TransformRequest(TransformRequestRequest) returns (TransformRequestResponse);
+  
+  // Transform response
+  rpc TransformResponse(TransformResponseRequest) returns (TransformResponseResponse);
+}
+
+// Request/Response Messages
+message ProxyRequestRequest {
+  string user_id = 1;
+  string provider = 2; // "openai", "openrouter"
+  string model = 3;
+  string request_type = 4; // "chat", "completion", "embedding"
+  string prompt = 5;
+  int32 max_tokens = 6;
+  double temperature = 7;
+  double top_p = 8;
+  int32 frequency_penalty = 9;
+  int32 presence_penalty = 10;
+  repeated string stop = 11;
+  map<string, string> parameters = 12;
+}
+
+message ProxyRequestResponse {
+  bool success = 1;
+  string message = 2;
+  string response_text = 3;
+  int32 input_tokens = 4;
+  int32 output_tokens = 5;
+  double cost = 6;
+  string currency = 7;
+  double response_time = 8;
+  string provider = 9;
+  string model = 10;
+  string finish_reason = 11;
+  map<string, string> metadata = 12;
+}
+
+message GetModelsRequest {
+  string provider = 1; // "openai", "openrouter", "all"
+  string category = 2; // "chat", "completion", "embedding", "all"
+}
+
+message GetModelsResponse {
+  bool success = 1;
+  string message = 2;
+  repeated ModelInfo models = 3;
+}
+
+message GetModelInfoRequest {
+  string provider = 1;
+  string model = 2;
+}
+
+message GetModelInfoResponse {
+  bool success = 1;
+  string message = 2;
+  ModelInfo model = 3;
+}
+
+message ValidateRequestRequest {
+  string user_id = 1;
+  string provider = 2;
+  string model = 3;
+  string request_type = 4;
+  string prompt = 5;
+  int32 max_tokens = 6;
+}
+
+message ValidateRequestResponse {
+  bool success = 1;
+  string message = 2;
+  bool is_valid = 3;
+  repeated string errors = 4;
+  repeated string warnings = 5;
+  int32 estimated_tokens = 6;
+  double estimated_cost = 7;
+}
+
+message TransformRequestRequest {
+  string provider = 1;
+  string model = 2;
+  string request_type = 3;
+  string original_request = 4; // JSON string
+}
+
+message TransformRequestResponse {
+  bool success = 1;
+  string message = 2;
+  string transformed_request = 3; // JSON string
+  map<string, string> headers = 4;
+  string endpoint = 5;
+}
+
+message TransformResponseRequest {
+  string provider = 1;
+  string model = 2;
+  string request_type = 3;
+  string original_response = 4; // JSON string
+}
+
+message TransformResponseResponse {
+  bool success = 1;
+  string message = 2;
+  string transformed_response = 3; // JSON string
+  int32 input_tokens = 4;
+  int32 output_tokens = 5;
+  double cost = 6;
+}
+
+// Data Types
+message ModelInfo {
+  string id = 1;
+  string name = 2;
+  string provider = 3;
+  string category = 4; // "chat", "completion", "embedding"
+  string description = 5;
+  int32 max_tokens = 6;
+  double cost_per_input_token = 7;
+  double cost_per_output_token = 8;
+  string currency = 9;
+  bool is_available = 10;
+  repeated string capabilities = 11;
+  string created_at = 12;
+  string updated_at = 13;
+}

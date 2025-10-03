@@ -1,0 +1,201 @@
+version: '3.8'
+
+services:
+  # Databases
+  auth-db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: auth_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - auth_db_data:/var/lib/postgresql/data
+    networks:
+      - ai-aggregator
+
+  billing-db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: billing_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5433:5432"
+    volumes:
+      - billing_db_data:/var/lib/postgresql/data
+    networks:
+      - ai-aggregator
+
+  orchestrator-db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: orchestrator_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5434:5432"
+    volumes:
+      - orchestrator_db_data:/var/lib/postgresql/data
+    networks:
+      - ai-aggregator
+
+  # Redis
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - ai-aggregator
+
+  # RabbitMQ
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - ai-aggregator
+
+  # Shared package
+  shared:
+    build:
+      context: ./services/shared
+      dockerfile: Dockerfile
+    image: ai-aggregator-shared:latest
+    command: ["tail", "-f", "/dev/null"]
+    environment:
+      - NODE_ENV=development
+    networks:
+      - ai-aggregator
+
+  # Services
+  api-gateway:
+    build:
+      context: .
+      dockerfile: ./services/api-gateway/Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - AUTH_DATABASE_URL=postgresql://postgres:password@auth-db:5432/auth_db?schema=public
+      - BILLING_DATABASE_URL=postgresql://postgres:password@billing-db:5432/billing_db?schema=public
+      - ORCHESTRATOR_DATABASE_URL=postgresql://postgres:password@orchestrator-db:5432/orchestrator_db?schema=public
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
+      - JWT_SECRET=your-super-secret-jwt-key-here
+      - OPENAI_API_KEY=your-openai-api-key
+      - OPENROUTER_API_KEY=your-openrouter-api-key
+    depends_on:
+      - auth-db
+      - billing-db
+      - orchestrator-db
+      - redis
+      - rabbitmq
+    networks:
+      - ai-aggregator
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: ./services/auth-service/Dockerfile
+    ports:
+      - "3001:3001"
+      - "50051:50051"
+    environment:
+      - NODE_ENV=development
+      - AUTH_DATABASE_URL=postgresql://postgres:password@auth-db:5432/auth_db?schema=public
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
+      - JWT_SECRET=your-super-secret-jwt-key-here
+    depends_on:
+      - auth-db
+      - redis
+      - rabbitmq
+    networks:
+      - ai-aggregator
+
+  provider-orchestrator:
+    build:
+      context: .
+      dockerfile: ./services/provider-orchestrator/Dockerfile
+    ports:
+      - "3002:3002"
+    environment:
+      - NODE_ENV=development
+    env_file:
+      - .env
+    depends_on:
+      - orchestrator-db
+      - redis
+      - rabbitmq
+    networks:
+      - ai-aggregator
+
+  proxy-service:
+    build:
+      context: .
+      dockerfile: ./services/proxy-service/Dockerfile
+    ports:
+      - "3003:3003"
+    environment:
+      - NODE_ENV=development
+    env_file:
+      - .env
+    depends_on:
+      - redis
+      - rabbitmq
+    networks:
+      - ai-aggregator
+
+  billing-service:
+    build:
+      context: .
+      dockerfile: ./services/billing-service/Dockerfile
+    ports:
+      - "3004:3004"
+    environment:
+      - NODE_ENV=development
+    env_file:
+      - .env
+    depends_on:
+      - billing-db
+      - redis
+      - rabbitmq
+    networks:
+      - ai-aggregator
+
+  analytics-service:
+    build:
+      context: .
+      dockerfile: ./services/analytics-service/Dockerfile
+    ports:
+      - "3005:3005"
+    environment:
+      - NODE_ENV=development
+    env_file:
+      - .env
+    depends_on:
+      - redis
+      - rabbitmq
+    networks:
+      - ai-aggregator
+
+volumes:
+  auth_db_data:
+  billing_db_data:
+  orchestrator_db_data:
+  redis_data:
+  rabbitmq_data:
+
+networks:
+  ai-aggregator:
+    driver: bridge

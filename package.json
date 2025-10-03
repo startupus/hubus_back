@@ -1,0 +1,30 @@
+{
+  "name": "ai-aggregator",
+  "version": "1.0.0",
+  "description": "AI Aggregator Microservices Monorepo",
+  "private": true,
+  "workspaces": [
+    "services/*"
+  ],
+  "scripts": {
+    "dev": "docker-compose up -d && npm run dev:services",
+    "dev:services": "concurrently \"npm run dev --workspace=services/api-gateway\" \"npm run dev --workspace=services/auth-service\" \"npm run dev --workspace=services/provider-orchestrator\" \"npm run dev --workspace=services/proxy-service\" \"npm run dev --workspace=services/billing-service\" \"npm run dev --workspace=services/analytics-service\"",
+    "build": "npm run build --workspaces",
+    "test": "npm run test --workspaces",
+    "lint": "npm run lint --workspaces",
+    "clean": "npm run clean --workspaces && docker-compose down -v"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "concurrently": "^8.2.2",
+    "typescript": "^5.3.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "dependencies": {
+    "@grpc/grpc-js": "^1.14.0",
+    "@grpc/proto-loader": "^0.8.0"
+  }
+}

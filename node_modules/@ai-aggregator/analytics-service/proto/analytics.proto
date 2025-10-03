@@ -1,0 +1,190 @@
+syntax = "proto3";
+
+package analytics;
+
+// Analytics Service Definition
+service AnalyticsService {
+  // Get metrics
+  rpc GetMetrics(GetMetricsRequest) returns (GetMetricsResponse);
+  
+  // Record event
+  rpc RecordEvent(RecordEventRequest) returns (RecordEventResponse);
+  
+  // Get usage statistics
+  rpc GetUsageStats(GetUsageStatsRequest) returns (GetUsageStatsResponse);
+  
+  // Get performance metrics
+  rpc GetPerformanceMetrics(GetPerformanceMetricsRequest) returns (GetPerformanceMetricsResponse);
+  
+  // Get error statistics
+  rpc GetErrorStats(GetErrorStatsRequest) returns (GetErrorStatsResponse);
+  
+  // Get provider statistics
+  rpc GetProviderStats(GetProviderStatsRequest) returns (GetProviderStatsResponse);
+}
+
+// Request/Response Messages
+message GetMetricsRequest {
+  string user_id = 1;
+  string metric_type = 2; // "usage", "performance", "errors", "cost"
+  string start_date = 3;
+  string end_date = 4;
+  int32 page = 5;
+  int32 limit = 6;
+}
+
+message GetMetricsResponse {
+  bool success = 1;
+  string message = 2;
+  repeated MetricData metrics = 3;
+  PaginationInfo pagination = 4;
+}
+
+message RecordEventRequest {
+  string user_id = 1;
+  string event_type = 2;
+  string event_name = 3;
+  map<string, string> properties = 4;
+  string timestamp = 5;
+}
+
+message RecordEventResponse {
+  bool success = 1;
+  string message = 2;
+  string event_id = 3;
+}
+
+message GetUsageStatsRequest {
+  string user_id = 1;
+  string start_date = 2;
+  string end_date = 3;
+  string provider = 4;
+}
+
+message GetUsageStatsResponse {
+  bool success = 1;
+  string message = 2;
+  UsageStats stats = 3;
+}
+
+message GetPerformanceMetricsRequest {
+  string service_name = 1;
+  string start_date = 2;
+  string end_date = 3;
+}
+
+message GetPerformanceMetricsResponse {
+  bool success = 1;
+  string message = 2;
+  PerformanceMetrics metrics = 3;
+}
+
+message GetErrorStatsRequest {
+  string service_name = 1;
+  string start_date = 2;
+  string end_date = 3;
+  string error_type = 4;
+}
+
+message GetErrorStatsResponse {
+  bool success = 1;
+  string message = 2;
+  ErrorStats stats = 3;
+}
+
+message GetProviderStatsRequest {
+  string provider = 1;
+  string start_date = 2;
+  string end_date = 3;
+}
+
+message GetProviderStatsResponse {
+  bool success = 1;
+  string message = 2;
+  ProviderStats stats = 3;
+}
+
+// Data Types
+message MetricData {
+  string id = 1;
+  string name = 2;
+  string type = 3;
+  double value = 4;
+  string unit = 5;
+  string timestamp = 6;
+  map<string, string> labels = 7;
+}
+
+message UsageStats {
+  string user_id = 1;
+  int32 total_requests = 2;
+  int32 total_tokens = 3;
+  double total_cost = 4;
+  string currency = 5;
+  repeated ProviderUsage provider_usage = 6;
+  string period_start = 7;
+  string period_end = 8;
+}
+
+message ProviderUsage {
+  string provider = 1;
+  int32 requests = 2;
+  int32 tokens = 3;
+  double cost = 4;
+  double avg_response_time = 5;
+  double success_rate = 6;
+}
+
+message PerformanceMetrics {
+  string service_name = 1;
+  double avg_response_time = 2;
+  double p95_response_time = 3;
+  double p99_response_time = 4;
+  int32 total_requests = 5;
+  double requests_per_second = 6;
+  double error_rate = 7;
+  string period_start = 8;
+  string period_end = 9;
+}
+
+message ErrorStats {
+  string service_name = 1;
+  int32 total_errors = 2;
+  repeated ErrorType errors = 3;
+  double error_rate = 4;
+  string period_start = 5;
+  string period_end = 6;
+}
+
+message ErrorType {
+  string error_code = 1;
+  string error_message = 2;
+  int32 count = 3;
+  double percentage = 4;
+}
+
+message ProviderStats {
+  string provider = 1;
+  int32 total_requests = 2;
+  double avg_response_time = 3;
+  double success_rate = 4;
+  double cost = 5;
+  string currency = 6;
+  repeated ModelUsage model_usage = 7;
+  string period_start = 8;
+  string period_end = 9;
+}
+
+message ModelUsage {
+  string model = 1;
+  int32 requests = 2;
+  int32 tokens = 3;
+  double cost = 4;
+}
+
+message PaginationInfo {
+  int32 page = 1;
+  int32 limit = 2;
+  int32 total = 3;
+  int32 total_pages = 4;
+}

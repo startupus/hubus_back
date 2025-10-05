@@ -193,4 +193,102 @@ export class HttpController {
       };
     }
   }
+
+  @Post('openai/chat/completions')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Proxy request to OpenAI' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        model: { type: 'string' },
+        messages: { type: 'array', items: { type: 'object' } },
+        temperature: { type: 'number' },
+        max_tokens: { type: 'number' }
+      },
+      required: ['model', 'messages']
+    }
+  })
+  @ApiResponse({ status: 200, description: 'OpenAI request processed successfully' })
+  async proxyOpenAI(@Body() data: any) {
+    try {
+      LoggerUtil.debug('proxy-service', 'HTTP ProxyOpenAI called', { 
+        model: data.model,
+        messages_count: data.messages?.length 
+      });
+      
+      // Заглушка - в реальном проекте здесь будет проксирование к OpenAI
+      return {
+        id: `chatcmpl-${Date.now()}`,
+        object: 'chat.completion',
+        created: Math.floor(Date.now() / 1000),
+        model: data.model || 'gpt-3.5-turbo',
+        choices: [{
+          index: 0,
+          message: {
+            role: 'assistant',
+            content: 'Mock response from OpenAI via proxy service'
+          },
+          finish_reason: 'stop'
+        }],
+        usage: {
+          prompt_tokens: 10,
+          completion_tokens: 20,
+          total_tokens: 30
+        }
+      };
+    } catch (error) {
+      LoggerUtil.error('proxy-service', 'HTTP ProxyOpenAI failed', error as Error);
+      throw error;
+    }
+  }
+
+  @Post('openrouter/chat/completions')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Proxy request to OpenRouter' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        model: { type: 'string' },
+        messages: { type: 'array', items: { type: 'object' } },
+        temperature: { type: 'number' },
+        max_tokens: { type: 'number' }
+      },
+      required: ['model', 'messages']
+    }
+  })
+  @ApiResponse({ status: 200, description: 'OpenRouter request processed successfully' })
+  async proxyOpenRouter(@Body() data: any) {
+    try {
+      LoggerUtil.debug('proxy-service', 'HTTP ProxyOpenRouter called', { 
+        model: data.model,
+        messages_count: data.messages?.length 
+      });
+      
+      // Заглушка - в реальном проекте здесь будет проксирование к OpenRouter
+      return {
+        id: `chatcmpl-${Date.now()}`,
+        object: 'chat.completion',
+        created: Math.floor(Date.now() / 1000),
+        model: data.model || 'gpt-3.5-turbo',
+        choices: [{
+          index: 0,
+          message: {
+            role: 'assistant',
+            content: 'Mock response from OpenRouter via proxy service'
+          },
+          finish_reason: 'stop'
+        }],
+        usage: {
+          prompt_tokens: 10,
+          completion_tokens: 20,
+          total_tokens: 30
+        }
+      };
+    } catch (error) {
+      LoggerUtil.error('proxy-service', 'HTTP ProxyOpenRouter failed', error as Error);
+      throw error;
+    }
+  }
 }

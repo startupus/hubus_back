@@ -12,6 +12,11 @@ services:
       - auth_db_data:/var/lib/postgresql/data
     networks:
       - ai-aggregator
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   billing-db:
     image: postgres:15-alpine
@@ -25,6 +30,11 @@ services:
       - billing_db_data:/var/lib/postgresql/data
     networks:
       - ai-aggregator
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   orchestrator-db:
     image: postgres:15-alpine
@@ -38,6 +48,11 @@ services:
       - orchestrator_db_data:/var/lib/postgresql/data
     networks:
       - ai-aggregator
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   analytics-db:
     image: postgres:15-alpine
@@ -51,6 +66,11 @@ services:
       - analytics_db_data:/var/lib/postgresql/data
     networks:
       - ai-aggregator
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   # Redis
   redis:
@@ -61,6 +81,11 @@ services:
       - redis_data:/data
     networks:
       - ai-aggregator
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   # RabbitMQ
   rabbitmq:
@@ -75,6 +100,11 @@ services:
       - rabbitmq_data:/var/lib/rabbitmq
     networks:
       - ai-aggregator
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   # Shared package
   shared:
@@ -97,6 +127,8 @@ services:
       - "3000:3000"
     environment:
       - NODE_ENV=development
+      - HOST=0.0.0.0
+      - PORT=3000
       - AUTH_DATABASE_URL=postgresql://postgres:password@auth-db:5432/auth_db?schema=public
       - BILLING_DATABASE_URL=postgresql://postgres:password@billing-db:5432/billing_db?schema=public
       - ORCHESTRATOR_DATABASE_URL=postgresql://postgres:password@orchestrator-db:5432/orchestrator_db?schema=public
@@ -110,13 +142,19 @@ services:
       - ANALYTICS_SERVICE_URL=http://analytics-service:3005
       - PROXY_SERVICE_URL=http://proxy-service:3003
     depends_on:
-      - auth-db
-      - billing-db
-      - orchestrator-db
-      - redis
-      - rabbitmq
+      auth-db:
+        condition: service_healthy
+      billing-db:
+        condition: service_healthy
+      orchestrator-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     networks:
       - ai-aggregator
+    restart: unless-stopped
 
   auth-service:
     build:
@@ -127,17 +165,24 @@ services:
       - "50051:50051"
     environment:
       - NODE_ENV=development
+      - HOST=0.0.0.0
+      - PORT=3001
+      - GRPC_PORT=50051
       - AUTH_DATABASE_URL=postgresql://postgres:password@auth-db:5432/auth_db?schema=public
       - REDIS_URL=redis://redis:6379
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
       - JWT_SECRET=your-super-secret-jwt-key-here
       - LOG_LEVEL=debug
     depends_on:
-      - auth-db
-      - redis
-      - rabbitmq
+      auth-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     networks:
       - ai-aggregator
+    restart: unless-stopped
 
   provider-orchestrator:
     build:
@@ -147,14 +192,26 @@ services:
       - "3002:3002"
     environment:
       - NODE_ENV=development
-    env_file:
-      - .env
+      - HOST=0.0.0.0
+      - PORT=3002
+      - ORCHESTRATOR_DATABASE_URL=postgresql://postgres:password@orchestrator-db:5432/orchestrator_db?schema=public
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
+      - OPENAI_API_KEY=mock_openai_key
+      - OPENROUTER_API_KEY=mock_openrouter_key
+      - YANDEX_API_KEY=mock_yandex_key
+      - YANDEX_FOLDER_ID=mock_yandex_folder_id
+      - JWT_SECRET=your-super-secret-jwt-key-here
     depends_on:
-      - orchestrator-db
-      - redis
-      - rabbitmq
+      orchestrator-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     networks:
       - ai-aggregator
+    restart: unless-stopped
 
   proxy-service:
     build:
@@ -164,13 +221,22 @@ services:
       - "3003:3003"
     environment:
       - NODE_ENV=development
-    env_file:
-      - .env
+      - HOST=0.0.0.0
+      - PORT=3003
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
+      - OPENAI_API_KEY=your-openai-api-key
+      - OPENROUTER_API_KEY=your-openrouter-api-key
+      - YANDEX_API_KEY=your-yandex-api-key
+      - YANDEX_FOLDER_ID=your-yandex-folder-id
     depends_on:
-      - redis
-      - rabbitmq
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     networks:
       - ai-aggregator
+    restart: unless-stopped
 
   billing-service:
     build:
@@ -180,14 +246,32 @@ services:
       - "3004:3004"
     environment:
       - NODE_ENV=development
-    env_file:
-      - .env
+      - HOST=0.0.0.0
+      - PORT=3004
+      - BILLING_DATABASE_URL=postgresql://postgres:password@billing-db:5432/billing_db?schema=public
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
+      - JWT_SECRET=your-super-secret-jwt-key-here
+      - STRIPE_SECRET_KEY=sk_test_your_stripe_secret_key
+      - PAYPAL_CLIENT_ID=your_paypal_client_id
+      - PAYPAL_CLIENT_SECRET=your_paypal_client_secret
+      - LOG_LEVEL=debug
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3004/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     depends_on:
-      - billing-db
-      - redis
-      - rabbitmq
+      billing-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     networks:
       - ai-aggregator
+    restart: unless-stopped
 
   analytics-service:
     build:
@@ -197,20 +281,34 @@ services:
       - "3005:3005"
     environment:
       - NODE_ENV=development
+      - HOST=0.0.0.0
+      - PORT=3005
       - ANALYTICS_DATABASE_URL=postgresql://postgres:password@analytics-db:5432/analytics_db?schema=public
       - REDIS_URL=redis://redis:6379
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
       - JWT_SECRET=your-super-secret-jwt-key-here
       - LOG_LEVEL=debug
       - LOG_FORMAT=json
+      - PROMETHEUS_ENABLED=false
+      - GRAFANA_ENABLED=false
     volumes:
       - analytics_logs:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3005/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     depends_on:
-      - analytics-db
-      - redis
-      - rabbitmq
+      analytics-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     networks:
       - ai-aggregator
+    restart: unless-stopped
 
 volumes:
   auth_db_data:

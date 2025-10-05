@@ -3,6 +3,7 @@
  */
 export declare class LoggerUtil {
     private static formatLogEntry;
+    private static formatJsonLogEntry;
     /**
      * Log a message with the specified level
      */
@@ -39,5 +40,10 @@ export declare class LoggerUtil {
      * Log an external API call
      */
     static logExternalApi(service: string, provider: string, endpoint: string, statusCode: number, duration: number, requestId?: string, userId?: string): void;
+    /**
+     * Generate a correlation ID for request tracking
+     */
+    static generateCorrelationId(): string;
 }
+export declare const generateCorrelationId: typeof LoggerUtil.generateCorrelationId;
 //# sourceMappingURL=logger.util.d.ts.map

@@ -7,6 +7,8 @@ import { ChatModule } from './chat/chat.module';
 import { BillingModule } from './billing/billing.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { AICertificationModule } from './ai-certification/ai-certification.module';
+import { OrchestratorModule } from './orchestrator/orchestrator.module';
+import { ProxyModule } from './proxy/proxy.module';
 import { configuration } from './config/configuration';
 import { validationSchema } from './config/validation.schema';
 
@@ -30,6 +32,8 @@ import { validationSchema } from './config/validation.schema';
     BillingModule,
     AnalyticsModule,
     AICertificationModule,
+    OrchestratorModule,
+    ProxyModule,
   ],
 })
 export class AppModule {}

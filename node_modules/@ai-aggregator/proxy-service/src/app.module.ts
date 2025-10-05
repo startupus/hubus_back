@@ -3,6 +3,8 @@ import { ConfigModule } from '@nestjs/config';
 import { validationSchema } from './config/validation.schema';
 import configuration from './config/configuration';
 import { ProxyModule } from './proxy/proxy.module';
+import { HttpModule } from './http/http.module';
+import { HealthModule } from './health/health.module';
 
 @Module({
   imports: [
@@ -14,6 +16,8 @@ import { ProxyModule } from './proxy/proxy.module';
       expandVariables: true,
     }),
     ProxyModule,
+    HttpModule,
+    HealthModule,
   ],
 })
 export class AppModule {}

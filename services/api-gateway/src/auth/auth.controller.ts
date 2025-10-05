@@ -1,4 +1,4 @@
-import { Controller, Post, Body } from '@nestjs/common';
+import { Controller, Post, Body, Get, Param, Delete } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { RegisterDto, LoginDto, AuthResponseDto } from '@ai-aggregator/shared';
@@ -20,6 +20,27 @@ export class AuthController {
   @ApiResponse({ status: 200, description: 'Login successful', type: AuthResponseDto })
   async login(@Body() loginDto: LoginDto) {
     return this.authService.login(loginDto);
+  }
+
+  @Post('api-keys')
+  @ApiOperation({ summary: 'Create API key' })
+  @ApiResponse({ status: 201, description: 'API key created successfully' })
+  async createApiKey(@Body() createApiKeyDto: any) {
+    return this.authService.createApiKey(createApiKeyDto);
+  }
+
+  @Get('api-keys')
+  @ApiOperation({ summary: 'Get user API keys' })
+  @ApiResponse({ status: 200, description: 'API keys retrieved successfully' })
+  async getApiKeys(@Body() getApiKeysDto: any) {
+    return this.authService.getApiKeys(getApiKeysDto);
+  }
+
+  @Delete('api-keys/:keyId')
+  @ApiOperation({ summary: 'Revoke API key' })
+  @ApiResponse({ status: 200, description: 'API key revoked successfully' })
+  async revokeApiKey(@Param('keyId') keyId: string) {
+    return this.authService.revokeApiKey(keyId);
   }
 }
 

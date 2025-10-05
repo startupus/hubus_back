@@ -11,6 +11,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
+var _a, _b, _c, _d, _e, _f;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AuthController = void 0;
 const common_1 = require("@nestjs/common");
@@ -54,6 +55,18 @@ let AuthController = class AuthController {
         const userId = req.user.sub;
         return { userId };
     }
+    async createApiKey(body, req) {
+        const userId = req.user.sub;
+        return this.authService.createApiKey(userId, body.name);
+    }
+    async getApiKeys(req) {
+        const userId = req.user.sub;
+        return this.authService.getApiKeys(userId);
+    }
+    async revokeApiKey(keyId, req) {
+        const userId = req.user.sub;
+        return this.authService.revokeApiKey(userId, keyId);
+    }
 };
 exports.AuthController = AuthController;
 __decorate([
@@ -63,7 +76,7 @@ __decorate([
     (0, swagger_1.ApiResponse)({ status: 409, description: 'User already exists' }),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [shared_1.RegisterDto]),
+    __metadata("design:paramtypes", [typeof (_a = typeof shared_1.RegisterDto !== "undefined" && shared_1.RegisterDto) === "function" ? _a : Object]),
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "register", null);
 __decorate([
@@ -74,7 +87,7 @@ __decorate([
     __param(0, (0, common_1.Body)()),
     __param(1, (0, common_1.Req)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [shared_1.LoginDto, Object]),
+    __metadata("design:paramtypes", [typeof (_b = typeof shared_1.LoginDto !== "undefined" && shared_1.LoginDto) === "function" ? _b : Object, Object]),
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "login", null);
 __decorate([
@@ -108,7 +121,7 @@ __decorate([
     __param(0, (0, common_1.Body)()),
     __param(1, (0, common_1.Req)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [shared_1.ChangePasswordDto, Object]),
+    __metadata("design:paramtypes", [typeof (_c = typeof shared_1.ChangePasswordDto !== "undefined" && shared_1.ChangePasswordDto) === "function" ? _c : Object, Object]),
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "changePassword", null);
 __decorate([
@@ -117,7 +130,7 @@ __decorate([
     (0, swagger_1.ApiResponse)({ status: 200, description: 'Password reset email sent' }),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [shared_1.ResetPasswordRequestDto]),
+    __metadata("design:paramtypes", [typeof (_d = typeof shared_1.ResetPasswordRequestDto !== "undefined" && shared_1.ResetPasswordRequestDto) === "function" ? _d : Object]),
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "requestPasswordReset", null);
 __decorate([
@@ -127,7 +140,7 @@ __decorate([
     (0, swagger_1.ApiResponse)({ status: 400, description: 'Invalid or expired token' }),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [shared_1.ResetPasswordDto]),
+    __metadata("design:paramtypes", [typeof (_e = typeof shared_1.ResetPasswordDto !== "undefined" && shared_1.ResetPasswordDto) === "function" ? _e : Object]),
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "resetPassword", null);
 __decorate([
@@ -137,7 +150,7 @@ __decorate([
     (0, swagger_1.ApiResponse)({ status: 400, description: 'Invalid or expired token' }),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [shared_1.VerifyEmailDto]),
+    __metadata("design:paramtypes", [typeof (_f = typeof shared_1.VerifyEmailDto !== "undefined" && shared_1.VerifyEmailDto) === "function" ? _f : Object]),
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "verifyEmail", null);
 __decorate([
@@ -152,6 +165,44 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "getProfile", null);
+__decorate([
+    (0, common_1.Post)('api-keys'),
+    (0, common_1.UseGuards)((0, passport_1.AuthGuard)('jwt')),
+    (0, swagger_1.ApiBearerAuth)(),
+    (0, swagger_1.ApiOperation)({ summary: 'Create API key for user' }),
+    (0, swagger_1.ApiResponse)({ status: 201, description: 'API key created successfully' }),
+    (0, swagger_1.ApiResponse)({ status: 401, description: 'Unauthorized' }),
+    __param(0, (0, common_1.Body)()),
+    __param(1, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:returntype", Promise)
+], AuthController.prototype, "createApiKey", null);
+__decorate([
+    (0, common_1.Get)('api-keys'),
+    (0, common_1.UseGuards)((0, passport_1.AuthGuard)('jwt')),
+    (0, swagger_1.ApiBearerAuth)(),
+    (0, swagger_1.ApiOperation)({ summary: 'Get user API keys' }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: 'API keys retrieved successfully' }),
+    (0, swagger_1.ApiResponse)({ status: 401, description: 'Unauthorized' }),
+    __param(0, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], AuthController.prototype, "getApiKeys", null);
+__decorate([
+    (0, common_1.Post)('api-keys/:keyId/revoke'),
+    (0, common_1.UseGuards)((0, passport_1.AuthGuard)('jwt')),
+    (0, swagger_1.ApiBearerAuth)(),
+    (0, swagger_1.ApiOperation)({ summary: 'Revoke API key' }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: 'API key revoked successfully' }),
+    (0, swagger_1.ApiResponse)({ status: 401, description: 'Unauthorized' }),
+    __param(0, (0, common_1.Body)('keyId')),
+    __param(1, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", Promise)
+], AuthController.prototype, "revokeApiKey", null);
 exports.AuthController = AuthController = __decorate([
     (0, swagger_1.ApiTags)('Authentication'),
     (0, common_1.Controller)('auth'),

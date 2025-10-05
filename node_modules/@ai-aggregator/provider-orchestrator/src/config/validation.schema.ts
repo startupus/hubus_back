@@ -18,6 +18,8 @@ export const validationSchema = Joi.object({
   // Providers
   OPENAI_API_KEY: Joi.string().required(),
   OPENROUTER_API_KEY: Joi.string().required(),
+  YANDEX_API_KEY: Joi.string().required(),
+  YANDEX_FOLDER_ID: Joi.string().required(),
   
   // Monitoring
   LOG_LEVEL: Joi.string().valid('debug', 'info', 'warn', 'error').default('info'),

@@ -5,6 +5,7 @@ import configuration from './config/configuration';
 import { BillingModule } from './billing/billing.module';
 import { HttpModule } from './http/http.module';
 import { HealthModule } from './health/health.module';
+import { PrismaModule } from './common/prisma/prisma.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { HealthModule } from './health/health.module';
       envFilePath: ['.env.local', '.env'],
       expandVariables: true,
     }),
+    PrismaModule,
     BillingModule,
     HttpModule,
     HealthModule,

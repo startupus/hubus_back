@@ -49,7 +49,7 @@ export class ReportingService {
       this.logger.debug('Creating data export', { exportType, filters, userId });
 
       // Create export record
-      const exportRecord = await this.prisma.dataExport.create({
+      const exportRecord = await (this.prisma as any).dataExport.create({
         data: {
           exportType,
           filters: filters as any,
@@ -74,7 +74,7 @@ export class ReportingService {
    */
   async getExportStatus(exportId: string): Promise<DataExport | null> {
     try {
-      const exportRecord = await this.prisma.dataExport.findUnique({
+      const exportRecord = await (this.prisma as any).dataExport.findUnique({
         where: { id: exportId }
       });
 
@@ -94,7 +94,7 @@ export class ReportingService {
    */
   async downloadExport(exportId: string): Promise<Buffer | null> {
     try {
-      const exportRecord = await this.prisma.dataExport.findUnique({
+      const exportRecord = await (this.prisma as any).dataExport.findUnique({
         where: { id: exportId }
       });
 
@@ -134,15 +134,15 @@ export class ReportingService {
       };
 
       const [events, metrics, userAnalytics] = await Promise.all([
-        this.prisma.analyticsEvent.findMany({
+        (this.prisma as any).analyticsEvent.findMany({
           where,
           orderBy: { timestamp: 'desc' }
         }),
-        this.prisma.metricsSnapshot.findMany({
+        (this.prisma as any).metricsSnapshot.findMany({
           where: { timestamp: { gte: timeRange.start, lte: timeRange.end } },
           orderBy: { timestamp: 'desc' }
         }),
-        this.prisma.userAnalytics.findUnique({
+        (this.prisma as any).userAnalytics.findUnique({
           where: { userId }
         })
       ]);
@@ -208,15 +208,15 @@ export class ReportingService {
       };
 
       const [healthData, errorData, metricsData] = await Promise.all([
-        this.prisma.systemHealth.findMany({
+        (this.prisma as any).systemHealth.findMany({
           where,
           orderBy: { timestamp: 'desc' }
         }),
-        this.prisma.errorAnalytics.findMany({
+        (this.prisma as any).errorAnalytics.findMany({
           where,
           orderBy: { timestamp: 'desc' }
         }),
-        this.prisma.metricsSnapshot.findMany({
+        (this.prisma as any).metricsSnapshot.findMany({
           where: {
             ...where,
             metricType: 'performance'
@@ -292,19 +292,19 @@ export class ReportingService {
       };
 
       const [aiAnalytics, classificationAnalytics, certificationAnalytics, safetyAnalytics] = await Promise.all([
-        this.prisma.aIAnalytics.findMany({
+        (this.prisma as any).aIAnalytics.findMany({
           where,
           orderBy: { lastUpdated: 'desc' }
         }),
-        this.prisma.aIClassificationAnalytics.findMany({
+        (this.prisma as any).aIClassificationAnalytics.findMany({
           where,
           orderBy: { lastUpdated: 'desc' }
         }),
-        this.prisma.aICertificationAnalytics.findMany({
+        (this.prisma as any).aICertificationAnalytics.findMany({
           where,
           orderBy: { lastUpdated: 'desc' }
         }),
-        this.prisma.aISafetyAnalytics.findMany({
+        (this.prisma as any).aISafetyAnalytics.findMany({
           where,
           orderBy: { lastUpdated: 'desc' }
         })
@@ -427,7 +427,7 @@ export class ReportingService {
     try {
       this.logger.debug('Cleaning up expired exports');
 
-      const expiredExports = await this.prisma.dataExport.findMany({
+      const expiredExports = await (this.prisma as any).dataExport.findMany({
         where: {
           expiresAt: {
             lt: new Date()
@@ -447,7 +447,7 @@ export class ReportingService {
         }
 
         // Delete database record
-        await this.prisma.dataExport.delete({
+        await (this.prisma as any).dataExport.delete({
           where: { id: exportRecord.id }
         });
 
@@ -467,12 +467,12 @@ export class ReportingService {
   private async processExportAsync(exportId: string): Promise<void> {
     try {
       // Update status to processing
-      await this.prisma.dataExport.update({
+      await (this.prisma as any).dataExport.update({
         where: { id: exportId },
         data: { status: 'processing' }
       });
 
-      const exportRecord = await this.prisma.dataExport.findUnique({
+      const exportRecord = await (this.prisma as any).dataExport.findUnique({
         where: { id: exportId }
       });
 
@@ -490,7 +490,7 @@ export class ReportingService {
       await this.generateExportFile(data, exportRecord.exportType as ExportType, filePath);
 
       // Update export record
-      await this.prisma.dataExport.update({
+      await (this.prisma as any).dataExport.update({
         where: { id: exportId },
         data: {
           status: 'completed',
@@ -503,13 +503,13 @@ export class ReportingService {
     } catch (error) {
       this.logger.error(`Failed to process export ${exportId}`, error);
       
-      await this.prisma.dataExport.update({
+      await (this.prisma as any).dataExport.update({
         where: { id: exportId },
         data: { status: 'failed' }
       });
     }
   }
-
+ 
   private async generateExportData(filters: ExportFilters): Promise<any[]> {
     const where: any = {
       timestamp: {
@@ -530,7 +530,7 @@ export class ReportingService {
       where.userId = { in: filters.userIds };
     }
 
-    return await this.prisma.analyticsEvent.findMany({
+    return await (this.prisma as any).analyticsEvent.findMany({
       where,
       orderBy: { timestamp: 'desc' }
     });
@@ -632,7 +632,7 @@ export class ReportingService {
 
   private async generateLineChartData(where: any, timeRange: TimeRange): Promise<any[]> {
     // Simplified line chart data generation
-    const data = await this.prisma.metricsSnapshot.findMany({
+    const data = await (this.prisma as any).metricsSnapshot.findMany({
       where,
       orderBy: { timestamp: 'asc' }
     });
@@ -646,7 +646,7 @@ export class ReportingService {
 
   private async generateBarChartData(where: any, timeRange: TimeRange): Promise<any[]> {
     // Simplified bar chart data generation
-    const data = await this.prisma.analyticsEvent.groupBy({
+    const data = await (this.prisma as any).analyticsEvent.groupBy({
       by: ['service'],
       where,
       _count: { service: true }
@@ -661,7 +661,7 @@ export class ReportingService {
 
   private async generatePieChartData(where: any, timeRange: TimeRange): Promise<any[]> {
     // Simplified pie chart data generation
-    const data = await this.prisma.analyticsEvent.groupBy({
+    const data = await (this.prisma as any).analyticsEvent.groupBy({
       by: ['eventType'],
       where,
       _count: { eventType: true }
@@ -680,7 +680,7 @@ export class ReportingService {
 
   private async generateScatterChartData(where: any, timeRange: TimeRange): Promise<any[]> {
     // Simplified scatter chart data generation
-    const data = await this.prisma.metricsSnapshot.findMany({
+    const data = await (this.prisma as any).metricsSnapshot.findMany({
       where,
       orderBy: { timestamp: 'asc' }
     });

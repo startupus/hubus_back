@@ -14,7 +14,7 @@ const auth_module_1 = require("./modules/auth/auth.module");
 const api_key_module_1 = require("./modules/api-key/api-key.module");
 const user_module_1 = require("./modules/user/user.module");
 const security_module_1 = require("./modules/security/security.module");
-const grpc_module_1 = require("./grpc/grpc.module");
+const http_module_1 = require("./http/http.module");
 const health_module_1 = require("./health/health.module");
 const configuration_1 = require("./config/configuration");
 const validation_schema_1 = require("./config/validation.schema");
@@ -37,7 +37,7 @@ exports.AppModule = AppModule = __decorate([
             api_key_module_1.ApiKeyModule,
             user_module_1.UserModule,
             security_module_1.SecurityModule,
-            grpc_module_1.GrpcModule,
+            http_module_1.HttpModule,
             health_module_1.HealthModule,
         ],
     })

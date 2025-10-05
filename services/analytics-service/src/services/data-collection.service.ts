@@ -40,7 +40,7 @@ export class DataCollectionService {
 
       const createdEvent = await this.prisma.analyticsEvent.create({
         data: {
-          userId: event.userId,
+          userId: event.userId || null, // Делаем userId опциональным
           sessionId: event.sessionId,
           eventType: event.eventType,
           eventName: event.eventName,

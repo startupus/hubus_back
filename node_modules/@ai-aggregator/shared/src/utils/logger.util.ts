@@ -26,11 +26,31 @@ export class LoggerUtil {
     return logMessage;
   }
 
+  private static formatJsonLogEntry(entry: any): string {
+    return JSON.stringify({
+      timestamp: entry.timestamp.toISOString(),
+      level: entry.level,
+      service: entry.service,
+      message: entry.message,
+      requestId: entry.requestId,
+      userId: entry.userId,
+      metadata: entry.metadata,
+      error: entry.error ? {
+        name: entry.error.name,
+        message: entry.error.message,
+        stack: entry.error.stack,
+      } : undefined,
+    });
+  }
+
   /**
    * Log a message with the specified level
    */
   static log(entry: any): void {
-    const formattedMessage = this.formatLogEntry(entry);
+    const useJsonFormat = process.env.LOG_FORMAT === 'json';
+    const formattedMessage = useJsonFormat 
+      ? this.formatJsonLogEntry(entry)
+      : this.formatLogEntry(entry);
     
     switch (entry.level) {
       case 'debug':
@@ -243,4 +263,14 @@ export class LoggerUtil {
       userId
     );
   }
+
+  /**
+   * Generate a correlation ID for request tracking
+   */
+  static generateCorrelationId(): string {
+    return `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }
 }
+
+// Export the generateCorrelationId function separately for easier access
+export const generateCorrelationId = LoggerUtil.generateCorrelationId;

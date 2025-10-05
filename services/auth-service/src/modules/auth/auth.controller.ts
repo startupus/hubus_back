@@ -102,4 +102,37 @@ export class AuthController {
     // TODO: Implement get user profile
     return { userId };
   }
+
+  @Post('api-keys')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Create API key for user' })
+  @ApiResponse({ status: 201, description: 'API key created successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async createApiKey(@Body() body: { name: string }, @Req() req: Request) {
+    const userId = (req.user as any).sub;
+    return this.authService.createApiKey(userId, body.name);
+  }
+
+  @Get('api-keys')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get user API keys' })
+  @ApiResponse({ status: 200, description: 'API keys retrieved successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async getApiKeys(@Req() req: Request) {
+    const userId = (req.user as any).sub;
+    return this.authService.getApiKeys(userId);
+  }
+
+  @Post('api-keys/:keyId/revoke')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Revoke API key' })
+  @ApiResponse({ status: 200, description: 'API key revoked successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async revokeApiKey(@Body('keyId') keyId: string, @Req() req: Request) {
+    const userId = (req.user as any).sub;
+    return this.authService.revokeApiKey(userId, keyId);
+  }
 }

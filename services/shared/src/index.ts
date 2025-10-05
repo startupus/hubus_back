@@ -24,12 +24,16 @@ export * from './utils/crypto.util';
 export * from './utils/validation.util';
 export * from './utils/response.util';
 export * from './utils/logger.util';
+export * from './utils/concurrency.util';
 
 // Services
 export * from './services/anonymization.service';
 export * from './services/ai-classification.service';
 export * from './services/ai-certification.service';
 export * from './services/ai-safety.service';
+export * from './services/redis.service';
+export * from './services/rabbitmq.service';
+export * from './services/thread-pool.service';
 
 // Constants
 export * from './constants';

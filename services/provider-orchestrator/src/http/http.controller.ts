@@ -94,4 +94,43 @@ export class HttpController {
       throw error;
     }
   }
+
+  @Get('models')
+  @ApiOperation({ summary: 'Get list of available models' })
+  @ApiResponse({ status: 200, description: 'Models list retrieved successfully' })
+  async getModels() {
+    try {
+      LoggerUtil.debug('provider-orchestrator', 'HTTP GetModels called');
+      
+      // Заглушка - в реальном проекте здесь будет список моделей
+      return {
+        models: [
+          {
+            id: 'gpt-4',
+            name: 'GPT-4',
+            provider: 'openai',
+            status: 'available',
+            costPerToken: 0.00003
+          },
+          {
+            id: 'gpt-3.5-turbo',
+            name: 'GPT-3.5 Turbo',
+            provider: 'openai',
+            status: 'available',
+            costPerToken: 0.000002
+          },
+          {
+            id: 'claude-3',
+            name: 'Claude 3',
+            provider: 'openrouter',
+            status: 'available',
+            costPerToken: 0.000015
+          }
+        ]
+      };
+    } catch (error) {
+      LoggerUtil.error('provider-orchestrator', 'HTTP GetModels failed', error as Error);
+      throw error;
+    }
+  }
 }

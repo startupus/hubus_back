@@ -332,6 +332,76 @@ let AuthService = class AuthService {
             shared_1.LoggerUtil.error('auth-service', 'Failed to log security event', error);
         }
     }
+    async createApiKey(userId, name) {
+        try {
+            const apiKey = await shared_1.CryptoUtil.generateApiKey();
+            const hashedKey = await shared_1.CryptoUtil.hashApiKey(apiKey);
+            const keyRecord = await this.prisma.apiKey.create({
+                data: {
+                    userId,
+                    name,
+                    keyHash: hashedKey,
+                    expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+                },
+            });
+            shared_1.LoggerUtil.info('auth-service', 'API key created', { userId, keyId: keyRecord.id });
+            return {
+                success: true,
+                message: 'API key created successfully',
+                apiKey: {
+                    id: keyRecord.id,
+                    name: keyRecord.name,
+                    key: apiKey,
+                    expiresAt: keyRecord.expiresAt,
+                    createdAt: keyRecord.createdAt,
+                },
+            };
+        }
+        catch (error) {
+            shared_1.LoggerUtil.error('auth-service', 'Failed to create API key', error);
+            throw new common_1.BadRequestException('Failed to create API key');
+        }
+    }
+    async getApiKeys(userId) {
+        try {
+            const apiKeys = await this.prisma.apiKey.findMany({
+                where: { userId, isActive: true },
+                select: {
+                    id: true,
+                    name: true,
+                    createdAt: true,
+                    expiresAt: true,
+                    lastUsedAt: true,
+                },
+                orderBy: { createdAt: 'desc' },
+            });
+            return {
+                success: true,
+                apiKeys,
+            };
+        }
+        catch (error) {
+            shared_1.LoggerUtil.error('auth-service', 'Failed to get API keys', error);
+            throw new common_1.BadRequestException('Failed to get API keys');
+        }
+    }
+    async revokeApiKey(userId, keyId) {
+        try {
+            await this.prisma.apiKey.update({
+                where: { id: keyId, userId },
+                data: { isActive: false },
+            });
+            shared_1.LoggerUtil.info('auth-service', 'API key revoked', { userId, keyId });
+            return {
+                success: true,
+                message: 'API key revoked successfully',
+            };
+        }
+        catch (error) {
+            shared_1.LoggerUtil.error('auth-service', 'Failed to revoke API key', error);
+            throw new common_1.BadRequestException('Failed to revoke API key');
+        }
+    }
 };
 exports.AuthService = AuthService;
 exports.AuthService = AuthService = __decorate([

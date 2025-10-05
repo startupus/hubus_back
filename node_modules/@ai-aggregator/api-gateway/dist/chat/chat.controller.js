@@ -22,20 +22,75 @@ let ChatController = class ChatController {
     constructor(chatService) {
         this.chatService = chatService;
     }
-    async createCompletion(requestDto) {
-        return this.chatService.createCompletion(requestDto);
+    async createCompletion(request, userId, provider = 'openai') {
+        console.log('Chat completion request received:', JSON.stringify(request, null, 2));
+        return this.chatService.createCompletion(request, userId, provider);
+    }
+    async getModels(provider) {
+        const models = await this.chatService.getModels(provider);
+        return {
+            success: true,
+            message: 'Models retrieved successfully',
+            models
+        };
+    }
+    async getModelInfo(provider, model) {
+        const modelInfo = await this.chatService.getModelInfo(provider, model);
+        return {
+            success: true,
+            message: 'Model info retrieved successfully',
+            model: modelInfo
+        };
+    }
+    async validateRequest(request) {
+        const validation = await this.chatService.validateRequest(request);
+        return {
+            success: validation.isValid,
+            message: validation.isValid ? 'Request is valid' : 'Request validation failed',
+            ...validation
+        };
     }
 };
 exports.ChatController = ChatController;
 __decorate([
     (0, common_1.Post)('completions'),
-    (0, swagger_1.ApiOperation)({ summary: 'Create chat completion' }),
-    (0, swagger_1.ApiResponse)({ status: 200, description: 'Chat completion created successfully', type: shared_1.ProviderResponseDto }),
+    (0, swagger_1.ApiOperation)({ summary: 'Create chat completion with anonymization' }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: 'Chat completion created successfully' }),
     __param(0, (0, common_1.Body)()),
+    __param(1, (0, common_1.Query)('user_id')),
+    __param(2, (0, common_1.Query)('provider')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [shared_1.ProviderRequestDto]),
+    __metadata("design:paramtypes", [Object, String, String]),
     __metadata("design:returntype", Promise)
 ], ChatController.prototype, "createCompletion", null);
+__decorate([
+    (0, common_1.Get)('models'),
+    (0, swagger_1.ApiOperation)({ summary: 'Get available models' }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: 'Models retrieved successfully' }),
+    __param(0, (0, common_1.Query)('provider')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", Promise)
+], ChatController.prototype, "getModels", null);
+__decorate([
+    (0, common_1.Get)('models/:provider/:model'),
+    (0, swagger_1.ApiOperation)({ summary: 'Get model information' }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: 'Model info retrieved successfully' }),
+    __param(0, (0, common_1.Param)('provider')),
+    __param(1, (0, common_1.Param)('model')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String]),
+    __metadata("design:returntype", Promise)
+], ChatController.prototype, "getModelInfo", null);
+__decorate([
+    (0, common_1.Post)('validate'),
+    (0, swagger_1.ApiOperation)({ summary: 'Validate chat request' }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: 'Request validated successfully' }),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [shared_1.ChatCompletionRequest]),
+    __metadata("design:returntype", Promise)
+], ChatController.prototype, "validateRequest", null);
 exports.ChatController = ChatController = __decorate([
     (0, swagger_1.ApiTags)('Chat'),
     (0, common_1.Controller)('chat'),

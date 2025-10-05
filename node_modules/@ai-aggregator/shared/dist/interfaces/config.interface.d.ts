@@ -48,6 +48,9 @@ export interface ProviderConfig {
 export interface ProvidersConfig {
     openai: ProviderConfig;
     openrouter: ProviderConfig;
+    yandex: ProviderConfig & {
+        folderId: string;
+    };
     anthropic?: ProviderConfig;
     google?: ProviderConfig;
     cohere?: ProviderConfig;
@@ -83,6 +86,19 @@ export interface SecurityConfig {
     lockoutDuration: number;
     requireEmailVerification: boolean;
 }
+export interface ServiceEndpointConfig {
+    url: string;
+    timeout: number;
+}
+export interface ServicesConfig {
+    auth: ServiceEndpointConfig;
+    billing: ServiceEndpointConfig;
+    analytics: ServiceEndpointConfig;
+    proxy: ServiceEndpointConfig;
+    classification: ServiceEndpointConfig;
+    certification: ServiceEndpointConfig;
+    safety: ServiceEndpointConfig;
+}
 export interface ServiceConfig {
     name: string;
     port: number;
@@ -105,6 +121,7 @@ export interface MicroserviceConfig {
     rabbitmq: RabbitMQConfig;
     jwt: JwtConfig;
     providers: ProvidersConfig;
+    services: ServicesConfig;
     billing: BillingConfig;
     rateLimit: RateLimitConfig;
     monitoring: MonitoringConfig;

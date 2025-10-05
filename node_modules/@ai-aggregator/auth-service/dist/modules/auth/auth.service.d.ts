@@ -24,4 +24,7 @@ export declare class AuthService {
     private mapUserToDto;
     private logFailedLoginAttempt;
     private logSecurityEvent;
+    createApiKey(userId: string, name: string): Promise<any>;
+    getApiKeys(userId: string): Promise<any>;
+    revokeApiKey(userId: string, keyId: string): Promise<any>;
 }

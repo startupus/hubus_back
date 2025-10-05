@@ -1,29 +1,62 @@
-import { Controller, Post, Get, Body, Param, Query, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, Query, HttpCode, HttpStatus, UseGuards, UsePipes, ValidationPipe } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { LoggerUtil } from '@ai-aggregator/shared';
+import { BillingService } from '../billing/billing.service';
+import { PricingService } from '../billing/pricing.service';
+import { PaymentGatewayService } from '../billing/payment-gateway.service';
+import { RateLimitGuard } from '../common/guards/rate-limit.guard';
+import { RateLimits } from '../common/decorators/rate-limit.decorator';
+import {
+  GetBalanceDto,
+  UpdateBalanceDto,
+  CreateTransactionDto,
+  CalculateCostDto,
+  ProcessPaymentDto,
+  TrackUsageDto,
+  BillingReportDto
+} from '../dto/billing.dto';
+import {
+  GetBalanceRequest,
+  UpdateBalanceRequest,
+  CreateTransactionRequest,
+  CalculateCostRequest,
+  ProcessPaymentRequest,
+  TrackUsageRequest,
+  TransactionType
+} from '../types/billing.types';
 
 @ApiTags('billing')
 @Controller('billing')
+@UseGuards(RateLimitGuard)
+@UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
 export class HttpController {
-  constructor() {}
+  constructor(
+    private readonly billingService: BillingService,
+    private readonly pricingService: PricingService,
+    private readonly paymentGatewayService: PaymentGatewayService
+  ) {}
 
   @Get('balance/:userId')
   @ApiOperation({ summary: 'Get user balance' })
   @ApiResponse({ status: 200, description: 'Balance retrieved successfully' })
-  async getBalance(@Param('userId') userId: string) {
+  async getBalance(@Param() params: GetBalanceDto) {
     try {
-      LoggerUtil.debug('billing-service', 'HTTP GetBalance called', { user_id: userId });
+      LoggerUtil.debug('billing-service', 'HTTP GetBalance called', { user_id: params.userId });
       
-      // Заглушка - в реальном проекте здесь будет обращение к базе данных
+      const result = await this.billingService.getBalance({ userId: params.userId });
+      
+      if (!result.success) {
+        return {
+          success: false,
+          message: result.error || 'Failed to get balance',
+          balance: null,
+        };
+      }
+
       return {
         success: true,
         message: 'Balance retrieved successfully',
-        balance: {
-          userId: userId,
-          balance: 100.0,
-          currency: 'USD',
-          updatedAt: new Date().toISOString(),
-        },
+        balance: result.balance,
       };
     } catch (error) {
       LoggerUtil.error('billing-service', 'HTTP GetBalance failed', error as Error);
@@ -36,21 +69,10 @@ export class HttpController {
   }
 
   @Post('balance/update')
-  @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Update user balance' })
-  @ApiBody({
-    schema: {
-      type: 'object',
-      properties: {
-        userId: { type: 'string' },
-        amount: { type: 'number' },
-        operation: { type: 'string', enum: ['add', 'subtract'] }
-      },
-      required: ['userId', 'amount', 'operation']
-    }
-  })
+  @ApiBody({ type: UpdateBalanceDto })
   @ApiResponse({ status: 200, description: 'Balance updated successfully' })
-  async updateBalance(@Body() data: any) {
+  async updateBalance(@Body() data: UpdateBalanceDto) {
     try {
       LoggerUtil.debug('billing-service', 'HTTP UpdateBalance called', { 
         user_id: data.userId, 
@@ -58,16 +80,21 @@ export class HttpController {
         operation: data.operation 
       });
       
-      // Заглушка - в реальном проекте здесь будет обновление баланса в БД
+      const result = await this.billingService.updateBalance(data);
+      
+      if (!result.success) {
+        return {
+          success: false,
+          message: result.error || 'Failed to update balance',
+          balance: null,
+        };
+      }
+
       return {
         success: true,
         message: 'Balance updated successfully',
-        balance: {
-          userId: data.userId,
-          balance: 100.0 + (data.operation === 'add' ? data.amount : -data.amount),
-          currency: 'USD',
-          updatedAt: new Date().toISOString(),
-        },
+        balance: result.balance,
+        transaction: result.transaction,
       };
     } catch (error) {
       LoggerUtil.error('billing-service', 'HTTP UpdateBalance failed', error as Error);
@@ -80,24 +107,25 @@ export class HttpController {
   }
 
   @Post('transactions')
-  @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create transaction' })
   @ApiBody({
     schema: {
       type: 'object',
       properties: {
         userId: { type: 'string' },
-        type: { type: 'string', enum: ['credit', 'debit'] },
+        type: { type: 'string', enum: ['CREDIT', 'DEBIT', 'REFUND', 'CHARGEBACK'] },
         amount: { type: 'number' },
+        currency: { type: 'string' },
         description: { type: 'string' },
-        provider: { type: 'string' },
-        metadata: { type: 'object' }
+        reference: { type: 'string' },
+        metadata: { type: 'object' },
+        paymentMethodId: { type: 'string' }
       },
       required: ['userId', 'type', 'amount']
     }
   })
   @ApiResponse({ status: 201, description: 'Transaction created successfully' })
-  async createTransaction(@Body() data: any) {
+  async createTransaction(@Body() data: CreateTransactionRequest) {
     try {
       LoggerUtil.debug('billing-service', 'HTTP CreateTransaction called', { 
         user_id: data.userId, 
@@ -105,21 +133,20 @@ export class HttpController {
         amount: data.amount 
       });
       
-      // Заглушка - в реальном проекте здесь будет создание транзакции в БД
+      const result = await this.billingService.createTransaction(data);
+      
+      if (!result.success) {
+        return {
+          success: false,
+          message: result.error || 'Failed to create transaction',
+          transaction: null,
+        };
+      }
+
       return {
         success: true,
         message: 'Transaction created successfully',
-        transaction: {
-          id: `txn_${Date.now()}`,
-          userId: data.userId,
-          type: data.type,
-          amount: data.amount,
-          description: data.description || 'Transaction',
-          provider: data.provider || 'system',
-          status: 'completed',
-          createdAt: new Date().toISOString(),
-          metadata: data.metadata || {},
-        },
+        transaction: result.transaction,
       };
     } catch (error) {
       LoggerUtil.error('billing-service', 'HTTP CreateTransaction failed', error as Error);
@@ -146,7 +173,7 @@ export class HttpController {
         limit: limit 
       });
       
-      // Заглушка - в реальном проекте здесь будет запрос к БД
+      // TODO: Implement transaction history retrieval with pagination
       return {
         success: true,
         message: 'Transaction history retrieved successfully',
@@ -170,46 +197,50 @@ export class HttpController {
   }
 
   @Post('calculate-cost')
-  @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Calculate request cost' })
   @ApiBody({
     schema: {
       type: 'object',
       properties: {
         userId: { type: 'string' },
-        provider: { type: 'string' },
-        model: { type: 'string' },
-        inputTokens: { type: 'number' },
-        outputTokens: { type: 'number' }
+        service: { type: 'string' },
+        resource: { type: 'string' },
+        quantity: { type: 'number' },
+        metadata: { type: 'object' }
       },
-      required: ['userId', 'provider', 'model']
+      required: ['userId', 'service', 'resource', 'quantity']
     }
   })
   @ApiResponse({ status: 200, description: 'Cost calculated successfully' })
-  async calculateCost(@Body() data: any) {
+  async calculateCost(@Body() data: CalculateCostRequest) {
     try {
       LoggerUtil.debug('billing-service', 'HTTP CalculateCost called', { 
         user_id: data.userId,
-        provider: data.provider,
-        model: data.model 
+        service: data.service,
+        resource: data.resource,
+        quantity: data.quantity
       });
       
-      // Заглушка - в реальном проекте здесь будет расчет стоимости
-      const inputCost = (data.inputTokens || 0) * 0.001;
-      const outputCost = (data.outputTokens || 0) * 0.002;
+      const result = await this.billingService.calculateCost(data);
       
+      if (!result.success) {
+        return {
+          success: false,
+          message: result.error || 'Failed to calculate cost',
+          cost: null,
+        };
+      }
+
       return {
         success: true,
         message: 'Cost calculated successfully',
         cost: {
-          provider: data.provider,
-          model: data.model,
-          inputTokens: data.inputTokens || 0,
-          outputTokens: data.outputTokens || 0,
-          inputCost: inputCost,
-          outputCost: outputCost,
-          totalCost: inputCost + outputCost,
-          currency: 'USD',
+          service: data.service,
+          resource: data.resource,
+          quantity: data.quantity,
+          totalCost: result.cost,
+          currency: result.currency,
+          breakdown: result.breakdown,
         },
       };
     } catch (error) {
@@ -223,7 +254,6 @@ export class HttpController {
   }
 
   @Post('payment')
-  @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Process payment' })
   @ApiBody({
     schema: {
@@ -231,38 +261,38 @@ export class HttpController {
       properties: {
         userId: { type: 'string' },
         amount: { type: 'number' },
-        paymentMethod: { type: 'string' },
-        description: { type: 'string' }
+        currency: { type: 'string' },
+        paymentMethodId: { type: 'string' },
+        description: { type: 'string' },
+        metadata: { type: 'object' }
       },
-      required: ['userId', 'amount', 'paymentMethod']
+      required: ['userId', 'amount']
     }
   })
   @ApiResponse({ status: 200, description: 'Payment processed successfully' })
-  async processPayment(@Body() data: any) {
+  async processPayment(@Body() data: ProcessPaymentRequest) {
     try {
       LoggerUtil.debug('billing-service', 'HTTP ProcessPayment called', { 
         user_id: data.userId,
         amount: data.amount,
-        payment_method: data.paymentMethod 
+        payment_method_id: data.paymentMethodId 
       });
       
-      // Заглушка - в реальном проекте здесь будет обработка платежа
+      const result = await this.billingService.processPayment(data);
+      
+      if (!result.success) {
+        return {
+          success: false,
+          message: result.error || 'Failed to process payment',
+          transaction: null,
+        };
+      }
+
       return {
         success: true,
         message: 'Payment processed successfully',
-        transaction: {
-          id: `payment_${Date.now()}`,
-          userId: data.userId,
-          type: 'credit',
-          amount: data.amount,
-          description: data.description || 'Payment',
-          provider: 'payment_gateway',
-          status: 'completed',
-          createdAt: new Date().toISOString(),
-          metadata: {
-            paymentMethod: data.paymentMethod,
-          },
-        },
+        transaction: result.transaction,
+        paymentUrl: result.paymentUrl,
       };
     } catch (error) {
       LoggerUtil.error('billing-service', 'HTTP ProcessPayment failed', error as Error);
@@ -270,6 +300,94 @@ export class HttpController {
         success: false,
         message: error instanceof Error ? error.message : 'Unknown error',
         transaction: null,
+      };
+    }
+  }
+
+  @Post('usage/track')
+  @ApiOperation({ summary: 'Track usage' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        userId: { type: 'string' },
+        service: { type: 'string' },
+        resource: { type: 'string' },
+        quantity: { type: 'number' },
+        unit: { type: 'string' },
+        metadata: { type: 'object' }
+      },
+      required: ['userId', 'service', 'resource']
+    }
+  })
+  @ApiResponse({ status: 200, description: 'Usage tracked successfully' })
+  async trackUsage(@Body() data: TrackUsageDto) {
+    try {
+      LoggerUtil.debug('billing-service', 'HTTP TrackUsage called', { 
+        user_id: data.userId,
+        service: data.service,
+        resource: data.resource,
+        quantity: data.quantity
+      });
+      
+      const result = await this.billingService.trackUsage(data);
+      
+      if (!result.success) {
+        return {
+          success: false,
+          message: result.error || 'Failed to track usage',
+          usageEvent: null,
+        };
+      }
+
+      return {
+        success: true,
+        message: 'Usage tracked successfully',
+        usageEvent: result.usageEvent,
+        cost: result.cost,
+      };
+    } catch (error) {
+      LoggerUtil.error('billing-service', 'HTTP TrackUsage failed', error as Error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Unknown error',
+        usageEvent: null,
+      };
+    }
+  }
+
+  @Get('report/:userId')
+  @ApiOperation({ summary: 'Get billing report' })
+  @ApiResponse({ status: 200, description: 'Billing report generated successfully' })
+  async getBillingReport(
+    @Param('userId') userId: string,
+    @Query('startDate') startDate: string,
+    @Query('endDate') endDate: string
+  ) {
+    try {
+      LoggerUtil.debug('billing-service', 'HTTP GetBillingReport called', { 
+        user_id: userId,
+        start_date: startDate,
+        end_date: endDate
+      });
+      
+      // Устанавливаем дефолтные даты если не переданы
+      const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000); // 30 дней назад
+      const end = endDate ? new Date(endDate) : new Date(); // сейчас
+      
+      const report = await this.billingService.getBillingReport(userId, start, end);
+      
+      return {
+        success: true,
+        message: 'Billing report generated successfully',
+        report,
+      };
+    } catch (error) {
+      LoggerUtil.error('billing-service', 'HTTP GetBillingReport failed', error as Error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Unknown error',
+        report: null,
       };
     }
   }

@@ -8,6 +8,8 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ChatModule = void 0;
 const common_1 = require("@nestjs/common");
+const axios_1 = require("@nestjs/axios");
+const config_1 = require("@nestjs/config");
 const chat_controller_1 = require("./chat.controller");
 const chat_service_1 = require("./chat.service");
 let ChatModule = class ChatModule {
@@ -15,6 +17,7 @@ let ChatModule = class ChatModule {
 exports.ChatModule = ChatModule;
 exports.ChatModule = ChatModule = __decorate([
     (0, common_1.Module)({
+        imports: [axios_1.HttpModule, config_1.ConfigModule],
         controllers: [chat_controller_1.ChatController],
         providers: [chat_service_1.ChatService],
     })

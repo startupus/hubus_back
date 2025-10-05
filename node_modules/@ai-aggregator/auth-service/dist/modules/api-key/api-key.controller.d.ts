@@ -4,12 +4,12 @@ import { CreateApiKeyDto, UpdateApiKeyDto } from '@ai-aggregator/shared';
 export declare class ApiKeyController {
     private readonly apiKeyService;
     constructor(apiKeyService: ApiKeyService);
-    createApiKey(createApiKeyDto: CreateApiKeyDto, req: Request): Promise<import("@ai-aggregator/shared").ApiKey>;
+    createApiKey(createApiKeyDto: CreateApiKeyDto, req: Request): Promise<ApiKey>;
     listApiKeys(page: number, limit: number, req: Request): Promise<{
-        apiKeys: import("@ai-aggregator/shared").ApiKey[];
+        apiKeys: CreateApiKeyDto[];
         total: number;
     }>;
-    getApiKeyById(id: string, req: Request): Promise<import("@ai-aggregator/shared").ApiKey>;
-    updateApiKey(id: string, updateApiKeyDto: UpdateApiKeyDto, req: Request): Promise<import("@ai-aggregator/shared").ApiKey>;
+    getApiKeyById(id: string, req: Request): Promise<ApiKey>;
+    updateApiKey(id: string, updateApiKeyDto: UpdateApiKeyDto, req: Request): Promise<ApiKey>;
     revokeApiKey(id: string, req: Request): Promise<void>;
 }

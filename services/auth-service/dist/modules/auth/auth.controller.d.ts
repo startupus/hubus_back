@@ -4,8 +4,8 @@ import { RegisterDto, LoginDto, ChangePasswordDto, ResetPasswordRequestDto, Rese
 export declare class AuthController {
     private readonly authService;
     constructor(authService: AuthService);
-    register(registerDto: RegisterDto): Promise<import("@ai-aggregator/shared").AuthResult>;
-    login(loginDto: LoginDto, req: Request): Promise<import("@ai-aggregator/shared").AuthResult>;
+    register(registerDto: RegisterDto): Promise<AuthResult>;
+    login(loginDto: LoginDto, req: Request): Promise<AuthResult>;
     logout(refreshToken: string): Promise<void>;
     refreshToken(refreshToken: string): Promise<{
         accessToken: string;
@@ -18,4 +18,9 @@ export declare class AuthController {
     getProfile(req: Request): Promise<{
         userId: any;
     }>;
+    createApiKey(body: {
+        name: string;
+    }, req: Request): Promise<any>;
+    getApiKeys(req: Request): Promise<any>;
+    revokeApiKey(keyId: string, req: Request): Promise<any>;
 }

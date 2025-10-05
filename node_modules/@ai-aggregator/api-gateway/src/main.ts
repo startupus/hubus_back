@@ -21,15 +21,15 @@ async function bootstrap() {
     credentials: true,
   });
 
-  // Global validation pipe
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
-      disableErrorMessages: false,
-    }),
-  );
+  // Global validation pipe - временно отключена для отладки
+  // app.useGlobalPipes(
+  //   new ValidationPipe({
+  //     whitelist: true,
+  //     forbidNonWhitelisted: false,
+  //     transform: true,
+  //     disableErrorMessages: false,
+  //   }),
+  // );
 
   // Swagger documentation
   if (configService.get('NODE_ENV') !== 'production') {

@@ -93,5 +93,54 @@ export class AuthService {
       throw new HttpException('Login failed', HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
+
+  async createApiKey(createApiKeyDto: any): Promise<any> {
+    // Mock implementation for API Gateway
+    return {
+      success: true,
+      message: 'API key created successfully',
+      apiKey: {
+        id: `ak-${Date.now()}`,
+        name: createApiKeyDto.name || 'Default API Key',
+        key: `ak_${Math.random().toString(36).substr(2, 32)}`,
+        userId: createApiKeyDto.userId,
+        isActive: true,
+        createdAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString() // 1 year
+      }
+    };
+  }
+
+  async getApiKeys(getApiKeysDto: any): Promise<any> {
+    // Mock implementation for API Gateway
+    return {
+      success: true,
+      message: 'API keys retrieved successfully',
+      apiKeys: [
+        {
+          id: 'ak-1234567890',
+          name: 'Test API Key',
+          key: 'ak_1234567890abcdef',
+          userId: getApiKeysDto.userId,
+          isActive: true,
+          createdAt: new Date().toISOString(),
+          expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
+        }
+      ]
+    };
+  }
+
+  async revokeApiKey(keyId: string): Promise<any> {
+    // Mock implementation for API Gateway
+    return {
+      success: true,
+      message: 'API key revoked successfully',
+      apiKey: {
+        id: keyId,
+        isActive: false,
+        revokedAt: new Date().toISOString()
+      }
+    };
+  }
 }
 

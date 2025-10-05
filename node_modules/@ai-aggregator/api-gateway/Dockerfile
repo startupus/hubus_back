@@ -42,7 +42,7 @@ COPY --from=development /app/shared ./shared
 RUN ln -sf /app/shared /app/node_modules/@ai-aggregator/shared
 
 # Переустановить bcrypt для текущей архитектуры
-RUN cd /app/shared && npm uninstall bcrypt && npm install bcrypt
+RUN cd /app/shared && npm install bcrypt --force
 
 EXPOSE 3000
 

@@ -3,7 +3,7 @@
  * Logging utilities
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.LoggerUtil = void 0;
+exports.generateCorrelationId = exports.LoggerUtil = void 0;
 class LoggerUtil {
     static formatLogEntry(entry) {
         const timestamp = entry.timestamp.toISOString();
@@ -23,11 +23,30 @@ class LoggerUtil {
         }
         return logMessage;
     }
+    static formatJsonLogEntry(entry) {
+        return JSON.stringify({
+            timestamp: entry.timestamp.toISOString(),
+            level: entry.level,
+            service: entry.service,
+            message: entry.message,
+            requestId: entry.requestId,
+            userId: entry.userId,
+            metadata: entry.metadata,
+            error: entry.error ? {
+                name: entry.error.name,
+                message: entry.error.message,
+                stack: entry.error.stack,
+            } : undefined,
+        });
+    }
     /**
      * Log a message with the specified level
      */
     static log(entry) {
-        const formattedMessage = this.formatLogEntry(entry);
+        const useJsonFormat = process.env.LOG_FORMAT === 'json';
+        const formattedMessage = useJsonFormat
+            ? this.formatJsonLogEntry(entry)
+            : this.formatLogEntry(entry);
         switch (entry.level) {
             case 'debug':
                 console.debug(formattedMessage);
@@ -158,6 +177,14 @@ class LoggerUtil {
             duration,
         }, requestId, userId);
     }
+    /**
+     * Generate a correlation ID for request tracking
+     */
+    static generateCorrelationId() {
+        return `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    }
 }
 exports.LoggerUtil = LoggerUtil;
+// Export the generateCorrelationId function separately for easier access
+exports.generateCorrelationId = LoggerUtil.generateCorrelationId;
 //# sourceMappingURL=logger.util.js.map

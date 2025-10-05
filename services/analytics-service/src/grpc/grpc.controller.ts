@@ -2,7 +2,7 @@ import { Controller } from '@nestjs/common';
 import { GrpcMethod } from '@nestjs/microservices';
 import { LoggerUtil } from '@ai-aggregator/shared';
 
-@Controller()
+@Controller('grpc')
 export class AnalyticsGrpcController {
   constructor() {}
 

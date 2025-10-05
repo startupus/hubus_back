@@ -4,7 +4,6 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const core_1 = require("@nestjs/core");
-const common_1 = require("@nestjs/common");
 const swagger_1 = require("@nestjs/swagger");
 const config_1 = require("@nestjs/config");
 const helmet_1 = __importDefault(require("helmet"));
@@ -20,12 +19,6 @@ async function bootstrap() {
         origin: configService.get('CORS_ORIGIN', '*'),
         credentials: true,
     });
-    app.useGlobalPipes(new common_1.ValidationPipe({
-        whitelist: true,
-        forbidNonWhitelisted: true,
-        transform: true,
-        disableErrorMessages: false,
-    }));
     if (configService.get('NODE_ENV') !== 'production') {
         const config = new swagger_1.DocumentBuilder()
             .setTitle('AI Aggregator API Gateway')

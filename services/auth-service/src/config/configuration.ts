@@ -68,6 +68,14 @@ export const configuration = (): MicroserviceConfig => ({
       maxRetries: parseInt(process.env.OPENROUTER_MAX_RETRIES || '3', 10),
       retryDelay: parseInt(process.env.OPENROUTER_RETRY_DELAY || '1000', 10),
     },
+    yandex: {
+      apiKey: process.env.YANDEX_API_KEY || '',
+      folderId: process.env.YANDEX_FOLDER_ID || '',
+      baseUrl: process.env.YANDEX_BASE_URL || 'https://llm.api.cloud.yandex.net/foundationModels/v1',
+      timeout: parseInt(process.env.YANDEX_TIMEOUT || '60000', 10),
+      maxRetries: parseInt(process.env.YANDEX_MAX_RETRIES || '3', 10),
+      retryDelay: parseInt(process.env.YANDEX_RETRY_DELAY || '1000', 10),
+    },
   },
   billing: {
     defaultCurrency: process.env.BILLING_DEFAULT_CURRENCY || 'USD',
@@ -105,5 +113,35 @@ export const configuration = (): MicroserviceConfig => ({
     maxLoginAttempts: parseInt(process.env.MAX_LOGIN_ATTEMPTS || '5', 10),
     lockoutDuration: parseInt(process.env.LOCKOUT_DURATION || '900000', 10),
     requireEmailVerification: process.env.REQUIRE_EMAIL_VERIFICATION === 'true',
+  },
+  services: {
+    auth: {
+      url: process.env.AUTH_SERVICE_URL || 'http://auth-service:3001',
+      timeout: parseInt(process.env.AUTH_SERVICE_TIMEOUT || '5000', 10),
+    },
+    proxy: {
+      url: process.env.PROXY_SERVICE_URL || 'http://proxy-service:3003',
+      timeout: parseInt(process.env.PROXY_SERVICE_TIMEOUT || '5000', 10),
+    },
+    analytics: {
+      url: process.env.ANALYTICS_SERVICE_URL || 'http://analytics-service:3005',
+      timeout: parseInt(process.env.ANALYTICS_SERVICE_TIMEOUT || '5000', 10),
+    },
+    billing: {
+      url: process.env.BILLING_SERVICE_URL || 'http://billing-service:3004',
+      timeout: parseInt(process.env.BILLING_SERVICE_TIMEOUT || '5000', 10),
+    },
+    classification: {
+      url: process.env.CLASSIFICATION_SERVICE_URL || 'http://classification-service:3006',
+      timeout: parseInt(process.env.CLASSIFICATION_SERVICE_TIMEOUT || '5000', 10),
+    },
+    certification: {
+      url: process.env.CERTIFICATION_SERVICE_URL || 'http://certification-service:3007',
+      timeout: parseInt(process.env.CERTIFICATION_SERVICE_TIMEOUT || '5000', 10),
+    },
+    safety: {
+      url: process.env.SAFETY_SERVICE_URL || 'http://safety-service:3008',
+      timeout: parseInt(process.env.SAFETY_SERVICE_TIMEOUT || '5000', 10),
+    },
   },
 });

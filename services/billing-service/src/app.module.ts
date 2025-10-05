@@ -3,6 +3,8 @@ import { ConfigModule } from '@nestjs/config';
 import { validationSchema } from './config/validation.schema';
 import configuration from './config/configuration';
 import { BillingModule } from './billing/billing.module';
+import { HttpModule } from './http/http.module';
+import { HealthModule } from './health/health.module';
 
 @Module({
   imports: [
@@ -14,6 +16,8 @@ import { BillingModule } from './billing/billing.module';
       expandVariables: true,
     }),
     BillingModule,
+    HttpModule,
+    HealthModule,
   ],
 })
 export class AppModule {}

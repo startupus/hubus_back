@@ -6,6 +6,7 @@ import { AuthModule } from './auth/auth.module';
 import { ChatModule } from './chat/chat.module';
 import { BillingModule } from './billing/billing.module';
 import { AnalyticsModule } from './analytics/analytics.module';
+import { AICertificationModule } from './ai-certification/ai-certification.module';
 import { configuration } from './config/configuration';
 import { validationSchema } from './config/validation.schema';
 
@@ -28,6 +29,7 @@ import { validationSchema } from './config/validation.schema';
     ChatModule,
     BillingModule,
     AnalyticsModule,
+    AICertificationModule,
   ],
 })
 export class AppModule {}

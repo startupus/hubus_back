@@ -9,18 +9,27 @@ export * from './types/auth';
 export * from './types/billing';
 export * from './types/providers';
 export * from './types/events';
+export * from './types/ai-certification';
 
 // DTOs
 export * from './dto/base.dto';
 export * from './dto/auth.dto';
 export * from './dto/billing.dto';
 export * from './dto/providers.dto';
+export * from './dto/chat.dto';
+export * from './dto/ai-certification.dto';
 
 // Utilities
 export * from './utils/crypto.util';
 export * from './utils/validation.util';
 export * from './utils/response.util';
 export * from './utils/logger.util';
+
+// Services
+export * from './services/anonymization.service';
+export * from './services/ai-classification.service';
+export * from './services/ai-certification.service';
+export * from './services/ai-safety.service';
 
 // Constants
 export * from './constants';
@@ -88,3 +97,23 @@ export type {
   SecurityConfig,
   ServiceConfig,
 } from './interfaces/config.interface';
+
+export type {
+  AICategory,
+  AICertificationLevel,
+  AICertificationStatus,
+  AISafetyLevel,
+  AICapability,
+  TestResult,
+  AICertification,
+  ComplianceInfo,
+  AIClassification,
+  AIClassificationRequest,
+  AIClassificationResponse,
+  CertificationAudit,
+  AuditFinding,
+  AIPerformanceMetrics,
+  AISafetyAssessment,
+  RiskFactor,
+  SafetyIncident,
+} from './types/ai-certification';

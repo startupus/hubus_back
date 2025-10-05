@@ -15,6 +15,7 @@ const auth_module_1 = require("./auth/auth.module");
 const chat_module_1 = require("./chat/chat.module");
 const billing_module_1 = require("./billing/billing.module");
 const analytics_module_1 = require("./analytics/analytics.module");
+const ai_certification_module_1 = require("./ai-certification/ai-certification.module");
 const configuration_1 = require("./config/configuration");
 const validation_schema_1 = require("./config/validation.schema");
 let AppModule = class AppModule {
@@ -40,6 +41,7 @@ exports.AppModule = AppModule = __decorate([
             chat_module_1.ChatModule,
             billing_module_1.BillingModule,
             analytics_module_1.AnalyticsModule,
+            ai_certification_module_1.AICertificationModule,
         ],
     })
 ], AppModule);

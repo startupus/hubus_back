@@ -1,62 +1,46 @@
 import { Controller, Post, Get, Body, Param, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
-import { LoggerUtil } from '@ai-aggregator/shared';
+import { LoggerUtil, ChatCompletionRequest, ChatCompletionResponse } from '@ai-aggregator/shared';
+import { ProxyService } from './proxy.service';
 
 @ApiTags('Proxy Service')
 @Controller('proxy')
 export class ProxyController {
-  constructor() {}
+  constructor(private readonly proxyService: ProxyService) {}
 
-  @Post('request')
-  @ApiOperation({ summary: 'Proxy request to external AI provider' })
-  @ApiResponse({ status: 200, description: 'Request processed successfully' })
-  async proxyRequest(@Body() body: {
-    user_id: string;
-    provider: string;
-    model: string;
-    request_type?: string;
-    prompt: string;
-    max_tokens?: number;
-    temperature?: number;
-    top_p?: number;
-  }) {
+  @Post('chat/completions')
+  @ApiOperation({ summary: 'Process chat completion with anonymization' })
+  @ApiResponse({ status: 200, description: 'Chat completion processed successfully' })
+  async chatCompletions(
+    @Body() request: any,
+    @Query('user_id') userId: string,
+    @Query('provider') provider: 'openai' | 'openrouter' | 'yandex' = 'openai'
+  ): Promise<any> {
     try {
-      LoggerUtil.debug('proxy-service', 'HTTP ProxyRequest called', { 
-        user_id: body.user_id,
-        provider: body.provider,
-        model: body.model 
+      // Валидация входных данных
+      if (!request || !request.model) {
+        throw new Error('Missing required field: model');
+      }
+      
+      if (!request.messages || !Array.isArray(request.messages) || request.messages.length === 0) {
+        throw new Error('Missing or invalid messages array');
+      }
+      
+      LoggerUtil.debug('proxy-service', 'Chat completions request', { 
+        userId,
+        provider,
+        model: request.model,
+        messageCount: request.messages?.length || 0
       });
       
-      return {
-        success: true,
-        message: 'Request processed successfully',
-        response_text: 'This is a mock AI response from the proxy service',
-        input_tokens: 10,
-        output_tokens: 20,
-        cost: 0.05,
-        currency: 'USD',
-        response_time: 1.5,
-        provider: body.provider || 'openai',
-        model: body.model || 'gpt-4',
-        finish_reason: 'stop',
-        metadata: {},
-      };
+      return await this.proxyService.processChatCompletion(request, userId, provider);
     } catch (error) {
-      LoggerUtil.error('proxy-service', 'HTTP ProxyRequest failed', error as Error);
-      return {
-        success: false,
-        message: error instanceof Error ? error.message : 'Unknown error',
-        response_text: '',
-        input_tokens: 0,
-        output_tokens: 0,
-        cost: 0,
-        currency: 'USD',
-        response_time: 0,
-        provider: '',
-        model: '',
-        finish_reason: 'error',
-        metadata: {},
-      };
+      LoggerUtil.error('proxy-service', 'Chat completions failed', error as Error, {
+        userId,
+        provider,
+        model: request.model
+      });
+      throw error;
     }
   }
 
@@ -64,50 +48,21 @@ export class ProxyController {
   @ApiOperation({ summary: 'Get available models' })
   @ApiResponse({ status: 200, description: 'Models retrieved successfully' })
   async getModels(
-    @Query('provider') provider?: string,
+    @Query('provider') provider?: 'openai' | 'openrouter' | 'yandex',
     @Query('category') category?: string
   ) {
     try {
-      LoggerUtil.debug('proxy-service', 'HTTP GetModels called', { provider, category });
+      LoggerUtil.debug('proxy-service', 'Get models request', { provider, category });
+      
+      const models = await this.proxyService.getAvailableModels(provider);
       
       return {
         success: true,
         message: 'Models retrieved successfully',
-        models: [
-          {
-            id: 'gpt-4',
-            name: 'GPT-4',
-            provider: 'openai',
-            category: 'chat',
-            description: 'Most capable GPT-4 model',
-            max_tokens: 8192,
-            cost_per_input_token: 0.00003,
-            cost_per_output_token: 0.00006,
-            currency: 'USD',
-            is_available: true,
-            capabilities: ['chat', 'completion'],
-            created_at: '2023-03-14T00:00:00Z',
-            updated_at: '2023-03-14T00:00:00Z',
-          },
-          {
-            id: 'gpt-3.5-turbo',
-            name: 'GPT-3.5 Turbo',
-            provider: 'openai',
-            category: 'chat',
-            description: 'Fast and efficient GPT-3.5 model',
-            max_tokens: 4096,
-            cost_per_input_token: 0.0000015,
-            cost_per_output_token: 0.000002,
-            currency: 'USD',
-            is_available: true,
-            capabilities: ['chat', 'completion'],
-            created_at: '2022-11-30T00:00:00Z',
-            updated_at: '2022-11-30T00:00:00Z',
-          },
-        ],
+        models: models.filter(model => !category || model.category === category),
       };
     } catch (error) {
-      LoggerUtil.error('proxy-service', 'HTTP GetModels failed', error as Error);
+      LoggerUtil.error('proxy-service', 'Get models failed', error as Error, { provider, category });
       return {
         success: false,
         message: error instanceof Error ? error.message : 'Unknown error',
@@ -120,33 +75,30 @@ export class ProxyController {
   @ApiOperation({ summary: 'Get model information' })
   @ApiResponse({ status: 200, description: 'Model info retrieved successfully' })
   async getModelInfo(
-    @Param('provider') provider: string,
+    @Param('provider') provider: 'openai' | 'openrouter' | 'yandex',
     @Param('model') model: string
   ) {
     try {
-      LoggerUtil.debug('proxy-service', 'HTTP GetModelInfo called', { provider, model });
+      LoggerUtil.debug('proxy-service', 'Get model info request', { provider, model });
+      
+      const models = await this.proxyService.getAvailableModels(provider);
+      const modelInfo = models.find(m => m.id === model);
+      
+      if (!modelInfo) {
+        return {
+          success: false,
+          message: `Model ${model} not found for provider ${provider}`,
+          model: null,
+        };
+      }
       
       return {
         success: true,
         message: 'Model info retrieved successfully',
-        model: {
-          id: model,
-          name: model,
-          provider: provider,
-          category: 'chat',
-          description: `Information about ${model} from ${provider}`,
-          max_tokens: 4096,
-          cost_per_input_token: 0.00003,
-          cost_per_output_token: 0.00006,
-          currency: 'USD',
-          is_available: true,
-          capabilities: ['chat', 'completion'],
-          created_at: '2023-01-01T00:00:00Z',
-          updated_at: '2023-01-01T00:00:00Z',
-        },
+        model: modelInfo,
       };
     } catch (error) {
-      LoggerUtil.error('proxy-service', 'HTTP GetModelInfo failed', error as Error);
+      LoggerUtil.error('proxy-service', 'Get model info failed', error as Error, { provider, model });
       return {
         success: false,
         message: error instanceof Error ? error.message : 'Unknown error',
@@ -158,32 +110,28 @@ export class ProxyController {
   @Post('validate-request')
   @ApiOperation({ summary: 'Validate request before processing' })
   @ApiResponse({ status: 200, description: 'Request validated successfully' })
-  async validateRequest(@Body() body: {
-    user_id: string;
-    provider: string;
-    model: string;
-    request_type: string;
-    prompt: string;
-    max_tokens?: number;
-  }) {
+  async validateRequest(@Body() request: ChatCompletionRequest) {
     try {
-      LoggerUtil.debug('proxy-service', 'HTTP ValidateRequest called', { 
-        user_id: body.user_id,
-        provider: body.provider,
-        model: body.model 
+      LoggerUtil.debug('proxy-service', 'Validate request', { 
+        model: request.model,
+        messageCount: request.messages.length
       });
       
+      const validation = await this.proxyService.validateRequest(request);
+      
       return {
-        success: true,
-        message: 'Request is valid',
-        is_valid: true,
-        errors: [],
-        warnings: [],
-        estimated_tokens: body.prompt.length / 4,
-        estimated_cost: (body.prompt.length / 4) * 0.00003,
+        success: validation.isValid,
+        message: validation.isValid ? 'Request is valid' : 'Request validation failed',
+        is_valid: validation.isValid,
+        errors: validation.errors,
+        warnings: validation.warnings,
+        estimated_tokens: validation.estimatedTokens,
+        estimated_cost: validation.estimatedCost,
       };
     } catch (error) {
-      LoggerUtil.error('proxy-service', 'HTTP ValidateRequest failed', error as Error);
+      LoggerUtil.error('proxy-service', 'Validate request failed', error as Error, {
+        model: request.model
+      });
       return {
         success: false,
         message: error instanceof Error ? error.message : 'Unknown error',

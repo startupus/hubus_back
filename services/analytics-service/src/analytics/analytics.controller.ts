@@ -126,10 +126,10 @@ export class AnalyticsController {
     }
   }
 
-  @Get('health')
-  @ApiOperation({ summary: 'Health check for analytics service' })
+  @Get('ping')
+  @ApiOperation({ summary: 'Ping check for analytics service' })
   @ApiResponse({ status: 200, description: 'Service is healthy' })
-  async getHealth() {
+  async getPing() {
     return {
       service: 'analytics-service',
       status: 'healthy',

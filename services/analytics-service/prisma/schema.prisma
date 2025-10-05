@@ -1,0 +1,379 @@
+// This is your Prisma schema file for Analytics Service
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("ANALYTICS_DATABASE_URL")
+}
+
+// ===========================================
+// CORE ANALYTICS TABLES
+// ===========================================
+
+model AnalyticsEvent {
+  id          String   @id @default(uuid())
+  userId      String?
+  sessionId   String?
+  eventType   String   // 'user_action', 'system_event', 'ai_interaction', 'security_event'
+  eventName   String   // 'login', 'api_request', 'model_classification', etc.
+  service     String   // 'auth-service', 'proxy-service', 'api-gateway', etc.
+  properties  Json     // Event-specific data
+  metadata    Json?    // Additional metadata
+  timestamp   DateTime @default(now())
+  ipAddress   String?
+  userAgent   String?
+  
+  // Relations
+  user        User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  session     AnalyticsSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  
+  @@index([userId])
+  @@index([eventType])
+  @@index([eventName])
+  @@index([service])
+  @@index([timestamp])
+  @@map("analytics_events")
+}
+
+model AnalyticsSession {
+  id          String   @id @default(uuid())
+  userId      String?
+  sessionId   String   @unique
+  startTime   DateTime @default(now())
+  endTime     DateTime?
+  duration    Int?     // in seconds
+  isActive    Boolean  @default(true)
+  ipAddress   String?
+  userAgent   String?
+  metadata    Json?
+  
+  // Relations
+  user        User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  events      AnalyticsEvent[]
+  
+  @@index([userId])
+  @@index([sessionId])
+  @@index([startTime])
+  @@map("analytics_sessions")
+}
+
+model MetricsSnapshot {
+  id          String   @id @default(uuid())
+  service     String
+  metricType  String   // 'performance', 'usage', 'error', 'resource'
+  metricName  String   // 'response_time', 'cpu_usage', 'request_count'
+  value       Float
+  unit        String   // 'ms', 'count', 'percent', 'bytes'
+  labels      Json     // Key-value pairs for grouping
+  timestamp   DateTime @default(now())
+  metadata    Json?
+  
+  @@index([service])
+  @@index([metricType])
+  @@index([metricName])
+  @@index([timestamp])
+  @@map("metrics_snapshots")
+}
+
+// ===========================================
+// USER ANALYTICS
+// ===========================================
+
+model UserAnalytics {
+  id                String   @id @default(uuid())
+  userId            String   @unique
+  totalRequests     Int      @default(0)
+  totalTokens       Int      @default(0)
+  totalCost         Float    @default(0)
+  averageResponseTime Float  @default(0)
+  successRate       Float    @default(0)
+  lastActivity      DateTime @default(now())
+  preferences       Json?
+  timezone          String?
+  language          String?
+  
+  // Relations
+  user              User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([lastActivity])
+  @@map("user_analytics")
+}
+
+model UserUsageHistory {
+  id          String   @id @default(uuid())
+  userId      String
+  date        DateTime @db.Date
+  requests    Int      @default(0)
+  tokens      Int      @default(0)
+  cost        Float    @default(0)
+  models      Json     // Model usage breakdown
+  providers   Json     // Provider usage breakdown
+  
+  // Relations
+  user        User @relation("UserUsageHistoryUser", fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([date])
+  @@unique([userId, date])
+  @@map("user_usage_history")
+}
+
+model UserCostHistory {
+  id          String   @id @default(uuid())
+  userId      String
+  date        DateTime @db.Date
+  totalCost   Float    @default(0)
+  modelCosts  Json     // Cost breakdown by model
+  providerCosts Json   // Cost breakdown by provider
+  currency    String   @default("USD")
+  
+  // Relations
+  user        User @relation("UserCostHistoryUser", fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([date])
+  @@unique([userId, date])
+  @@map("user_cost_history")
+}
+
+// ===========================================
+// AI ANALYTICS
+// ===========================================
+
+model AIAnalytics {
+  id                String   @id @default(uuid())
+  modelId           String
+  provider          String
+  totalRequests     Int      @default(0)
+  totalTokens       Int      @default(0)
+  averageLatency    Float    @default(0)
+  successRate       Float    @default(0)
+  averageCost       Float    @default(0)
+  qualityScore      Float?   // AI quality assessment
+  lastUpdated       DateTime @default(now())
+  metadata          Json?
+  
+  @@index([modelId])
+  @@index([provider])
+  @@index([lastUpdated])
+  @@unique([modelId, provider])
+  @@map("ai_analytics")
+}
+
+model AIClassificationAnalytics {
+  id                String   @id @default(uuid())
+  modelId           String
+  category          String
+  totalClassified   Int      @default(0)
+  accuracyRate      Float    @default(0)
+  averageConfidence Float    @default(0)
+  processingTime    Float    @default(0)
+  lastUpdated       DateTime @default(now())
+  
+  @@index([modelId])
+  @@index([category])
+  @@index([lastUpdated])
+  @@unique([modelId, category])
+  @@map("ai_classification_analytics")
+}
+
+model AICertificationAnalytics {
+  id                String   @id @default(uuid())
+  modelId           String
+  certificationLevel String
+  totalCertified    Int      @default(0)
+  complianceRate    Float    @default(0)
+  auditFindings     Int      @default(0)
+  renewalRate       Float    @default(0)
+  lastUpdated       DateTime @default(now())
+  
+  @@index([modelId])
+  @@index([certificationLevel])
+  @@index([lastUpdated])
+  @@unique([modelId, certificationLevel])
+  @@map("ai_certification_analytics")
+}
+
+model AISafetyAnalytics {
+  id                String   @id @default(uuid())
+  modelId           String
+  safetyLevel       String
+  totalAssessed     Int      @default(0)
+  riskScore         Float    @default(0)
+  biasScore         Float    @default(0)
+  incidentCount     Int      @default(0)
+  lastUpdated       DateTime @default(now())
+  
+  @@index([modelId])
+  @@index([safetyLevel])
+  @@index([lastUpdated])
+  @@unique([modelId, safetyLevel])
+  @@map("ai_safety_analytics")
+}
+
+// ===========================================
+// SYSTEM ANALYTICS
+// ===========================================
+
+model SystemHealth {
+  id              String   @id @default(uuid())
+  service         String
+  status          String   // 'healthy', 'degraded', 'unhealthy'
+  responseTime    Float?
+  errorRate       Float?
+  cpuUsage        Float?
+  memoryUsage     Float?
+  diskUsage       Float?
+  networkLatency  Float?
+  timestamp       DateTime @default(now())
+  metadata        Json?
+  
+  @@index([service])
+  @@index([status])
+  @@index([timestamp])
+  @@map("system_health")
+}
+
+model ErrorAnalytics {
+  id              String   @id @default(uuid())
+  service         String
+  errorType       String
+  errorCode       String?
+  errorMessage    String?
+  stackTrace      String?
+  userId          String?
+  requestId       String?
+  timestamp       DateTime @default(now())
+  resolved        Boolean  @default(false)
+  resolvedAt      DateTime?
+  metadata        Json?
+  
+  // Relations
+  user            User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  
+  @@index([service])
+  @@index([errorType])
+  @@index([timestamp])
+  @@index([resolved])
+  @@map("error_analytics")
+}
+
+// ===========================================
+// ALERTS AND NOTIFICATIONS
+// ===========================================
+
+model Alert {
+  id              String   @id @default(uuid())
+  alertType       String   // 'critical', 'warning', 'info'
+  alertName       String
+  description     String
+  service         String?
+  userId          String?
+  isActive        Boolean  @default(true)
+  triggeredAt     DateTime @default(now())
+  resolvedAt      DateTime?
+  metadata        Json?
+  
+  // Relations
+  user            User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  
+  @@index([alertType])
+  @@index([service])
+  @@index([isActive])
+  @@index([triggeredAt])
+  @@map("alerts")
+}
+
+model AlertRule {
+  id              String   @id @default(uuid())
+  name            String
+  description     String
+  alertType       String
+  condition       Json     // Alert condition configuration
+  threshold       Float?
+  service         String?
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@index([alertType])
+  @@index([service])
+  @@index([isActive])
+  @@map("alert_rules")
+}
+
+// ===========================================
+// INTEGRATIONS
+// ===========================================
+
+model ExternalIntegration {
+  id              String   @id @default(uuid())
+  integrationType String   // 'prometheus', 'grafana', 'slack', 'webhook'
+  name            String
+  config          Json     // Integration configuration
+  isActive        Boolean  @default(true)
+  lastSync        DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@index([integrationType])
+  @@index([isActive])
+  @@map("external_integrations")
+}
+
+model DataExport {
+  id              String   @id @default(uuid())
+  exportType      String   // 'csv', 'json', 'excel'
+  filters         Json     // Export filters
+  status          String   // 'pending', 'processing', 'completed', 'failed'
+  filePath        String?
+  userId          String?
+  createdAt       DateTime @default(now())
+  completedAt     DateTime?
+  expiresAt       DateTime?
+  
+  // Relations
+  user            User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  
+  @@index([exportType])
+  @@index([status])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("data_exports")
+}
+
+// ===========================================
+// REFERENCE DATA
+// ===========================================
+
+model User {
+  id              String   @id @default(uuid())
+  email           String   @unique
+  firstName       String?
+  lastName        String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  // Relations
+  analyticsEvents AnalyticsEvent[]
+  sessions        AnalyticsSession[]
+  userAnalytics   UserAnalytics?
+  usageHistory    UserUsageHistory[] @relation("UserUsageHistoryUser")
+  costHistory     UserCostHistory[] @relation("UserCostHistoryUser")
+  errorAnalytics  ErrorAnalytics[]
+  alerts          Alert[]
+  dataExports     DataExport[]
+  
+  @@map("users")
+}
+
+// ===========================================
+// INDEXES FOR PERFORMANCE
+// ===========================================
+
+// Composite indexes are defined within individual models above

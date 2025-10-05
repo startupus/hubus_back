@@ -1,44 +1,46 @@
-FROM node:18-alpine AS development
+# Use Node.js 18 Alpine as base image
+FROM node:18-alpine
 
+# Install required dependencies for Prisma
+RUN apk add --no-cache openssl
+
+# Set working directory
 WORKDIR /app
 
-# Копировать shared пакет
+# Create logs directory
+RUN mkdir -p /app/logs
+
+# Copy package files
+COPY services/analytics-service/package*.json ./
+COPY services/shared/package*.json ./shared/
+
+# Install dependencies
+RUN npm install --only=production
+
+# Copy shared package
 COPY services/shared ./shared
+
+# Build shared package
 WORKDIR /app/shared
 RUN npm install
 RUN npm run build
 
-# Копировать analytics-service
+# Copy analytics service source
 WORKDIR /app
-COPY services/analytics-service/package*.json ./
-RUN npm install
 COPY services/analytics-service ./
 
-# Создать символическую ссылку на shared пакет
-RUN ln -sf /app/shared /app/node_modules/@ai-aggregator/shared
+# Install shared package locally
+RUN npm install ./shared
 
-RUN npm run build
+# Generate Prisma client
+RUN npx prisma generate
 
-FROM node:18-alpine AS production
+# Expose port
+EXPOSE 3005
 
-# Установить зависимости для bcrypt
-RUN apk add --no-cache python3 make g++
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:3005/health || exit 1
 
-WORKDIR /app
-
-COPY services/analytics-service/package*.json ./
-RUN npm install --only=production
-
-COPY --from=development /app/dist ./dist
-COPY --from=development /app/shared ./shared
-COPY --from=development /app/proto ./proto
-
-# Создать символическую ссылку на shared пакет
-RUN ln -sf /app/shared /app/node_modules/@ai-aggregator/shared
-
-# Переустановить bcrypt для текущей архитектуры
-RUN cd /app/shared && npm uninstall bcrypt && npm install bcrypt
-
-EXPOSE 3005 50053
-
-CMD ["node", "dist/main"]
+# Start the application
+CMD ["npm", "run", "start:prod"]

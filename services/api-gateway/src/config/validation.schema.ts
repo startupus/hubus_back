@@ -24,6 +24,12 @@ export const validationSchema = Joi.object({
   RABBITMQ_USERNAME: Joi.string().default('guest'),
   RABBITMQ_PASSWORD: Joi.string().default('guest'),
   
+  // Service URLs
+  AUTH_SERVICE_URL: Joi.string().default('http://auth-service:3001'),
+  BILLING_SERVICE_URL: Joi.string().default('http://billing-service:3004'),
+  ANALYTICS_SERVICE_URL: Joi.string().default('http://analytics-service:3005'),
+  PROXY_SERVICE_URL: Joi.string().default('http://proxy-service:3003'),
+  
   // JWT
   JWT_SECRET: Joi.string().required(),
   JWT_EXPIRES_IN: Joi.string().default('24h'),

@@ -5,7 +5,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { ApiKeyModule } from './modules/api-key/api-key.module';
 import { UserModule } from './modules/user/user.module';
 import { SecurityModule } from './modules/security/security.module';
-import { GrpcModule } from './grpc/grpc.module';
+import { HttpModule } from './http/http.module';
 import { HealthModule } from './health/health.module';
 import { configuration } from './config/configuration';
 import { validationSchema } from './config/validation.schema';
@@ -25,7 +25,7 @@ import { validationSchema } from './config/validation.schema';
     ApiKeyModule,
     UserModule,
     SecurityModule,
-    GrpcModule,
+    HttpModule,
     HealthModule,
   ],
 })

@@ -31,7 +31,7 @@ export interface JwtPayload {
     email: string;
     role: UserRole;
     iat: number;
-    exp: number;
+    exp?: number;
     jti?: string;
 }
 export interface RefreshToken {

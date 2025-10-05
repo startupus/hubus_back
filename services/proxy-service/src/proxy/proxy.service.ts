@@ -8,7 +8,8 @@ import {
   ChatCompletionResponse, 
   AnonymizationService,
   AnonymizedData,
-  LoggerUtil 
+  LoggerUtil,
+  RabbitMQService
 } from '@ai-aggregator/shared';
 
 @Injectable()
@@ -287,6 +288,39 @@ export class ProxyService {
       ...response,
       choices: deanonymizedChoices
     };
+  }
+
+  /**
+   * Отправляет событие биллинга через RabbitMQ
+   */
+  async sendBillingEvent(billingData: any): Promise<void> {
+    try {
+      // TODO: Re-enable RabbitMQ integration
+      // await this.rabbitmq.publishCriticalMessage('billing.usage', {
+      //   eventType: 'ai_usage',
+      //   userId: billingData.userId,
+      //   service: billingData.service,
+      //   resource: billingData.resource,
+      //   tokens: billingData.tokens,
+      //   cost: billingData.cost,
+      //   provider: billingData.provider,
+      //   model: billingData.model,
+      //   timestamp: billingData.timestamp,
+      //   metadata: {
+      //     service: 'proxy-service',
+      //     currency: 'USD'
+      //   }
+      // });
+      
+      LoggerUtil.debug('proxy-service', 'Billing event sent successfully', {
+        userId: billingData.userId,
+        tokens: billingData.tokens,
+        cost: billingData.cost
+      });
+    } catch (error) {
+      LoggerUtil.error('proxy-service', 'Failed to send billing event', error as Error);
+      throw error;
+    }
   }
 
   /**

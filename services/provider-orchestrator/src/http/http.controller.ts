@@ -30,12 +30,14 @@ export class HttpController {
         model: data.model 
       });
       
-      // Заглушка - в реальном проекте здесь будет маршрутизация запроса
+      // Простая заглушка для маршрутизации
       return {
-        response: 'AI response from provider',
-        provider: 'openai',
-        model: data.model || 'gpt-4',
-        cost: 0.05,
+        success: true,
+        message: 'Request routed successfully',
+        provider: data.provider || 'openai',
+        model: data.model || 'gpt-3.5-turbo',
+        estimatedCost: 0.05,
+        estimatedTokens: 30
       };
     } catch (error) {
       LoggerUtil.error('provider-orchestrator', 'HTTP RouteRequest failed', error as Error);
@@ -52,12 +54,14 @@ export class HttpController {
         provider_id: providerId 
       });
       
-      // Заглушка - в реальном проекте здесь будет проверка статуса провайдера
+      // Простая заглушка для статуса провайдера
       return {
-        providerName: providerId,
+        provider: providerId,
         status: 'operational',
-        lastChecked: new Date().toISOString(),
-        message: 'Provider is operational',
+        responseTime: 100,
+        successRate: 99.5,
+        errorRate: 0.5,
+        message: 'Provider is operational'
       };
     } catch (error) {
       LoggerUtil.error('provider-orchestrator', 'HTTP GetProviderStatus failed', error as Error);
@@ -102,29 +106,22 @@ export class HttpController {
     try {
       LoggerUtil.debug('provider-orchestrator', 'HTTP GetModels called');
       
-      // Заглушка - в реальном проекте здесь будет список моделей
+      // Простая заглушка для моделей
       return {
         models: [
           {
             id: 'gpt-4',
             name: 'GPT-4',
-            provider: 'openai',
+            provider: 'OpenAI',
             status: 'available',
             costPerToken: 0.00003
           },
           {
             id: 'gpt-3.5-turbo',
             name: 'GPT-3.5 Turbo',
-            provider: 'openai',
+            provider: 'OpenAI',
             status: 'available',
-            costPerToken: 0.000002
-          },
-          {
-            id: 'claude-3',
-            name: 'Claude 3',
-            provider: 'openrouter',
-            status: 'available',
-            costPerToken: 0.000015
+            costPerToken: 0.00002
           }
         ]
       };

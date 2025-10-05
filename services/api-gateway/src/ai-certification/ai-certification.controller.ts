@@ -34,11 +34,12 @@ export class AICertificationController {
     return this.certificationService.getCertificationStatuses();
   }
 
-  @Get('models/:modelId')
-  @ApiOperation({ summary: 'Get model certification' })
+  @Get('model/:modelId')
+  @ApiOperation({ summary: 'Get model certification by model ID' })
   @ApiParam({ name: 'modelId', description: 'Model ID' })
-  @ApiResponse({ status: 200, description: 'Certification retrieved successfully' })
-  async getModelCertification(@Param('modelId') modelId: string): Promise<AICertification | null> {
+  @ApiResponse({ status: 200, description: 'Model certification retrieved successfully' })
+  @ApiResponse({ status: 404, description: 'Model certification not found' })
+  async getModelCertificationById(@Param('modelId') modelId: string): Promise<AICertification | null> {
     return this.certificationService.getModelCertification(modelId);
   }
 
@@ -79,5 +80,12 @@ export class AICertificationController {
     };
   }> {
     return this.certificationService.getLevelRequirements(level);
+  }
+
+  @Get('requirements')
+  @ApiOperation({ summary: 'Get general certification requirements' })
+  @ApiResponse({ status: 200, description: 'Requirements retrieved successfully' })
+  async getRequirements(): Promise<any> {
+    return this.certificationService.getRequirements();
   }
 }

@@ -1,113 +1,98 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
+import { HttpService } from '@nestjs/axios';
+import { ConfigService } from '@nestjs/config';
+import { firstValueFrom } from 'rxjs';
 import { UserBalanceDto } from '@ai-aggregator/shared';
 
 @Injectable()
 export class BillingService {
+  private readonly billingServiceUrl: string;
+
+  constructor(
+    private readonly httpService: HttpService,
+    private readonly configService: ConfigService,
+  ) {
+    this.billingServiceUrl = this.configService.get('BILLING_SERVICE_URL', 'http://billing-service:3004');
+  }
+
   async getBalance(userId: string): Promise<UserBalanceDto> {
-    // TODO: Implement balance retrieval logic
-    return {
-      userId: userId,
-      balance: 100.0,
-      currency: 'USD',
-      lastUpdated: new Date().toISOString(),
-    };
+    try {
+      const response = await firstValueFrom(
+        this.httpService.get(`${this.billingServiceUrl}/billing/balance/${userId}`)
+      );
+      return response.data;
+    } catch (error: any) {
+      if (error.response?.status === 404) {
+        throw new HttpException('User balance not found', HttpStatus.NOT_FOUND);
+      }
+      throw new HttpException('Failed to get balance', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
   }
 
   async trackUsage(data: any): Promise<any> {
-    // TODO: Implement usage tracking logic
-    return {
-      success: true,
-      message: 'Usage tracked successfully',
-      usageEvent: {
-        id: `usage-${Date.now()}`,
-        userId: data.userId,
-        service: data.service,
-        resource: data.resource,
-        quantity: data.quantity,
-        timestamp: new Date().toISOString()
-      }
-    };
+    try {
+      const response = await firstValueFrom(
+        this.httpService.post(`${this.billingServiceUrl}/billing/usage/track`, data)
+      );
+      return response.data;
+    } catch (error: any) {
+      throw new HttpException('Failed to track usage', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
   }
 
   async getReport(userId: string): Promise<any> {
-    // TODO: Implement billing report logic
-    return {
-      success: true,
-      message: 'Billing report generated successfully',
-      report: {
-        userId: userId,
-        period: {
-          start: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-          end: new Date().toISOString()
-        },
-        totalUsage: 100,
-        totalCost: 5.0,
-        currency: 'USD',
-        transactions: []
-      }
-    };
+    try {
+      const response = await firstValueFrom(
+        this.httpService.get(`${this.billingServiceUrl}/billing/report/${userId}`)
+      );
+      return response.data;
+    } catch (error: any) {
+      throw new HttpException('Failed to get billing report', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
   }
 
   async createTransaction(data: any): Promise<any> {
-    // TODO: Implement transaction creation logic
-    return {
-      success: true,
-      message: 'Transaction created successfully',
-      transaction: {
-        id: `tx-${Date.now()}`,
-        userId: data.userId,
-        amount: data.amount,
-        type: data.type,
-        description: data.description,
-        status: 'PENDING',
-        createdAt: new Date().toISOString()
-      }
-    };
+    try {
+      const response = await firstValueFrom(
+        this.httpService.post(`${this.billingServiceUrl}/billing/transaction`, data)
+      );
+      return response.data;
+    } catch (error: any) {
+      throw new HttpException('Failed to create transaction', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
   }
 
   async getTransactions(userId: string): Promise<any> {
-    // TODO: Implement transactions retrieval logic
-    return {
-      success: true,
-      message: 'Transaction history retrieved successfully',
-      transactions: [],
-      pagination: {
-        page: 1,
-        limit: 10,
-        total: 0,
-        totalPages: 0
-      }
-    };
+    try {
+      const response = await firstValueFrom(
+        this.httpService.get(`${this.billingServiceUrl}/billing/transactions/${userId}`)
+      );
+      return response.data;
+    } catch (error: any) {
+      throw new HttpException('Failed to get transactions', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
   }
 
   async processPayment(data: any): Promise<any> {
-    // TODO: Implement payment processing logic
-    return {
-      success: true,
-      message: 'Payment processed successfully',
-      transaction: {
-        id: `payment-${Date.now()}`,
-        userId: data.userId,
-        amount: data.amount,
-        status: 'COMPLETED',
-        createdAt: new Date().toISOString()
-      }
-    };
+    try {
+      const response = await firstValueFrom(
+        this.httpService.post(`${this.billingServiceUrl}/billing/payment/process`, data)
+      );
+      return response.data;
+    } catch (error: any) {
+      throw new HttpException('Failed to process payment', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
   }
 
   async refundPayment(data: any): Promise<any> {
-    // TODO: Implement refund logic
-    return {
-      success: true,
-      message: 'Payment refunded successfully',
-      refund: {
-        id: `refund-${Date.now()}`,
-        transactionId: data.transactionId,
-        amount: data.amount,
-        status: 'COMPLETED',
-        createdAt: new Date().toISOString()
-      }
-    };
+    try {
+      const response = await firstValueFrom(
+        this.httpService.post(`${this.billingServiceUrl}/billing/payment/refund`, data)
+      );
+      return response.data;
+    } catch (error: any) {
+      throw new HttpException('Failed to refund payment', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
   }
 }
 

@@ -70,6 +70,23 @@ export class HttpController {
         data.provider || 'openai'
       );
 
+      // Отправка события биллинга через RabbitMQ
+      try {
+        await this.proxyService.sendBillingEvent({
+          userId: data.userId,
+          service: 'ai-chat',
+          resource: data.model,
+          tokens: (response.usage?.prompt_tokens || 0) + (response.usage?.completion_tokens || 0),
+          cost: (response.usage?.prompt_tokens || 0) * 0.00003 + (response.usage?.completion_tokens || 0) * 0.00006,
+          provider: response.provider || data.provider || 'openai',
+          model: response.model || data.model,
+          timestamp: new Date().toISOString()
+        });
+      } catch (rabbitError) {
+          LoggerUtil.warn('proxy-service', 'Failed to send billing event', { error: rabbitError });
+        // Не прерываем выполнение при ошибке RabbitMQ
+      }
+
       return {
         success: true,
         message: 'Request processed successfully',

@@ -2,7 +2,7 @@ import { Injectable, Logger, BadRequestException, NotFoundException } from '@nes
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CacheService } from '../common/cache/cache.service';
 import { ValidationService } from '../common/validation/validation.service';
-import { LoggerUtil } from '@ai-aggregator/shared';
+import { LoggerUtil, RabbitMQService } from '@ai-aggregator/shared';
 import {
   UserBalance,
   Transaction,
@@ -54,7 +54,8 @@ export class BillingService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly cacheService: CacheService,
-    private readonly validationService: ValidationService
+    private readonly validationService: ValidationService,
+    private readonly rabbitmq: RabbitMQService,
   ) {}
 
   /**
@@ -453,6 +454,26 @@ export class BillingService {
         userId: request.userId,
         amount: request.amount
       });
+
+      // Отправка события в Analytics через RabbitMQ
+      try {
+        await this.rabbitmq.publishCriticalMessage('analytics.events', {
+          eventType: 'transaction_created',
+          userId: request.userId,
+          transactionId: transaction.id,
+          amount: request.amount,
+          type: request.type,
+          timestamp: new Date().toISOString(),
+          metadata: {
+            service: 'billing-service',
+            currency: request.currency || 'USD',
+            description: request.description
+          }
+        });
+      } catch (rabbitError) {
+        LoggerUtil.warn('billing-service', 'Failed to send analytics event', rabbitError as Error);
+        // Не прерываем выполнение при ошибке RabbitMQ
+      }
 
       return {
         success: true,

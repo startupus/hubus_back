@@ -211,15 +211,15 @@ export class AISafetyService {
 
     // Оценка на основе различных факторов
     if (criticalRisks > 0 || !contentSafety.isSafe) {
-      return AISafetyLevel.RESTRICTED;
+      return AISafetyLevel.HIGH_RISK;
     }
 
     if (highRisks > 2 || contentSafety.toxicityScore > 0.2 || biasAssessment.overallBiasScore > 0.3) {
-      return AISafetyLevel.DANGEROUS;
+      return AISafetyLevel.HIGH_RISK;
     }
 
     if (highRisks > 0 || contentSafety.toxicityScore > 0.1 || biasAssessment.overallBiasScore > 0.2) {
-      return AISafetyLevel.WARNING;
+      return AISafetyLevel.CAUTION;
     }
 
     if (contentSafety.toxicityScore > 0.05 || biasAssessment.overallBiasScore > 0.1) {

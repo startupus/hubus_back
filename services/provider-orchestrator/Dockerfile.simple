@@ -1,0 +1,13 @@
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Установить express и cors
+RUN npm install express cors
+
+# Копировать простой сервер
+COPY services/provider-orchestrator/src/simple-server.js ./simple-server.js
+
+EXPOSE 3002
+
+CMD ["node", "simple-server.js"]

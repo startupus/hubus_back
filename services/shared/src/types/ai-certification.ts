@@ -28,29 +28,27 @@ export enum AICategory {
 }
 
 export enum AICertificationLevel {
-  UNVERIFIED = 'unverified',
-  BASIC = 'basic',
-  STANDARD = 'standard',
-  PREMIUM = 'premium',
-  ENTERPRISE = 'enterprise',
-  GOVERNMENT = 'government'
+  BASIC = 'BASIC',
+  INTERMEDIATE = 'INTERMEDIATE',
+  ADVANCED = 'ADVANCED',
+  EXPERT = 'EXPERT',
+  ENTERPRISE = 'ENTERPRISE'
 }
 
 export enum AICertificationStatus {
-  PENDING = 'pending',
-  IN_REVIEW = 'in_review',
-  APPROVED = 'approved',
-  REJECTED = 'rejected',
-  EXPIRED = 'expired',
-  SUSPENDED = 'suspended'
+  PENDING = 'PENDING',
+  IN_PROGRESS = 'IN_PROGRESS',
+  APPROVED = 'APPROVED',
+  REJECTED = 'REJECTED',
+  EXPIRED = 'EXPIRED',
+  REVOKED = 'REVOKED'
 }
 
 export enum AISafetyLevel {
-  SAFE = 'safe',
-  CAUTION = 'caution',
-  WARNING = 'warning',
-  DANGEROUS = 'dangerous',
-  RESTRICTED = 'restricted'
+  SAFE = 'SAFE',
+  MODERATE = 'MODERATE',
+  CAUTION = 'CAUTION',
+  HIGH_RISK = 'HIGH_RISK'
 }
 
 export enum RiskFactorCategory {

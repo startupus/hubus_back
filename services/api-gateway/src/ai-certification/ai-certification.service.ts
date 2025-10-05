@@ -35,7 +35,7 @@ export class AICertificationService {
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
   ) {
-    this.certificationServiceUrl = this.configService.get('CERTIFICATION_SERVICE_URL', 'http://certification-service:3007');
+    this.certificationServiceUrl = this.configService.get('CERTIFICATION_SERVICE_URL', 'http://ai-certification-service:3007');
   }
 
   async submitCertificationRequest(request: CertificationRequest): Promise<CertificationResponse> {
@@ -47,7 +47,7 @@ export class AICertificationService {
       });
 
       const response: AxiosResponse<CertificationResponse> = await firstValueFrom(
-        this.httpService.post(`${this.certificationServiceUrl}/ai/certification/submit`, request)
+        this.httpService.post(`${this.certificationServiceUrl}/certification/submit`, request)
       );
 
       LoggerUtil.info('api-gateway', 'Certification request submitted', {
@@ -79,7 +79,7 @@ export class AICertificationService {
   async getCertificationLevels(): Promise<{ levels: AICertificationLevel[] }> {
     try {
       const response: AxiosResponse<{ levels: AICertificationLevel[] }> = await firstValueFrom(
-        this.httpService.get(`${this.certificationServiceUrl}/ai/certification/levels`)
+        this.httpService.get(`${this.certificationServiceUrl}/certification/levels`)
       );
 
       return response.data;
@@ -92,7 +92,7 @@ export class AICertificationService {
   async getCertificationStatuses(): Promise<{ statuses: AICertificationStatus[] }> {
     try {
       const response: AxiosResponse<{ statuses: AICertificationStatus[] }> = await firstValueFrom(
-        this.httpService.get(`${this.certificationServiceUrl}/ai/certification/statuses`)
+        this.httpService.get(`${this.certificationServiceUrl}/certification/statuses`)
       );
 
       return response.data;
@@ -105,7 +105,7 @@ export class AICertificationService {
   async getModelCertification(modelId: string): Promise<AICertification | null> {
     try {
       const response: AxiosResponse<AICertification | null> = await firstValueFrom(
-        this.httpService.get(`${this.certificationServiceUrl}/ai/certification/models/${modelId}`)
+        this.httpService.get(`${this.certificationServiceUrl}/certification/model/${modelId}`)
       );
 
       return response.data;
@@ -122,7 +122,7 @@ export class AICertificationService {
       if (level) params.level = level;
 
       const response: AxiosResponse<{ certifications: AICertification[] }> = await firstValueFrom(
-        this.httpService.get(`${this.certificationServiceUrl}/ai/certification/all`, { params })
+        this.httpService.get(`${this.certificationServiceUrl}/certification/all`, { params })
       );
 
       return response.data;
@@ -135,7 +135,7 @@ export class AICertificationService {
   async revokeCertification(modelId: string, reason: string): Promise<{ success: boolean; message: string }> {
     try {
       const response: AxiosResponse<{ success: boolean; message: string }> = await firstValueFrom(
-        this.httpService.post(`${this.certificationServiceUrl}/ai/certification/revoke/${modelId}`, { reason })
+        this.httpService.post(`${this.certificationServiceUrl}/certification/revoke/${modelId}`, { reason })
       );
 
       return response.data;
@@ -164,13 +164,26 @@ export class AICertificationService {
           complianceStandards: string[];
         };
       }> = await firstValueFrom(
-        this.httpService.get(`${this.certificationServiceUrl}/ai/certification/levels/${level}/requirements`)
+        this.httpService.get(`${this.certificationServiceUrl}/certification/levels/${level}/requirements`)
       );
 
       return response.data;
     } catch (error: any) {
       LoggerUtil.error('api-gateway', 'Get level requirements failed', error, { level });
       throw new HttpException('Failed to get level requirements', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  async getRequirements(): Promise<any> {
+    try {
+      const response: AxiosResponse<any> = await firstValueFrom(
+        this.httpService.get(`${this.certificationServiceUrl}/certification/requirements`)
+      );
+
+      return response.data;
+    } catch (error: any) {
+      LoggerUtil.error('api-gateway', 'Get requirements failed', error);
+      throw new HttpException('Failed to get requirements', HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
 }

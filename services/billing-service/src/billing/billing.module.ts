@@ -5,6 +5,7 @@ import { PaymentGatewayService } from './payment-gateway.service';
 import { PrismaModule } from '../common/prisma/prisma.module';
 import { CacheService } from '../common/cache/cache.service';
 import { ValidationService } from '../common/validation/validation.service';
+import { RabbitMQService } from '@ai-aggregator/shared';
 
 @Module({
   imports: [PrismaModule],
@@ -13,7 +14,8 @@ import { ValidationService } from '../common/validation/validation.service';
     PricingService, 
     PaymentGatewayService,
     CacheService,
-    ValidationService
+    ValidationService,
+    RabbitMQService
   ],
   exports: [
     BillingService, 

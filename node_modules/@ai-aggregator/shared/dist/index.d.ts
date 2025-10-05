@@ -21,7 +21,6 @@ export * from './utils/logger.util';
 export * from './utils/concurrency.util';
 export * from './services/anonymization.service';
 export * from './services/ai-classification.service';
-export * from './services/ai-certification.service';
 export * from './services/ai-safety.service';
 export * from './services/redis.service';
 export * from './services/rabbitmq.service';
@@ -34,5 +33,5 @@ export type { ProviderRequest, ProviderResponse, ChatMessage, TokenUsage, Provid
 export type { BaseEntity, PaginationParams, PaginatedResponse, ServiceResponse, ErrorResponse, RequestContext, HealthCheck, Metrics, } from './types/common';
 export type { BaseEvent, Event, EventHandler, EventPublisher, EventSubscriber, } from './types/events';
 export type { MicroserviceConfig, DatabaseConfig, RedisConfig, RabbitMQConfig, JwtConfig, ProvidersConfig, BillingConfig, RateLimitConfig, MonitoringConfig, SecurityConfig, ServiceConfig, } from './interfaces/config.interface';
-export type { AICategory, AICertificationLevel, AICertificationStatus, AISafetyLevel, AICapability, TestResult, AICertification, ComplianceInfo, AIClassification, AIClassificationRequest, AIClassificationResponse, CertificationAudit, AuditFinding, AIPerformanceMetrics, AISafetyAssessment, RiskFactor, SafetyIncident, } from './types/ai-certification';
+export { AICategory, AICertificationLevel, AICertificationStatus, AISafetyLevel, AICapability, TestResult, AICertification, ComplianceInfo, AIClassification, AIClassificationRequest, AIClassificationResponse, CertificationAudit, AuditFinding, AIPerformanceMetrics, AISafetyAssessment, RiskFactor, SafetyIncident, } from './types/ai-certification';
 //# sourceMappingURL=index.d.ts.map

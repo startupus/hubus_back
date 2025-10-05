@@ -130,21 +130,7 @@ export class AISafetyController {
           'Content review for sensitive applications'
         ]
       },
-      [AISafetyLevel.WARNING]: {
-        description: 'Model has significant safety concerns requiring careful management',
-        requirements: [
-          'Passes basic safety tests',
-          'Bias mitigation required',
-          'Strong content filtering',
-          'Continuous monitoring'
-        ],
-        restrictions: [
-          'Human oversight mandatory',
-          'Limited use cases',
-          'Regular safety audits'
-        ]
-      },
-      [AISafetyLevel.DANGEROUS]: {
+      [AISafetyLevel.HIGH_RISK]: {
         description: 'Model poses significant risks and requires strict controls',
         requirements: [
           'Enhanced safety measures',
@@ -159,21 +145,6 @@ export class AISafetyController {
           'Incident response procedures'
         ]
       },
-      [AISafetyLevel.RESTRICTED]: {
-        description: 'Model is restricted due to critical safety issues',
-        requirements: [
-          'Critical safety fixes required',
-          'Complete bias elimination',
-          'Maximum security measures',
-          'Constant monitoring'
-        ],
-        restrictions: [
-          'Research use only',
-          'Expert supervision mandatory',
-          'No public deployment',
-          'Immediate incident response'
-        ]
-      }
     };
 
     return levelInfo[level] || levelInfo[AISafetyLevel.SAFE];

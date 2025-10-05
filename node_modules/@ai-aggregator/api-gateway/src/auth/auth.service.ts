@@ -95,52 +95,44 @@ export class AuthService {
   }
 
   async createApiKey(createApiKeyDto: any): Promise<any> {
-    // Mock implementation for API Gateway
-    return {
-      success: true,
-      message: 'API key created successfully',
-      apiKey: {
-        id: `ak-${Date.now()}`,
-        name: createApiKeyDto.name || 'Default API Key',
-        key: `ak_${Math.random().toString(36).substr(2, 32)}`,
-        userId: createApiKeyDto.userId,
-        isActive: true,
-        createdAt: new Date().toISOString(),
-        expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString() // 1 year
+    try {
+      const response = await firstValueFrom(
+        this.httpService.post(`${this.authServiceUrl}/auth/api-keys`, createApiKeyDto)
+      );
+      return response.data;
+    } catch (error: any) {
+      if (error.response?.status === 409) {
+        throw new HttpException('API key with this name already exists', HttpStatus.CONFLICT);
       }
-    };
+      throw new HttpException('Failed to create API key', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
   }
 
   async getApiKeys(getApiKeysDto: any): Promise<any> {
-    // Mock implementation for API Gateway
-    return {
-      success: true,
-      message: 'API keys retrieved successfully',
-      apiKeys: [
-        {
-          id: 'ak-1234567890',
-          name: 'Test API Key',
-          key: 'ak_1234567890abcdef',
-          userId: getApiKeysDto.userId,
-          isActive: true,
-          createdAt: new Date().toISOString(),
-          expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
-        }
-      ]
-    };
+    try {
+      const response = await firstValueFrom(
+        this.httpService.get(`${this.authServiceUrl}/auth/api-keys`, {
+          params: { userId: getApiKeysDto.userId }
+        })
+      );
+      return response.data;
+    } catch (error: any) {
+      throw new HttpException('Failed to get API keys', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
   }
 
   async revokeApiKey(keyId: string): Promise<any> {
-    // Mock implementation for API Gateway
-    return {
-      success: true,
-      message: 'API key revoked successfully',
-      apiKey: {
-        id: keyId,
-        isActive: false,
-        revokedAt: new Date().toISOString()
+    try {
+      const response = await firstValueFrom(
+        this.httpService.delete(`${this.authServiceUrl}/auth/api-keys/${keyId}`)
+      );
+      return response.data;
+    } catch (error: any) {
+      if (error.response?.status === 404) {
+        throw new HttpException('API key not found', HttpStatus.NOT_FOUND);
       }
-    };
+      throw new HttpException('Failed to revoke API key', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
   }
 }
 

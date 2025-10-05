@@ -72,6 +72,24 @@ services:
       timeout: 5s
       retries: 5
 
+  certification-db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: certification_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5436:5432"
+    volumes:
+      - certification_db_data:/var/lib/postgresql/data
+    networks:
+      - ai-aggregator
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # Redis
   redis:
     image: redis:7-alpine
@@ -141,6 +159,8 @@ services:
       - BILLING_SERVICE_URL=http://billing-service:3004
       - ANALYTICS_SERVICE_URL=http://analytics-service:3005
       - PROXY_SERVICE_URL=http://proxy-service:3003
+      - ORCHESTRATOR_SERVICE_URL=http://provider-orchestrator:3002
+      - CERTIFICATION_SERVICE_URL=http://ai-certification-service:3007
     depends_on:
       auth-db:
         condition: service_healthy
@@ -310,12 +330,49 @@ services:
       - ai-aggregator
     restart: unless-stopped
 
+  ai-certification-service:
+    build:
+      context: .
+      dockerfile: ./services/ai-certification-service/Dockerfile
+    ports:
+      - "3007:3007"
+    environment:
+      - NODE_ENV=development
+      - HOST=0.0.0.0
+      - PORT=3007
+      - DATABASE_URL=postgresql://postgres:password@certification-db:5432/certification_db?schema=public
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
+      - JWT_SECRET=your-super-secret-jwt-key-here
+      - LOG_LEVEL=debug
+      - LOG_FORMAT=json
+    volumes:
+      - certification_logs:/app/logs
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3007/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    depends_on:
+      certification-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - ai-aggregator
+    restart: unless-stopped
+
 volumes:
   auth_db_data:
   billing_db_data:
   orchestrator_db_data:
   analytics_db_data:
   analytics_logs:
+  certification_db_data:
+  certification_logs:
   redis_data:
   rabbitmq_data:
 

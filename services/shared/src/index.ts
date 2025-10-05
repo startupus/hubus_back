@@ -29,7 +29,6 @@ export * from './utils/concurrency.util';
 // Services
 export * from './services/anonymization.service';
 export * from './services/ai-classification.service';
-export * from './services/ai-certification.service';
 export * from './services/ai-safety.service';
 export * from './services/redis.service';
 export * from './services/rabbitmq.service';
@@ -102,7 +101,7 @@ export type {
   ServiceConfig,
 } from './interfaces/config.interface';
 
-export type {
+export {
   AICategory,
   AICertificationLevel,
   AICertificationStatus,

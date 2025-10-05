@@ -29,8 +29,8 @@ COPY services/billing-service/package*.json ./services/billing-service/
 
 # Установить зависимости
 RUN npm ci --only=production --silent
-RUN cd services/shared && npm ci --silent
-RUN cd services/billing-service && npm ci --silent
+RUN cd services/shared && npm install --silent
+RUN cd services/billing-service && npm install --silent
 
 # Копировать исходный код
 COPY services/shared ./services/shared

@@ -8,4 +8,7 @@ export declare class AuthService {
     constructor(httpService: HttpService, configService: ConfigService);
     register(registerDto: RegisterDto): Promise<AuthResponseDto>;
     login(loginDto: LoginDto): Promise<AuthResponseDto>;
+    createApiKey(createApiKeyDto: any): Promise<any>;
+    getApiKeys(getApiKeysDto: any): Promise<any>;
+    revokeApiKey(keyId: string): Promise<any>;
 }

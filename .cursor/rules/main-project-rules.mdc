@@ -20,7 +20,7 @@ alwaysApply: true
 
 Асинхронная коммуникация через RabbitMQ для бизнес-процессов
 
-Синхронная коммуникация через gRPC для проверок и агрегации
+Синхронная коммуникация через HTTP для проверок и агрегации
 
 API Gateway как единая точка входа
 
@@ -37,7 +37,7 @@ Prisma - ORM для работы с БД (отдельная схема на с�
 
 RabbitMQ - асинхронная коммуникация между сервисами
 
-gRPC - для высоконагруженных синхронных вызовов
+HTTP - для синхронных вызовов
 
 JWT - аутентификация через auth-service
 
@@ -59,21 +59,7 @@ Prometheus + Grafana - мониторинг всех сервисов
 
 Jaeger - распределенная трассировка
 
-3. Архитектура микросервисов
-text
-services/
-├── api-gateway/                 # Единая точка входа (NestJS)
-├── auth-service/                # Аутентификация и пользователи (NestJS)
-├── provider-orchestrator/       # Управление провайдерами и маршрутизация (NestJS)
-├── proxy-service/               # Прокси к внешним ИИ-провайдерам (NestJS)
-├── billing-service/             # Биллинг, балансы, тарификация (NestJS)
-├── analytics-service/           # Метрики, логи, мониторинг (NestJS)
-└── shared/                      # Общие библиотеки и типы
-    ├── types/                   # Общие TypeScript типы
-    ├── contracts/               # gRPC контракты и DTO
-    └── utils/                   # Общие утилиты
-4. Последовательность разработки
-
+3. Последовательность разработки
 Настроить монорепозиторий с независимыми сервисами
 
 Создать shared-пакет с общими типами и утилитами
@@ -81,6 +67,8 @@ services/
 Настроить Docker Compose для development среды
 
 Создать базовую конфигурацию для всех сервисов
+
+Разработать сервисы в порядке:
 
 auth-service - аутентификация, пользователи, API keys
 
@@ -94,10 +82,10 @@ api-gateway - единая точка входа, агрегация запро�
 
 analytics-service - метрики, логирование, мониторинг
 
-5. Детальные инструкции по сервисам
-5.1. Auth Service
+4. Детальные инструкции по сервисам
+4.1. Auth Service
 typescript
-// Обязательно: отдельная БД для пользователей, gRPC для валидации
+// Обязательно: отдельная БД для пользователей, HTTP для валидации
 @Injectable()
 export class AuthService {
   async validateUser(email: string, password: string): Promise<User> {
@@ -109,10 +97,10 @@ export class AuthService {
   }
   
   async validateApiKey(apiKey: string): Promise<ValidationResult> {
-    // gRPC endpoint для api-gateway
+    // HTTP endpoint для api-gateway
   }
 }
-5.2. Provider Orchestrator
+4.2. Provider Orchestrator
 typescript
 // Обязательно: коммуникация с proxy-service через RabbitMQ
 @Injectable()
@@ -123,7 +111,7 @@ export class ProviderOrchestratorService {
     // Маршрутизация запроса через RabbitMQ
   }
 }
-5.3. Proxy Service
+4.3. Proxy Service
 typescript
 // Обязательно: retry логика, обработка ошибок, кэширование
 @Injectable()
@@ -135,7 +123,7 @@ export class OpenAiProxyService {
     // Отправка метрик в analytics-service через RabbitMQ
   }
 }
-5.4. Billing Service
+4.4. Billing Service
 typescript
 // Обязательно: транзакционность, аудит операций, идемпотентность
 @Injectable()
@@ -148,15 +136,16 @@ export class BillingService {
     // Расчет стоимости
     // Списание баланса
     // Запись транзакции
-    // Валидация через gRPC от provider-orchestrator
+    // Валидация через HTTP от provider-orchestrator
   }
 }
-6. Коммуникация между сервисами
-Синхронная (HTTP/gRPC):
+5. Коммуникация между сервисами
+Синхронная (HTTP):
 
 typescript
-// API Gateway → Auth Service (валидация токена через gRPC)
-// Provider Orchestrator → Billing Service (проверка баланса через gRPC)
+// API Gateway → Auth Service (валидация токена через HTTP)
+// API Gateway → Billing Service (получение баланса и истории)
+// Provider Orchestrator → Billing Service (проверка баланса через HTTP)
 Асинхронная (RabbitMQ):
 
 typescript
@@ -164,7 +153,7 @@ typescript
 // Все сервисы → Analytics Service (логирование метрик)
 // Billing Service → Analytics Service (транзакции)
 // Provider Orchestrator → Proxy Service (маршрутизация запросов)
-7. Конфигурация и Environment
+6. Конфигурация и Environment
 Shared Configuration:
 
 typescript
@@ -178,9 +167,9 @@ export interface MicroserviceConfig {
     url: string;
     queue: string;
   };
-  grpc?: {
+  http?: {
     port: number;
-    protoPath: string;
+    timeout: number;
   };
 }
 Per-Service Environment:
@@ -196,11 +185,12 @@ export default () => ({
     secret: process.env.JWT_SECRET,
     expiresIn: '1h',
   },
-  grpc: {
-    port: parseInt(process.env.GRPC_PORT || '50051'),
+  http: {
+    port: parseInt(process.env.HTTP_PORT || '3001'),
+    timeout: parseInt(process.env.HTTP_TIMEOUT || '5000'),
   },
 });
-8. Базы данных (Database per Service)
+7. Базы данных (Database per Service)
 Auth Service Database:
 
 prisma
@@ -255,7 +245,7 @@ model RoutingRule {
   providerId String
   priority  Int
 }
-9. Docker конфигурация
+8. Docker конфигурация
 yaml
 version: '3.8'
 services:
@@ -264,13 +254,24 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - AUTH_SERVICE_GRPC_URL=auth-service:50051
+      - AUTH_SERVICE_HTTP_URL=http://auth-service:3001
+      - BILLING_SERVICE_HTTP_URL=http://billing-service:3004
+      - PROVIDER_ORCHESTRATOR_HTTP_URL=http://provider-orchestrator:3002
+    depends_on:
+      - auth-service
+      - billing-service
+      - provider-orchestrator
       
   auth-service:
     build: ./services/auth-service
+    ports:
+      - "3001:3001"
     environment:
       - DATABASE_URL=postgresql://user:pass@auth-db:5432/auth
-      - GRPC_PORT=50051
+      - HTTP_PORT=3001
+      - JWT_SECRET=your-jwt-secret
+    depends_on:
+      - auth-db
       
   auth-db:
     image: postgres:14
@@ -278,12 +279,22 @@ services:
       - POSTGRES_DB=auth
       - POSTGRES_USER=user
       - POSTGRES_PASSWORD=pass
+    volumes:
+      - auth_data:/var/lib/postgresql/data
       
   provider-orchestrator:
     build: ./services/provider-orchestrator
+    ports:
+      - "3002:3002"
     environment:
       - DATABASE_URL=postgresql://user:pass@orchestrator-db:5432/orchestrator
       - RABBITMQ_URL=amqp://user:pass@rabbitmq:5672
+      - BILLING_SERVICE_HTTP_URL=http://billing-service:3004
+      - HTTP_PORT=3002
+    depends_on:
+      - orchestrator-db
+      - rabbitmq
+      - billing-service
       
   orchestrator-db:
     image: postgres:14
@@ -291,13 +302,59 @@ services:
       - POSTGRES_DB=orchestrator
       - POSTGRES_USER=user
       - POSTGRES_PASSWORD=pass
+    volumes:
+      - orchestrator_data:/var/lib/postgresql/data
+      
+  proxy-service:
+    build: ./services/proxy-service
+    ports:
+      - "3003:3003"
+    environment:
+      - RABBITMQ_URL=amqp://user:pass@rabbitmq:5672
+      - BILLING_SERVICE_HTTP_URL=http://billing-service:3004
+      - HTTP_PORT=3003
+    depends_on:
+      - rabbitmq
+      - billing-service
+      
+  billing-service:
+    build: ./services/billing-service
+    ports:
+      - "3004:3004"
+    environment:
+      - DATABASE_URL=postgresql://user:pass@billing-db:5432/billing
+      - RABBITMQ_URL=amqp://user:pass@rabbitmq:5672
+      - HTTP_PORT=3004
+    depends_on:
+      - billing-db
+      - rabbitmq
+      
+  billing-db:
+    image: postgres:14
+    environment:
+      - POSTGRES_DB=billing
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=pass
+    volumes:
+      - billing_data:/var/lib/postgresql/data
       
   rabbitmq:
     image: rabbitmq:3-management
     ports:
       - "5672:5672"
       - "15672:15672"
-10. Инструкции для Cursor по выполнению запросов
+    environment:
+      - RABBITMQ_DEFAULT_USER=user
+      - RABBITMQ_DEFAULT_PASS=pass
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
+volumes:
+  auth_data:
+  orchestrator_data:
+  billing_data:
+  rabbitmq_data:
+9. Инструкции для Cursor по выполнению запросов
 При создании сервиса:
 
 Сначала создай структуру сервиса в services/
@@ -306,9 +363,11 @@ services:
 
 Создай схему БД для этого сервиса
 
-Определи интерфейсы коммуникации с другими сервисами
+Определи HTTP интерфейсы коммуникации с другими сервисами
 
 Реализуй бизнес-логику сервиса
+
+Добавь сервис в docker-compose.yml
 
 Пример запроса для создания сервиса:
 
@@ -319,25 +378,26 @@ text
 1. Структура: services/auth-service/ с NestJS
 2. База данных: PostgreSQL с изолированной схемой пользователей
 3. API: регистрация, логин, валидация JWT, управление API keys
-4. Коммуникация: gRPC для синхронных вызовов от api-gateway
+4. Коммуникация: HTTP для синхронных вызовов от api-gateway
 5. Конфигурация: отдельные env переменные для БД и JWT
+6. Docker: контейнеризация и настройка в docker-compose.yml
 
-Следуй последовательности: структура → БД → API → интеграция.
-11. Эндпоинты API Gateway
+Следуй последовательности: структура → БД → API → Docker → интеграция.
+10. Эндпоинты API Gateway
 text
 # Аутентификация
-POST /v1/auth/register     → auth-service (gRPC)
-POST /v1/auth/login        → auth-service (gRPC)
-POST /v1/auth/api-keys     → auth-service (gRPC)
+POST /v1/auth/register     → auth-service (HTTP)
+POST /v1/auth/login        → auth-service (HTTP)
+POST /v1/auth/api-keys     → auth-service (HTTP)
 
 # Прокси ИИ
 POST /v1/chat/completions  → provider-orchestrator (HTTP) → proxy-service (RabbitMQ)
 GET  /v1/models           → provider-orchestrator (HTTP)
 
 # Биллинг
-GET  /v1/billing/balance  → billing-service (gRPC)
-GET  /v1/billing/history  → billing-service (gRPC)
-12. Рекомендации по коду для микросервисов
+GET  /v1/billing/balance  → billing-service (HTTP)
+GET  /v1/billing/history  → billing-service (HTTP)
+11. Рекомендации по коду для микросервисов
 Нельзя:
 
 Прямые вызовы между сервисами (кроме через API/MQ)
@@ -362,14 +422,18 @@ Health checks для каждого сервиса
 
 Graceful shutdown
 
-13. Приоритеты разработки
+12. Приоритеты разработки
 Надежность - отказоустойчивость и обработка ошибок
+
 Производительность - кэширование, оптимизация запросов
+
 Масштабируемость - независимое масштабирование сервисов
+
 Безопасность - изоляция данных, валидация запросов
+
 Наблюдаемость - логи, метрики, трассировка
 
-14. MVP Особенности
+13. MVP Особенности
 Для MVP сосредоточься на:
 
 api-gateway + auth-service + proxy-service как минимальный набор
@@ -386,4 +450,17 @@ api-gateway + auth-service + proxy-service как минимальный наб�
 
 Базовая RabbitMQ коммуникация
 
-Упрощенная gRPC для критичных проверок
+Упрощенная HTTP для критичных проверок
+
+Базовая конфигурация Docker
+
+14. Запуск проекта
+
+# Запуск всех сервисов
+docker-compose up -d
+
+# Проверка статуса
+docker-compose ps
+
+# Остановка
+docker-compose down

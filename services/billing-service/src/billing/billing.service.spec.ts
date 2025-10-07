@@ -5,7 +5,7 @@ import { PrismaService } from '../common/prisma/prisma.service';
 import { ValidationService } from '../common/validation/validation.service';
 import { PricingService } from './pricing.service';
 import { PaymentGatewayService } from './payment-gateway.service';
-import { Decimal } from 'decimal.js';
+// // import { Decimal } from 'decimal.js'; // Временно отключено
 
 describe('BillingService', () => {
   let service: BillingService;
@@ -24,9 +24,10 @@ describe('BillingService', () => {
   const mockUserBalance = {
     id: 'test-balance-id',
     userId: 'test-user-id',
-    balance: new Decimal(100.00),
+    companyId: 'test-company-id',
+    balance: 100.00 as any,
     currency: 'USD',
-    creditLimit: new Decimal(1000.00),
+    creditLimit: 1000.00 as any,
     lastUpdated: new Date(),
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -34,12 +35,13 @@ describe('BillingService', () => {
 
   const mockTransaction = {
     id: 'test-transaction-id',
+    companyId: 'test-company-id',
     userId: 'test-user-id',
     currency: 'USD',
     createdAt: new Date(),
     updatedAt: new Date(),
     type: 'DEBIT' as any,
-    amount: new Decimal(10.50),
+    amount: 10.50 as any,
     description: 'Test transaction',
     status: 'COMPLETED' as any,
     reference: 'ref_123',
@@ -123,18 +125,18 @@ describe('BillingService', () => {
 
   describe('getBalance', () => {
     it('should return user balance', async () => {
-      jest.spyOn(prismaService.userBalance, 'findUnique').mockResolvedValue(mockUserBalance);
+      jest.spyOn(prismaService.companyBalance, 'findUnique').mockResolvedValue(mockUserBalance);
 
       const result = await service.getBalance({ userId: 'test-user-id' });
 
       expect(result).toEqual(mockUserBalance);
-      expect(prismaService.userBalance.findUnique).toHaveBeenCalledWith({
+      expect(prismaService.companyBalance.findUnique).toHaveBeenCalledWith({
         where: { userId: 'test-user-id' },
       });
     });
 
     it('should return null when user balance not found', async () => {
-      jest.spyOn(prismaService.userBalance, 'findUnique').mockResolvedValue(null);
+      jest.spyOn(prismaService.companyBalance, 'findUnique').mockResolvedValue(null);
 
       const result = await service.getBalance({ userId: 'non-existent-user' });
 
@@ -143,7 +145,7 @@ describe('BillingService', () => {
 
     it('should handle database errors', async () => {
       const error = new Error('Database connection failed');
-      jest.spyOn(prismaService.userBalance, 'findUnique').mockRejectedValue(error);
+      jest.spyOn(prismaService.companyBalance, 'findUnique').mockRejectedValue(error);
 
       await expect(service.getBalance({ userId: 'test-user-id' })).rejects.toThrow('Database connection failed');
     });
@@ -153,15 +155,15 @@ describe('BillingService', () => {
     it('should update user balance successfully', async () => {
       const userId = 'test-user-id';
       const amount = new Decimal(50.00);
-      const updatedBalance = { ...mockUserBalance, balance: new Decimal(150.00) };
+      const updatedBalance = { ...mockUserBalance, balance: 150.00 as any };
 
-      jest.spyOn(prismaService.userBalance, 'findUnique').mockResolvedValue(mockUserBalance);
-      jest.spyOn(prismaService.userBalance, 'update').mockResolvedValue(updatedBalance);
+      jest.spyOn(prismaService.companyBalance, 'findUnique').mockResolvedValue(mockUserBalance);
+      jest.spyOn(prismaService.companyBalance, 'update').mockResolvedValue(updatedBalance);
 
-      const result = await service.updateBalance({ userId, amount, operation: 'ADD' });
+      const result = await service.updateBalance({ userId, amount: Number(amount), operation: 'add' });
 
       expect(result).toEqual(updatedBalance);
-      expect(prismaService.userBalance.update).toHaveBeenCalledWith({
+      expect(prismaService.companyBalance.update).toHaveBeenCalledWith({
         where: { userId },
         data: { balance: new Decimal(150.00) },
       });
@@ -170,15 +172,15 @@ describe('BillingService', () => {
     it('should create new balance when user has no balance', async () => {
       const userId = 'test-user-id';
       const amount = new Decimal(100.00);
-      const newBalance = { ...mockUserBalance, balance: new Decimal(100.00) };
+      const newBalance = { ...mockUserBalance, balance: 100.00 as any };
 
-      jest.spyOn(prismaService.userBalance, 'findUnique').mockResolvedValue(null);
-      jest.spyOn(prismaService.userBalance, 'create').mockResolvedValue(newBalance);
+      jest.spyOn(prismaService.companyBalance, 'findUnique').mockResolvedValue(null);
+      jest.spyOn(prismaService.companyBalance, 'create').mockResolvedValue(newBalance);
 
-      const result = await service.updateBalance({ userId, amount, operation: 'ADD' });
+      const result = await service.updateBalance({ userId, amount: Number(amount), operation: 'add' });
 
       expect(result).toEqual(newBalance);
-      expect(prismaService.userBalance.create).toHaveBeenCalledWith({
+      expect(prismaService.companyBalance.create).toHaveBeenCalledWith({
         data: {
           userId,
           balance: amount,
@@ -190,15 +192,15 @@ describe('BillingService', () => {
     it('should handle negative balance', async () => {
       const userId = 'test-user-id';
       const amount = new Decimal(-50.00);
-      const updatedBalance = { ...mockUserBalance, balance: new Decimal(50.00) };
+      const updatedBalance = { ...mockUserBalance, balance: 50.00 as any };
 
-      jest.spyOn(prismaService.userBalance, 'findUnique').mockResolvedValue(mockUserBalance);
-      jest.spyOn(prismaService.userBalance, 'update').mockResolvedValue(updatedBalance);
+      jest.spyOn(prismaService.companyBalance, 'findUnique').mockResolvedValue(mockUserBalance);
+      jest.spyOn(prismaService.companyBalance, 'update').mockResolvedValue(updatedBalance);
 
-      const result = await service.updateBalance({ userId, amount, operation: 'ADD' });
+      const result = await service.updateBalance({ userId, amount: Number(amount), operation: 'add' });
 
       expect(result).toEqual(updatedBalance);
-      expect(prismaService.userBalance.update).toHaveBeenCalledWith({
+      expect(prismaService.companyBalance.update).toHaveBeenCalledWith({
         where: { userId },
         data: { balance: new Decimal(50.00) },
       });
@@ -212,7 +214,7 @@ describe('BillingService', () => {
         throw new Error('Invalid amount');
       });
 
-      await expect(service.updateBalance({ userId, amount, operation: 'ADD' })).rejects.toThrow('Invalid amount');
+      await expect(service.updateBalance({ userId, amount: Number(amount), operation: 'add' })).rejects.toThrow('Invalid amount');
     });
   });
 
@@ -220,7 +222,7 @@ describe('BillingService', () => {
     it('should create transaction successfully', async () => {
       const transactionData = {
         userId: 'test-user-id',
-        type: 'DEBIT' as const,
+        type: 'DEBIT' as any,
         amount: 10.50,
         description: 'Test transaction',
       };
@@ -238,7 +240,7 @@ describe('BillingService', () => {
     it('should validate transaction data', async () => {
       const transactionData = {
         userId: 'test-user-id',
-        type: 'DEBIT' as const,
+        type: 'DEBIT' as any,
         amount: 10.50,
         description: 'Test transaction',
       };
@@ -253,7 +255,7 @@ describe('BillingService', () => {
     it('should handle database errors', async () => {
       const transactionData = {
         userId: 'test-user-id',
-        type: 'DEBIT' as const,
+        type: 'DEBIT' as any,
         amount: 10.50,
         description: 'Test transaction',
       };
@@ -268,7 +270,7 @@ describe('BillingService', () => {
   describe('getTransactions', () => {
     it('should return user transactions', async () => {
       const userId = 'test-user-id';
-      const transactions = [mockTransaction];
+      const transactions = [{ ...mockTransaction, amount: 10.50 as any }];
 
       jest.spyOn(prismaService.transaction, 'findMany').mockResolvedValue(transactions);
 
@@ -283,7 +285,7 @@ describe('BillingService', () => {
 
     it('should return transactions with pagination', async () => {
       const userId = 'test-user-id';
-      const transactions = [mockTransaction];
+      const transactions = [{ ...mockTransaction, amount: 10.50 as any }];
       const page = 1;
       const limit = 10;
 
@@ -302,7 +304,7 @@ describe('BillingService', () => {
 
     it('should return transactions with date filter', async () => {
       const userId = 'test-user-id';
-      const transactions = [mockTransaction];
+      const transactions = [{ ...mockTransaction, amount: 10.50 as any }];
       const startDate = new Date('2023-01-01');
       const endDate = new Date('2023-12-31');
 
@@ -331,11 +333,11 @@ describe('BillingService', () => {
       const userId = 'test-user-id';
       const startDate = new Date('2023-01-01');
       const endDate = new Date('2023-12-31');
-      const transactions = [mockTransaction];
+      const transactions = [{ ...mockTransaction, amount: 10.50 as any }];
       const userBalance = mockUserBalance;
 
       jest.spyOn(prismaService.transaction, 'findMany').mockResolvedValue(transactions);
-      jest.spyOn(prismaService.userBalance, 'findUnique').mockResolvedValue(userBalance);
+      jest.spyOn(prismaService.companyBalance, 'findUnique').mockResolvedValue(userBalance);
 
       const result = await service.getBillingReport(userId, startDate, endDate);
 
@@ -357,7 +359,7 @@ describe('BillingService', () => {
       const userBalance = mockUserBalance;
 
       jest.spyOn(prismaService.transaction, 'findMany').mockResolvedValue([]);
-      jest.spyOn(prismaService.userBalance, 'findUnique').mockResolvedValue(userBalance);
+      jest.spyOn(prismaService.companyBalance, 'findUnique').mockResolvedValue(userBalance);
 
       const result = await service.getBillingReport(userId, startDate, endDate);
 
@@ -384,11 +386,11 @@ describe('BillingService', () => {
       };
 
       const cost = new Decimal(0.002);
-      const updatedBalance = { ...mockUserBalance, balance: new Decimal(99.998) };
+      const updatedBalance = { ...mockUserBalance, balance: 99.998 as any };
 
-      jest.spyOn(pricingService, 'calculateCost').mockResolvedValue(cost);
-      jest.spyOn(prismaService.userBalance, 'findUnique').mockResolvedValue(mockUserBalance);
-      jest.spyOn(prismaService.userBalance, 'update').mockResolvedValue(updatedBalance);
+      jest.spyOn(pricingService, 'calculateCost').mockResolvedValue(Number(cost));
+      jest.spyOn(prismaService.companyBalance, 'findUnique').mockResolvedValue(mockUserBalance);
+      jest.spyOn(prismaService.companyBalance, 'update').mockResolvedValue(updatedBalance);
       jest.spyOn(prismaService.transaction, 'create').mockResolvedValue(mockTransaction);
 
       const result = await service.trackUsage(usageData);
@@ -398,7 +400,7 @@ describe('BillingService', () => {
       expect(prismaService.transaction.create).toHaveBeenCalledWith({
         data: {
           userId: usageData.userId,
-          type: 'DEBIT',
+          type: 'DEBIT' as any,
           amount: cost,
           description: `AI usage: ${usageData.service} - ${usageData.tokens} tokens`,
         },
@@ -415,10 +417,10 @@ describe('BillingService', () => {
       };
 
       const cost = 150.00;
-      const userBalance = { ...mockUserBalance, balance: new Decimal(100.00) };
+      const userBalance = { ...mockUserBalance, balance: 100.00 as any };
 
-      jest.spyOn(pricingService, 'calculateCost').mockResolvedValue(cost);
-      jest.spyOn(prismaService.userBalance, 'findUnique').mockResolvedValue(userBalance);
+      jest.spyOn(pricingService, 'calculateCost').mockResolvedValue(Number(cost));
+      jest.spyOn(prismaService.companyBalance, 'findUnique').mockResolvedValue(userBalance);
 
       await expect(service.trackUsage(usageData)).rejects.toThrow('Insufficient balance');
     });
@@ -459,11 +461,11 @@ describe('BillingService', () => {
         timestamp: new Date()
       };
 
-      const updatedBalance = { ...mockUserBalance, balance: new Decimal(150.00) };
+      const updatedBalance = { ...mockUserBalance, balance: 150.00 as any };
 
       jest.spyOn(paymentGatewayService, 'processPayment').mockResolvedValue(paymentResult);
-      jest.spyOn(prismaService.userBalance, 'findUnique').mockResolvedValue(mockUserBalance);
-      jest.spyOn(prismaService.userBalance, 'update').mockResolvedValue(updatedBalance);
+      jest.spyOn(prismaService.companyBalance, 'findUnique').mockResolvedValue(mockUserBalance);
+      jest.spyOn(prismaService.companyBalance, 'update').mockResolvedValue(updatedBalance);
       jest.spyOn(prismaService.transaction, 'create').mockResolvedValue(mockTransaction);
 
       const result = await service.processPayment(paymentData);
@@ -490,7 +492,7 @@ describe('BillingService', () => {
     it('should refund payment successfully', async () => {
       const refundData = {
         transactionId: 'test-transaction-id',
-        amount: new Decimal(25.00),
+        amount: 25.00 as any,
         reason: 'Customer requested refund',
       };
 
@@ -498,16 +500,16 @@ describe('BillingService', () => {
         success: true,
         refundId: 'refund-id',
         status: 'COMPLETED' as any,
-        amount: new Decimal(25.00),
+        amount: 25.00 as any,
         currency: 'USD',
         timestamp: new Date()
       };
 
-      const updatedBalance = { ...mockUserBalance, balance: new Decimal(75.00) };
+      const updatedBalance = { ...mockUserBalance, balance: 75.00 as any };
 
       jest.spyOn(paymentGatewayService, 'refundPayment').mockResolvedValue(refundResult);
-      jest.spyOn(prismaService.userBalance, 'findUnique').mockResolvedValue(mockUserBalance);
-      jest.spyOn(prismaService.userBalance, 'update').mockResolvedValue(updatedBalance);
+      jest.spyOn(prismaService.companyBalance, 'findUnique').mockResolvedValue(mockUserBalance);
+      jest.spyOn(prismaService.companyBalance, 'update').mockResolvedValue(updatedBalance);
       jest.spyOn(prismaService.transaction, 'create').mockResolvedValue(mockTransaction);
 
       const result = await service.refundPayment(refundData);
@@ -519,7 +521,7 @@ describe('BillingService', () => {
     it('should handle refund failure', async () => {
       const refundData = {
         transactionId: 'test-transaction-id',
-        amount: new Decimal(25.00),
+        amount: 25.00 as any,
         reason: 'Customer requested refund',
       };
 
@@ -562,7 +564,7 @@ describe('BillingService', () => {
         status: 'completed' as any,
       };
 
-      const updatedTransaction = { ...mockTransaction, ...updateData };
+      const updatedTransaction = { ...mockTransaction, ...updateData } as any;
 
       jest.spyOn(prismaService.transaction, 'update').mockResolvedValue(updatedTransaction);
 

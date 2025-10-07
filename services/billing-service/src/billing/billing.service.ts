@@ -2,7 +2,8 @@ import { Injectable, Logger, BadRequestException, NotFoundException } from '@nes
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CacheService } from '../common/cache/cache.service';
 import { ValidationService } from '../common/validation/validation.service';
-import { LoggerUtil, RabbitMQService } from '@ai-aggregator/shared';
+import { LoggerUtil } from '@ai-aggregator/shared';
+import { RabbitMQClient } from '@ai-aggregator/shared';
 import {
   UserBalance,
   Transaction,
@@ -55,7 +56,7 @@ export class BillingService {
     private readonly prisma: PrismaService,
     private readonly cacheService: CacheService,
     private readonly validationService: ValidationService,
-    private readonly rabbitmq: RabbitMQService,
+    private readonly rabbitmq: RabbitMQClient,
   ) {}
 
   /**
@@ -82,15 +83,15 @@ export class BillingService {
       await this.validationService.validateUser(request.userId, this.prisma);
 
       // Получаем баланс из БД
-      const balance = await this.prisma.userBalance.findUnique({
-        where: { userId: request.userId }
+      const balance = await this.prisma.companyBalance.findUnique({
+        where: { companyId: request.userId }
       });
 
       if (!balance) {
         // Создаем баланс для нового пользователя
-        const newBalance = await this.prisma.userBalance.create({
+        const newBalance = await this.prisma.companyBalance.create({
           data: {
-            userId: request.userId,
+            companyId: request.userId,
             balance: 0,
             currency: 'USD',
             creditLimit: 0
@@ -162,8 +163,8 @@ export class BillingService {
 
         const result = await this.prisma.$transaction(async (tx) => {
           // Получаем текущий баланс с блокировкой
-          const currentBalance = await tx.userBalance.findUnique({
-            where: { userId: request.userId }
+          const currentBalance = await tx.companyBalance.findUnique({
+            where: { companyId: request.userId }
           });
 
           if (!currentBalance) {
@@ -194,8 +195,8 @@ export class BillingService {
             : currentBalance.balance.sub(amount);
 
           // Обновляем баланс
-          const updatedBalance = await tx.userBalance.update({
-            where: { userId: request.userId },
+          const updatedBalance = await tx.companyBalance.update({
+            where: { companyId: request.userId },
             data: { 
               balance: newBalance,
               lastUpdated: new Date()
@@ -205,6 +206,7 @@ export class BillingService {
           // Создаем запись транзакции
           const transaction = await tx.transaction.create({
             data: {
+              companyId: currentBalance.companyId,
               userId: request.userId,
               type: request.operation === 'add' ? TransactionType.CREDIT : TransactionType.DEBIT,
               amount: amount,
@@ -294,6 +296,7 @@ export class BillingService {
       // Create usage event
       const usageEvent = await this.prisma.usageEvent.create({
         data: {
+          companyId: request.companyId || 'default-company', // Временная заглушка
           userId: request.userId,
           service: request.service,
           resource: request.resource,
@@ -437,6 +440,7 @@ export class BillingService {
 
       const transaction = await this.prisma.transaction.create({
         data: {
+          companyId: request.companyId || 'default-company', // Временная заглушка
           userId: request.userId,
           type: request.type,
           amount: new Decimal(request.amount),
@@ -471,7 +475,7 @@ export class BillingService {
           }
         });
       } catch (rabbitError) {
-        LoggerUtil.warn('billing-service', 'Failed to send analytics event', rabbitError as Error);
+        LoggerUtil.warn('billing-service', 'Failed to send analytics event', { error: rabbitError });
         // Не прерываем выполнение при ошибке RabbitMQ
       }
 

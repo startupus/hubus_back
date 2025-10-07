@@ -5,13 +5,13 @@ WORKDIR /app
 # Копировать shared пакет
 COPY services/shared ./shared
 WORKDIR /app/shared
-RUN npm install
+RUN npm install --legacy-peer-deps
 RUN npm run build
 
 # Копировать provider-orchestrator
 WORKDIR /app
 COPY services/provider-orchestrator/package*.json ./
-RUN npm install
+RUN npm install --legacy-peer-deps
 COPY services/provider-orchestrator ./
 
 # Создать символическую ссылку на shared пакет
@@ -27,17 +27,17 @@ RUN apk add --no-cache python3 make g++
 WORKDIR /app
 
 COPY services/provider-orchestrator/package*.json ./
-RUN npm install --only=production
+RUN npm install --legacy-peer-deps --only=production
 
 COPY --from=development /app/dist ./dist
 COPY --from=development /app/shared ./shared
-COPY --from=development /app/proto ./proto
+# COPY --from=development /app/proto ./proto # Removed - no proto files
 
 # Создать символическую ссылку на shared пакет
 RUN ln -sf /app/shared /app/node_modules/@ai-aggregator/shared
 
-# Переустановить bcrypt для текущей архитектуры
-RUN cd /app/shared && npm install bcrypt --force
+# Переустановить и пересобрать bcrypt для текущей архитектуры
+RUN cd /app/shared && npm install bcrypt --force && npm rebuild bcrypt
 
 EXPOSE 3002
 

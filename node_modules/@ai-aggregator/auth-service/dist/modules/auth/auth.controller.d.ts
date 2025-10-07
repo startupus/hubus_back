@@ -4,8 +4,8 @@ import { RegisterDto, LoginDto, ChangePasswordDto, ResetPasswordRequestDto, Rese
 export declare class AuthController {
     private readonly authService;
     constructor(authService: AuthService);
-    register(registerDto: RegisterDto): Promise<AuthResult>;
-    login(loginDto: LoginDto, req: Request): Promise<AuthResult>;
+    register(registerDto: RegisterDto): Promise<import("@ai-aggregator/shared").AuthResult>;
+    login(loginDto: LoginDto, req: Request): Promise<import("@ai-aggregator/shared").AuthResult>;
     logout(refreshToken: string): Promise<void>;
     refreshToken(refreshToken: string): Promise<{
         accessToken: string;

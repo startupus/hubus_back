@@ -6,7 +6,7 @@ import { BillingService } from '../billing/billing.service';
 import { PricingService } from '../billing/pricing.service';
 import { PaymentGatewayService } from '../billing/payment-gateway.service';
 import { ValidationService } from '../common/validation/validation.service';
-import { Decimal } from 'decimal.js';
+// import { Decimal } from 'decimal.js'; // Временно отключено
 import request from 'supertest';
 
 describe('HttpController', () => {
@@ -18,9 +18,10 @@ describe('HttpController', () => {
   const mockUserBalance = {
     id: 'test-balance-id',
     userId: 'test-user-id',
-    balance: new Decimal(100.00),
+    companyId: 'test-company-id',
+    balance: 100.00 as any,
     currency: 'USD',
-    creditLimit: new Decimal(1000.00),
+    creditLimit: 1000.00 as any,
     lastUpdated: new Date(),
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -29,11 +30,12 @@ describe('HttpController', () => {
   const mockTransaction = {
     id: 'test-transaction-id',
     userId: 'test-user-id',
+    companyId: 'test-company-id',
     currency: 'USD',
     createdAt: new Date(),
     updatedAt: new Date(),
     type: 'DEBIT' as any,
-    amount: new Decimal(10.50),
+    amount: 10.50 as any,
     description: 'Test transaction',
     status: 'COMPLETED' as any,
     reference: 'ref_123',
@@ -169,7 +171,7 @@ describe('HttpController', () => {
   describe('POST /billing/balance/:userId', () => {
     it('should update user balance', async () => {
       const updateData = { amount: 50.00 };
-      const updatedBalance = { ...mockUserBalance, balance: new Decimal(150.00) };
+      const updatedBalance = { ...mockUserBalance, balance: 150.00 as any };
 
       jest.spyOn(billingService, 'updateBalance').mockResolvedValue({
         success: true,
@@ -376,10 +378,11 @@ describe('HttpController', () => {
         usageEvent: {
           id: 'test-usage-id',
           userId: 'test-user-id',
+          companyId: 'test-company-id',
           service: 'openai',
           resource: 'gpt-3.5-turbo',
           quantity: 1000,
-          cost: new Decimal(10.50),
+          cost: 10.50 as any,
           timestamp: new Date(),
           unit: 'tokens',
           currency: 'USD'

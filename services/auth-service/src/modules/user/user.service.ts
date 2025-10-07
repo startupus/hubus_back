@@ -81,13 +81,13 @@ export class UserService {
 
       // Revoke all API keys
       await this.prisma.apiKey.updateMany({
-        where: { userId },
+        where: { ownerId: userId, ownerType: 'user' },
         data: { isActive: false },
       });
 
       // Revoke all refresh tokens
       await this.prisma.refreshToken.updateMany({
-        where: { userId },
+        where: { userId: userId },
         data: { isRevoked: true },
       });
 

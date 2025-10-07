@@ -23,13 +23,13 @@ let SecurityService = class SecurityService {
             const skip = (page - 1) * limit;
             const [events, total] = await Promise.all([
                 this.prisma.securityEvent.findMany({
-                    where: { userId },
+                    where: { ownerId: userId, ownerType: 'user' },
                     skip,
                     take: limit,
                     orderBy: { timestamp: 'desc' },
                 }),
                 this.prisma.securityEvent.count({
-                    where: { userId },
+                    where: { ownerId: userId, ownerType: 'user' },
                 }),
             ]);
             return {

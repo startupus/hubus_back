@@ -1,6 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { LoggerUtil } from '@ai-aggregator/shared';
-import { ThreadPoolService } from '@ai-aggregator/shared';
+import { LoggerUtil, ThreadPoolService } from '@ai-aggregator/shared';
 import { ConcurrentMap, ConcurrentQueue, AtomicCounter, ConcurrentCache } from '@ai-aggregator/shared';
 import { PrismaService } from '../common/prisma/prisma.service';
 
@@ -376,7 +375,7 @@ export class ConcurrentAnalyticsService {
     try {
       const metrics: Array<{ name: string; value: number; timestamp: Date; count: number }> = [];
       
-      for (const [name, data] of this.realtimeMetrics.entries()) {
+      for (const [name, data] of this.realtimeMetrics as any) {
         metrics.push({
           name,
           value: data.value,
@@ -671,11 +670,11 @@ export class ConcurrentAnalyticsService {
       totalUsers: this.totalUsers.get(),
       totalRequests: this.totalRequests.get(),
       queueSize: this.eventQueue.size(),
-      realtimeMetricsCount: this.realtimeMetrics.size(),
+      realtimeMetricsCount: (this.realtimeMetrics as any).size(),
       cacheStats: {
-        dashboardCache: this.dashboardCache.size(),
-        metricsCache: this.metricsCache.size(),
-        reportCache: this.reportCache.size()
+        dashboardCache: (this.dashboardCache as any).size(),
+        metricsCache: (this.metricsCache as any).size(),
+        reportCache: (this.reportCache as any).size()
       }
     };
   }

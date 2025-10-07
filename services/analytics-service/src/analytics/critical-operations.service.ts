@@ -1,6 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { LoggerUtil } from '@ai-aggregator/shared';
-import { RabbitMQService } from '@ai-aggregator/shared';
+import { LoggerUtil, RabbitMQClient } from '@ai-aggregator/shared';
 import { DataCollectionService } from '../services/data-collection.service';
 import { PrismaService } from '../common/prisma/prisma.service';
 
@@ -18,7 +17,7 @@ export class CriticalOperationsService {
   private readonly logger = new Logger(CriticalOperationsService.name);
 
   constructor(
-    private readonly rabbitmqService: RabbitMQService,
+    private readonly rabbitmqService: RabbitMQClient,
     private readonly dataCollectionService: DataCollectionService,
     private readonly prisma: PrismaService
   ) {}
@@ -28,6 +27,12 @@ export class CriticalOperationsService {
    */
   async initializeCriticalHandlers(): Promise<void> {
     try {
+      // Обработчик общих событий аналитики (от api-gateway и других сервисов)
+      await this.rabbitmqService.subscribeToCriticalMessages(
+        'analytics.events',
+        this.handleAnalyticsEvents.bind(this)
+      );
+
       // Обработчик критических событий
       await this.rabbitmqService.subscribeToCriticalMessages(
         'analytics.critical.events',
@@ -183,6 +188,58 @@ export class CriticalOperationsService {
   }
 
   /**
+   * Обработчик общих событий аналитики (от api-gateway и других сервисов)
+   */
+  private async handleAnalyticsEvents(message: any): Promise<boolean> {
+    try {
+      LoggerUtil.info('analytics-service', 'Processing analytics event', { 
+        messageId: message.messageId,
+        userId: message.userId,
+        eventType: message.eventType,
+        eventName: message.eventName,
+        service: message.service
+      });
+
+      // Создаем событие в базе данных
+      const event = await this.prisma.analyticsEvent.create({
+        data: {
+          userId: message.userId,
+          sessionId: message.sessionId,
+          eventType: message.eventType,
+          eventName: message.eventName,
+          service: message.service,
+          properties: message.properties || {},
+          metadata: {
+            ...message.metadata,
+            processedAt: new Date().toISOString(),
+            messageId: message.messageId,
+            source: 'rabbitmq'
+          },
+          timestamp: new Date(message.timestamp || new Date())
+        }
+      });
+
+      // Обновляем статистику пользователя если это AI взаимодействие
+      if (message.eventType === 'ai_interaction') {
+        await this.updateUserAnalytics(message.userId, message.properties);
+      }
+
+      LoggerUtil.info('analytics-service', 'Analytics event processed successfully', { 
+        messageId: message.messageId,
+        eventId: event.id
+      });
+
+      return true;
+    } catch (error) {
+      LoggerUtil.error('analytics-service', 'Failed to process analytics event', error as Error, { 
+        messageId: message.messageId,
+        userId: message.userId
+      });
+      return false;
+    }
+  }
+
+  /**
    * Обработчик критических событий
    */
   private async handleCriticalEvents(message: any): Promise<boolean> {
@@ -250,11 +307,16 @@ export class CriticalOperationsService {
       const metricsSnapshot = await this.prisma.metricsSnapshot.create({
         data: {
           service: message.service,
-          endpoint: message.endpoint,
-          responseTime: message.responseTime,
-          statusCode: message.statusCode,
-          memoryUsage: message.memoryUsage,
-          cpuUsage: message.cpuUsage,
+          metricType: 'performance',
+          metricName: 'response_time',
+          value: message.responseTime,
+          unit: 'ms',
+          labels: {
+            endpoint: message.endpoint,
+            statusCode: message.statusCode,
+            memoryUsage: message.memoryUsage,
+            cpuUsage: message.cpuUsage
+          },
           timestamp: new Date(message.timestamp),
           metadata: message.metadata || {}
         }
@@ -335,6 +397,78 @@ export class CriticalOperationsService {
   }
 
   /**
+   * Обновление аналитики пользователя
+   */
+  private async updateUserAnalytics(userId: string, properties: any): Promise<void> {
+    try {
+      if (!userId) return;
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      // Обновляем или создаем запись аналитики пользователя
+      await this.prisma.userAnalytics.upsert({
+        where: { userId },
+        update: {
+          totalRequests: { increment: 1 },
+          totalTokens: { increment: properties.tokensUsed || 0 },
+          totalCost: { increment: properties.cost || 0 },
+          lastActivity: new Date()
+        },
+        create: {
+          userId,
+          totalRequests: 1,
+          totalTokens: properties.tokensUsed || 0,
+          totalCost: properties.cost || 0,
+          lastActivity: new Date()
+        }
+      });
+
+      // Обновляем дневную статистику использования
+      await this.prisma.userUsageHistory.upsert({
+        where: {
+          userId_date: {
+            userId,
+            date: today
+          }
+        },
+        update: {
+          requests: { increment: 1 },
+          tokens: { increment: properties.tokensUsed || 0 },
+          cost: { increment: properties.cost || 0 },
+          models: {
+            [properties.model || 'unknown']: { increment: 1 }
+          },
+          providers: {
+            [properties.provider || 'unknown']: { increment: 1 }
+          }
+        },
+        create: {
+          userId,
+          date: today,
+          requests: 1,
+          tokens: properties.tokensUsed || 0,
+          cost: properties.cost || 0,
+          models: {
+            [properties.model || 'unknown']: 1
+          },
+          providers: {
+            [properties.provider || 'unknown']: 1
+          }
+        }
+      });
+
+      LoggerUtil.debug('analytics-service', 'User analytics updated', {
+        userId,
+        tokensUsed: properties.tokensUsed,
+        cost: properties.cost
+      });
+    } catch (error) {
+      LoggerUtil.error('analytics-service', 'Failed to update user analytics', error as Error, { userId });
+    }
+  }
+
+  /**
    * Обработчик синхронизации данных
    */
   private async handleSyncData(message: any): Promise<boolean> {
@@ -365,7 +499,7 @@ export class CriticalOperationsService {
    */
   private async sendCriticalAlert(event: any): Promise<void> {
     try {
-      LoggerUtil.warn('analytics-service', 'CRITICAL EVENT DETECTED', null, {
+      LoggerUtil.info('analytics-service', 'CRITICAL EVENT DETECTED', {
         eventId: event.id,
         userId: event.userId,
         eventType: event.eventType,
@@ -384,7 +518,7 @@ export class CriticalOperationsService {
    */
   private async sendSecurityAlert(auditRecord: any): Promise<void> {
     try {
-      LoggerUtil.warn('analytics-service', 'SECURITY ALERT', null, {
+      LoggerUtil.info('analytics-service', 'SECURITY ALERT', {
         auditId: auditRecord.id,
         userId: auditRecord.userId,
         action: auditRecord.eventName,
@@ -405,7 +539,7 @@ export class CriticalOperationsService {
     try {
       // Проверяем на высокое время отклика
       if (metricsSnapshot.responseTime > 5000) { // 5 секунд
-        LoggerUtil.warn('analytics-service', 'High response time detected', null, {
+        LoggerUtil.info('analytics-service', 'High response time detected', {
           service: metricsSnapshot.service,
           endpoint: metricsSnapshot.endpoint,
           responseTime: metricsSnapshot.responseTime
@@ -414,7 +548,7 @@ export class CriticalOperationsService {
 
       // Проверяем на высокое использование памяти
       if (metricsSnapshot.memoryUsage > 0.9) { // 90%
-        LoggerUtil.warn('analytics-service', 'High memory usage detected', null, {
+        LoggerUtil.info('analytics-service', 'High memory usage detected', {
           service: metricsSnapshot.service,
           memoryUsage: metricsSnapshot.memoryUsage
         });
@@ -422,7 +556,7 @@ export class CriticalOperationsService {
 
       // Проверяем на высокое использование CPU
       if (metricsSnapshot.cpuUsage > 0.8) { // 80%
-        LoggerUtil.warn('analytics-service', 'High CPU usage detected', null, {
+        LoggerUtil.info('analytics-service', 'High CPU usage detected', {
           service: metricsSnapshot.service,
           cpuUsage: metricsSnapshot.cpuUsage
         });

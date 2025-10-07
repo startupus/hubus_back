@@ -1,9 +1,19 @@
+import { HttpService } from '@nestjs/axios';
 import { ChatService } from './chat.service';
-import { ChatCompletionRequest } from '@ai-aggregator/shared';
+import { HistoryService } from '../history/history.service';
+import { ChatCompletionRequest, RabbitMQClient } from '@ai-aggregator/shared';
+import { AnonymizationService } from '../anonymization/anonymization.service';
+import { ConfigService } from '@nestjs/config';
 export declare class ChatController {
     private readonly chatService;
-    constructor(chatService: ChatService);
-    createCompletion(request: any, userId: string, provider?: 'openai' | 'openrouter' | 'yandex'): Promise<any>;
+    private readonly historyService;
+    private readonly anonymizationService;
+    private readonly configService;
+    private readonly httpService;
+    private readonly rabbitmqClient;
+    constructor(chatService: ChatService, historyService: HistoryService, anonymizationService: AnonymizationService, configService: ConfigService, httpService: HttpService, rabbitmqClient: RabbitMQClient);
+    createCompletion(request: any, req: any, provider?: 'openai' | 'openrouter' | 'yandex'): Promise<any>;
+    private restoreAnonymizedResponse;
     getModels(provider?: 'openai' | 'openrouter' | 'yandex'): Promise<{
         success: boolean;
         message: string;
@@ -23,4 +33,6 @@ export declare class ChatController {
         success: boolean;
         message: string;
     }>;
+    getRecommendations(req: any, limit?: number, includeRussian?: boolean): Promise<any>;
+    getPopular(limit?: number): Promise<any>;
 }

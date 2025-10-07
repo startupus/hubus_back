@@ -1,6 +1,6 @@
-import { WinstonModule } from 'nest-winston';
+// import { WinstonModule } from 'nest-winston'; // Временно отключено
 import * as winston from 'winston';
-import * as DailyRotateFile from 'winston-daily-rotate-file';
+// import * as DailyRotateFile from 'winston-daily-rotate-file'; // Временно отключено
 
 export const createLoggerConfig = (serviceName: string) => {
   const logFormat = winston.format.combine(
@@ -31,7 +31,7 @@ export const createLoggerConfig = (serviceName: string) => {
     })
   );
 
-  return WinstonModule.createLogger({
+  return winston.createLogger({
     level: process.env.LOG_LEVEL || 'info',
     format: logFormat,
     defaultMeta: { service: serviceName },
@@ -41,37 +41,18 @@ export const createLoggerConfig = (serviceName: string) => {
         format: consoleFormat,
       }),
       
-      // File transports with rotation
-      new DailyRotateFile({
-        filename: `logs/${serviceName}-%DATE%.log`,
-        datePattern: 'YYYY-MM-DD',
-        maxSize: '20m',
-        maxFiles: '14d',
+      // File transports (simplified without rotation)
+      new winston.transports.File({
+        filename: `logs/${serviceName}.log`,
         format: logFormat,
       }),
       
       // Error log file
-      new DailyRotateFile({
-        filename: `logs/${serviceName}-error-%DATE%.log`,
-        datePattern: 'YYYY-MM-DD',
+      new winston.transports.File({
+        filename: `logs/${serviceName}-error.log`,
         level: 'error',
-        maxSize: '20m',
-        maxFiles: '30d',
         format: logFormat,
       }),
-      
-      // Debug log file (only in development)
-      ...(process.env.NODE_ENV === 'development' ? [
-        new DailyRotateFile({
-          filename: `logs/${serviceName}-debug-%DATE%.log`,
-          datePattern: 'YYYY-MM-DD',
-          level: 'debug',
-          maxSize: '20m',
-          maxFiles: '7d',
-          format: logFormat,
-        })
-      ] : []),
     ],
   });
 };
-

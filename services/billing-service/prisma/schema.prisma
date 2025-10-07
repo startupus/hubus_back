@@ -14,30 +14,52 @@ datasource db {
 // CORE BILLING MODELS
 // ===========================================
 
-model User {
+model Company {
   id                String    @id @default(uuid())
+  name              String
   email             String    @unique
-  firstName         String?   @map("first_name")
-  lastName          String?   @map("last_name")
   isActive          Boolean   @default(true) @map("is_active")
   createdAt         DateTime  @default(now()) @map("created_at")
   updatedAt         DateTime  @updatedAt @map("updated_at")
   
   // Billing relations
-  balance           UserBalance?
+  balance           CompanyBalance?
   transactions      Transaction[]
   usageEvents       UsageEvent[]
   invoices          Invoice[]
   subscriptions     Subscription[]
   paymentMethods    PaymentMethod[]
   discountRules     DiscountRule[]
+  users             User[]
   
-  @@map("users")
+  @@map("companies")
 }
 
-model UserBalance {
+model User {
   id                String    @id @default(uuid())
-  userId            String    @unique @map("user_id")
+  companyId         String    @map("company_id")
+  email             String    @unique
+  firstName         String?   @map("first_name")
+  lastName          String?   @map("last_name")
+  position          String?   // Должность в компании
+  department        String?   // Отдел в компании
+  isActive          Boolean   @default(true) @map("is_active")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  
+  // Relations
+  company           Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  transactions      Transaction[]
+  usageEvents       UsageEvent[]
+  
+  @@map("users")
+  @@index([companyId])
+  @@index([email])
+}
+
+model CompanyBalance {
+  id                String    @id @default(uuid())
+  companyId         String    @unique @map("company_id")
   balance           Decimal   @default(0) @db.Decimal(10, 4)
   currency          String    @default("USD")
   creditLimit       Decimal?  @map("credit_limit") @db.Decimal(10, 2)
@@ -46,14 +68,15 @@ model UserBalance {
   updatedAt         DateTime  @updatedAt @map("updated_at")
   
   // Relations
-  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company           Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
   
-  @@map("user_balances")
+  @@map("company_balances")
 }
 
 model Transaction {
   id                String            @id @default(uuid())
-  userId            String            @map("user_id")
+  companyId         String            @map("company_id")
+  userId            String?           @map("user_id") // Пользователь, который инициировал транзакцию
   type              TransactionType
   amount            Decimal           @db.Decimal(10, 4)
   currency          String            @default("USD")
@@ -66,13 +89,15 @@ model Transaction {
   updatedAt         DateTime          @updatedAt @map("updated_at")
   
   // Relations
-  user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company           Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user              User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
   invoice           Invoice?          @relation(fields: [invoiceId], references: [id])
   invoiceId         String?           @map("invoice_id")
   paymentMethod     PaymentMethod?    @relation(fields: [paymentMethodId], references: [id])
   paymentMethodId   String?           @map("payment_method_id")
   
   @@map("transactions")
+  @@index([companyId])
   @@index([userId])
   @@index([type])
   @@index([status])
@@ -81,7 +106,8 @@ model Transaction {
 
 model UsageEvent {
   id                String            @id @default(uuid())
-  userId            String            @map("user_id")
+  companyId         String            @map("company_id")
+  userId            String?           @map("user_id") // Пользователь, который использовал сервис
   service            String
   resource           String
   quantity           Int               @default(1)
@@ -92,9 +118,11 @@ model UsageEvent {
   timestamp          DateTime          @default(now())
   
   // Relations
-  user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company           Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user              User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
   
   @@map("usage_events")
+  @@index([companyId])
   @@index([userId])
   @@index([service])
   @@index([timestamp])
@@ -102,7 +130,7 @@ model UsageEvent {
 
 model Invoice {
   id                String            @id @default(uuid())
-  userId            String            @map("user_id")
+  companyId         String            @map("company_id")
   invoiceNumber     String            @unique @map("invoice_number")
   status            InvoiceStatus     @default(DRAFT)
   subtotal          Decimal           @db.Decimal(10, 2)
@@ -115,12 +143,12 @@ model Invoice {
   updatedAt         DateTime          @updatedAt @map("updated_at")
   
   // Relations
-  user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company           Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
   transactions      Transaction[]
   invoiceItems      InvoiceItem[]
   
   @@map("invoices")
-  @@index([userId])
+  @@index([companyId])
   @@index([status])
   @@index([dueDate])
 }
@@ -142,7 +170,7 @@ model InvoiceItem {
 
 model Subscription {
   id                String            @id @default(uuid())
-  userId            String            @map("user_id")
+  companyId         String            @map("company_id")
   planId            String            @map("plan_id")
   status            SubscriptionStatus @default(ACTIVE)
   currentPeriodStart DateTime         @map("current_period_start")
@@ -153,16 +181,16 @@ model Subscription {
   updatedAt         DateTime          @updatedAt @map("updated_at")
   
   // Relations
-  user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company           Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
   
   @@map("subscriptions")
-  @@index([userId])
+  @@index([companyId])
   @@index([status])
 }
 
 model PaymentMethod {
   id                String            @id @default(uuid())
-  userId            String            @map("user_id")
+  companyId         String            @map("company_id")
   type              PaymentMethodType
   provider          String
   externalId        String            @map("external_id")
@@ -172,11 +200,11 @@ model PaymentMethod {
   updatedAt         DateTime          @updatedAt @map("updated_at")
   
   // Relations
-  user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company           Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
   transactions      Transaction[]
   
   @@map("payment_methods")
-  @@index([userId])
+  @@index([companyId])
   @@index([type])
 }
 
@@ -203,7 +231,10 @@ model PricingRule {
   name              String
   service           String
   resource          String?
-  type              PricingRuleType   @default(PER_UNIT)
+  provider          String?           // openai, openrouter, yandex, etc.
+  model             String?           // gpt-3.5-turbo, gpt-4, etc.
+  providerType      ProviderType      @default(FOREIGN) @map("provider_type")
+  type              PricingRuleType   @default(PER_TOKEN)
   price             Decimal           @db.Decimal(10, 6)
   currency          String            @default("USD")
   limits            Json?
@@ -218,6 +249,9 @@ model PricingRule {
   @@map("pricing_rules")
   @@index([service])
   @@index([resource])
+  @@index([provider])
+  @@index([model])
+  @@index([providerType])
   @@index([isActive])
   @@index([priority])
 }
@@ -231,7 +265,7 @@ model DiscountRule {
   currency          String?           @default("USD")
   minAmount         Decimal?          @map("min_amount") @db.Decimal(10, 2)
   maxAmount         Decimal?          @map("max_amount") @db.Decimal(10, 2)
-  userId            String?           @map("user_id")
+  companyId         String?           @map("company_id")
   userTier          String?           @map("user_tier")
   isGlobal          Boolean           @default(false) @map("is_global")
   isActive          Boolean           @default(true) @map("is_active")
@@ -243,11 +277,11 @@ model DiscountRule {
   updatedAt         DateTime          @updatedAt @map("updated_at")
   
   // Relations
-  user              User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  company           Company?          @relation(fields: [companyId], references: [id], onDelete: SetNull)
   
   @@map("discount_rules")
   @@index([code])
-  @@index([userId])
+  @@index([companyId])
   @@index([isActive])
   @@index([validFrom])
   @@index([validTo])
@@ -336,4 +370,9 @@ enum DiscountType {
   PERCENTAGE
   FIXED_AMOUNT
   FREE_TRIAL
+}
+
+enum ProviderType {
+  DOMESTIC    // Отечественные (Yandex, Sber, etc.)
+  FOREIGN     // Зарубежные (OpenAI, Anthropic, etc.)
 }

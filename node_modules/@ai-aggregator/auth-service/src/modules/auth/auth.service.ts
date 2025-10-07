@@ -2,7 +2,8 @@ import { Injectable, UnauthorizedException, ConflictException, BadRequestExcepti
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../common/prisma/prisma.service';
-import { CryptoUtil, LoggerUtil, User, AuthResult, JwtPayload } from '@ai-aggregator/shared';
+import { LoggerUtil, User, AuthResult, JwtPayload } from '@ai-aggregator/shared';
+import { CryptoUtil } from '../../common/utils/crypto.util';
 import { RegisterDto, LoginDto, ChangePasswordDto, ResetPasswordRequestDto, ResetPasswordDto, VerifyEmailDto } from '@ai-aggregator/shared';
 
 @Injectable()
@@ -30,6 +31,17 @@ export class AuthService {
       // Hash password
       const passwordHash = await CryptoUtil.hashPassword(registerDto.password);
 
+      // Create company first
+      const company = await this.prisma.company.create({
+        data: {
+          name: 'Default Company',
+          email: registerDto.email,
+          passwordHash: passwordHash,
+          description: 'Default company for individual users',
+          isActive: true,
+        }
+      });
+
       // Create user
       const user = await this.prisma.user.create({
         data: {
@@ -37,6 +49,7 @@ export class AuthService {
           passwordHash,
           firstName: registerDto.firstName,
           lastName: registerDto.lastName,
+          companyId: company.id,
           isVerified: !this.configService.get('REQUIRE_EMAIL_VERIFICATION', false),
         },
       });
@@ -219,7 +232,7 @@ export class AuthService {
 
       // Revoke all refresh tokens
       await this.prisma.refreshToken.updateMany({
-        where: { userId },
+        where: { userId: userId },
         data: { isRevoked: true },
       });
 
@@ -253,7 +266,8 @@ export class AuthService {
       // Save reset token
       await this.prisma.passwordResetToken.create({
         data: {
-          userId: user.id,
+          ownerId: user.id,
+          ownerType: 'user',
           token: resetToken,
           expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
         },
@@ -291,7 +305,7 @@ export class AuthService {
       // Update password and mark token as used
       await this.prisma.$transaction([
         this.prisma.user.update({
-          where: { id: resetToken.userId },
+          where: { id: resetToken.user?.id || resetToken.ownerId },
           data: { passwordHash: newPasswordHash },
         }),
         this.prisma.passwordResetToken.update({
@@ -302,14 +316,14 @@ export class AuthService {
 
       // Revoke all refresh tokens
       await this.prisma.refreshToken.updateMany({
-        where: { userId: resetToken.userId },
+        where: { userId: resetToken.user?.id || resetToken.ownerId },
         data: { isRevoked: true },
       });
 
       // Log security event
-      await this.logSecurityEvent(resetToken.userId, 'PASSWORD_RESET', 'HIGH', 'Password reset completed');
+      await this.logSecurityEvent(resetToken.user?.id || resetToken.ownerId, 'PASSWORD_RESET', 'HIGH', 'Password reset completed');
 
-      LoggerUtil.info('auth-service', 'Password reset completed', { userId: resetToken.userId });
+      LoggerUtil.info('auth-service', 'Password reset completed', { userId: resetToken.user?.id || resetToken.ownerId });
     } catch (error) {
       LoggerUtil.error('auth-service', 'Password reset failed', error as Error);
       throw error;
@@ -334,7 +348,7 @@ export class AuthService {
       // Mark email as verified and token as used
       await this.prisma.$transaction([
         this.prisma.user.update({
-          where: { id: verificationToken.userId },
+          where: { id: verificationToken.user?.id || verificationToken.ownerId },
           data: { isVerified: true },
         }),
         this.prisma.emailVerificationToken.update({
@@ -344,9 +358,9 @@ export class AuthService {
       ]);
 
       // Log security event
-      await this.logSecurityEvent(verificationToken.userId, 'EMAIL_VERIFIED', 'LOW', 'Email verified successfully');
+      await this.logSecurityEvent(verificationToken.user?.id || verificationToken.ownerId, 'EMAIL_VERIFIED', 'LOW', 'Email verified successfully');
 
-      LoggerUtil.info('auth-service', 'Email verified successfully', { userId: verificationToken.userId });
+      LoggerUtil.info('auth-service', 'Email verified successfully', { userId: verificationToken.user?.id || verificationToken.ownerId });
     } catch (error) {
       LoggerUtil.error('auth-service', 'Email verification failed', error as Error);
       throw error;
@@ -423,6 +437,7 @@ export class AuthService {
       await this.prisma.loginAttempt.create({
         data: {
           email,
+          ownerType: 'user',
           ipAddress: ipAddress || 'unknown',
           userAgent: userAgent || 'unknown',
           success: false,
@@ -448,7 +463,8 @@ export class AuthService {
     try {
       await this.prisma.securityEvent.create({
         data: {
-          userId,
+          ownerId: userId,
+          ownerType: 'user',
           type: type as any,
           severity: severity as any,
           description,
@@ -471,9 +487,10 @@ export class AuthService {
       
       const keyRecord = await this.prisma.apiKey.create({
         data: {
-          userId,
+          ownerId: userId,
+          ownerType: 'user',
           name,
-          keyHash: hashedKey,
+          key: hashedKey,
           expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 1 year
         },
       });
@@ -503,7 +520,7 @@ export class AuthService {
   async getApiKeys(userId: string): Promise<any> {
     try {
       const apiKeys = await this.prisma.apiKey.findMany({
-        where: { userId, isActive: true },
+        where: { ownerId: userId, ownerType: 'user', isActive: true },
         select: {
           id: true,
           name: true,
@@ -530,7 +547,7 @@ export class AuthService {
   async revokeApiKey(userId: string, keyId: string): Promise<any> {
     try {
       await this.prisma.apiKey.update({
-        where: { id: keyId, userId },
+        where: { id: keyId, ownerId: userId, ownerType: 'user' },
         data: { isActive: false },
       });
 

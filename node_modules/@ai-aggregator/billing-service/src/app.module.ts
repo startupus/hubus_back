@@ -3,7 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { validationSchema } from './config/validation.schema';
 import configuration from './config/configuration';
 import { BillingModule } from './billing/billing.module';
-import { HttpModule } from './http/http.module';
+import { BillingHttpModule } from './http/http.module';
 import { HealthModule } from './health/health.module';
 import { PrismaModule } from './common/prisma/prisma.module';
 
@@ -18,7 +18,7 @@ import { PrismaModule } from './common/prisma/prisma.module';
     }),
     PrismaModule,
     BillingModule,
-    HttpModule,
+    BillingHttpModule,
     HealthModule,
   ],
 })

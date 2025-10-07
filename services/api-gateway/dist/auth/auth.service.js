@@ -89,6 +89,41 @@ let AuthService = class AuthService {
             throw new common_1.HttpException('Login failed', common_1.HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
+    async createApiKey(createApiKeyDto) {
+        try {
+            const response = await (0, rxjs_1.firstValueFrom)(this.httpService.post(`${this.authServiceUrl}/auth/api-keys`, createApiKeyDto));
+            return response.data;
+        }
+        catch (error) {
+            if (error.response?.status === 409) {
+                throw new common_1.HttpException('API key with this name already exists', common_1.HttpStatus.CONFLICT);
+            }
+            throw new common_1.HttpException('Failed to create API key', common_1.HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+    async getApiKeys(getApiKeysDto) {
+        try {
+            const response = await (0, rxjs_1.firstValueFrom)(this.httpService.get(`${this.authServiceUrl}/auth/api-keys`, {
+                params: { userId: getApiKeysDto.userId }
+            }));
+            return response.data;
+        }
+        catch (error) {
+            throw new common_1.HttpException('Failed to get API keys', common_1.HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+    async revokeApiKey(keyId) {
+        try {
+            const response = await (0, rxjs_1.firstValueFrom)(this.httpService.delete(`${this.authServiceUrl}/auth/api-keys/${keyId}`));
+            return response.data;
+        }
+        catch (error) {
+            if (error.response?.status === 404) {
+                throw new common_1.HttpException('API key not found', common_1.HttpStatus.NOT_FOUND);
+            }
+            throw new common_1.HttpException('Failed to revoke API key', common_1.HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
 };
 exports.AuthService = AuthService;
 exports.AuthService = AuthService = __decorate([

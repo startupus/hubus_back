@@ -6,4 +6,4 @@ import { OrchestratorModule } from '../orchestrator/orchestrator.module';
   imports: [OrchestratorModule],
   controllers: [HttpController],
 })
-export class HttpModule {}
+export class OrchestratorHttpModule {}

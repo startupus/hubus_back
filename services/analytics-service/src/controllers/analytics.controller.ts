@@ -80,7 +80,7 @@ export class AnalyticsController {
   async trackEvent(@Body() trackEventDto: TrackEventDto): Promise<AnalyticsResponseDto<AnalyticsEventResponseDto>> {
     try {
       LoggerUtil.debug('analytics-controller', 'Tracking event', {
-        eventType: trackEventDto.eventType,
+        eventType: trackEventDto.eventType as any,
         eventName: trackEventDto.eventName,
         service: trackEventDto.service
       });
@@ -88,7 +88,7 @@ export class AnalyticsController {
       const event = await this.dataCollectionService.recordEvent({
         userId: trackEventDto.userId,
         sessionId: trackEventDto.sessionId,
-        eventType: trackEventDto.eventType,
+        eventType: trackEventDto.eventType as any,
         eventName: trackEventDto.eventName,
         service: trackEventDto.service,
         properties: trackEventDto.properties,
@@ -130,7 +130,7 @@ export class AnalyticsController {
         source: batchEventDto.source
       });
 
-      const result = await this.dataCollectionService.processBatchEvents(batchEventDto);
+      const result = await this.dataCollectionService.processBatchEvents(batchEventDto as any);
 
       return {
         success: result.success,

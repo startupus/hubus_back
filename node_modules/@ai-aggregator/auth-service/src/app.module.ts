@@ -5,7 +5,8 @@ import { AuthModule } from './modules/auth/auth.module';
 import { ApiKeyModule } from './modules/api-key/api-key.module';
 import { UserModule } from './modules/user/user.module';
 import { SecurityModule } from './modules/security/security.module';
-import { HttpModule } from './http/http.module';
+import { AuthHttpModule } from './http/http.module';
+import { HttpModule } from '@nestjs/axios';
 import { HealthModule } from './health/health.module';
 import { configuration } from './config/configuration';
 import { validationSchema } from './config/validation.schema';
@@ -20,12 +21,16 @@ import { validationSchema } from './config/validation.schema';
       ignoreEnvFile: false,
       expandVariables: true,
     }),
+    HttpModule.register({
+      timeout: 10000,
+      maxRedirects: 3,
+    }),
     PrismaModule,
     AuthModule,
     ApiKeyModule,
     UserModule,
     SecurityModule,
-    HttpModule,
+    AuthHttpModule,
     HealthModule,
   ],
 })

@@ -18,7 +18,7 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
     for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.AISafetyLevel = exports.AICertificationStatus = exports.AICertificationLevel = exports.AICategory = void 0;
+exports.RequestStatus = exports.RequestType = exports.AISafetyLevel = exports.AICertificationStatus = exports.AICertificationLevel = exports.AICategory = void 0;
 // Types
 __exportStar(require("./types/common"), exports);
 __exportStar(require("./types/auth"), exports);
@@ -26,6 +26,7 @@ __exportStar(require("./types/billing"), exports);
 __exportStar(require("./types/providers"), exports);
 __exportStar(require("./types/events"), exports);
 __exportStar(require("./types/ai-certification"), exports);
+__exportStar(require("./types/request-history"), exports);
 // DTOs
 __exportStar(require("./dto/base.dto"), exports);
 __exportStar(require("./dto/auth.dto"), exports);
@@ -33,18 +34,17 @@ __exportStar(require("./dto/billing.dto"), exports);
 __exportStar(require("./dto/providers.dto"), exports);
 __exportStar(require("./dto/chat.dto"), exports);
 __exportStar(require("./dto/ai-certification.dto"), exports);
-// Utilities
+// Utilities (без нативных зависимостей)
 __exportStar(require("./utils/crypto.util"), exports);
 __exportStar(require("./utils/validation.util"), exports);
 __exportStar(require("./utils/response.util"), exports);
 __exportStar(require("./utils/logger.util"), exports);
 __exportStar(require("./utils/concurrency.util"), exports);
+// HTTP API Contracts
+__exportStar(require("./contracts"), exports);
+// HTTP Clients
+__exportStar(require("./clients"), exports);
 // Services
-__exportStar(require("./services/anonymization.service"), exports);
-__exportStar(require("./services/ai-classification.service"), exports);
-__exportStar(require("./services/ai-safety.service"), exports);
-__exportStar(require("./services/redis.service"), exports);
-__exportStar(require("./services/rabbitmq.service"), exports);
 __exportStar(require("./services/thread-pool.service"), exports);
 // Constants
 __exportStar(require("./constants"), exports);
@@ -55,4 +55,7 @@ Object.defineProperty(exports, "AICategory", { enumerable: true, get: function (
 Object.defineProperty(exports, "AICertificationLevel", { enumerable: true, get: function () { return ai_certification_1.AICertificationLevel; } });
 Object.defineProperty(exports, "AICertificationStatus", { enumerable: true, get: function () { return ai_certification_1.AICertificationStatus; } });
 Object.defineProperty(exports, "AISafetyLevel", { enumerable: true, get: function () { return ai_certification_1.AISafetyLevel; } });
+var request_history_1 = require("./types/request-history");
+Object.defineProperty(exports, "RequestType", { enumerable: true, get: function () { return request_history_1.RequestType; } });
+Object.defineProperty(exports, "RequestStatus", { enumerable: true, get: function () { return request_history_1.RequestStatus; } });
 //# sourceMappingURL=index.js.map

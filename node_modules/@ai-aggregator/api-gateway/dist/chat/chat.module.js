@@ -12,14 +12,17 @@ const axios_1 = require("@nestjs/axios");
 const config_1 = require("@nestjs/config");
 const chat_controller_1 = require("./chat.controller");
 const chat_service_1 = require("./chat.service");
+const history_module_1 = require("../history/history.module");
+const anonymization_module_1 = require("../anonymization/anonymization.module");
+const shared_1 = require("@ai-aggregator/shared");
 let ChatModule = class ChatModule {
 };
 exports.ChatModule = ChatModule;
 exports.ChatModule = ChatModule = __decorate([
     (0, common_1.Module)({
-        imports: [axios_1.HttpModule, config_1.ConfigModule],
+        imports: [axios_1.HttpModule, config_1.ConfigModule, history_module_1.HistoryModule, anonymization_module_1.AnonymizationModule],
         controllers: [chat_controller_1.ChatController],
-        providers: [chat_service_1.ChatService],
+        providers: [chat_service_1.ChatService, shared_1.RabbitMQClient],
     })
 ], ChatModule);
 //# sourceMappingURL=chat.module.js.map

@@ -28,6 +28,15 @@ let AuthController = class AuthController {
     async login(loginDto) {
         return this.authService.login(loginDto);
     }
+    async createApiKey(createApiKeyDto) {
+        return this.authService.createApiKey(createApiKeyDto);
+    }
+    async getApiKeys(getApiKeysDto) {
+        return this.authService.getApiKeys(getApiKeysDto);
+    }
+    async revokeApiKey(keyId) {
+        return this.authService.revokeApiKey(keyId);
+    }
 };
 exports.AuthController = AuthController;
 __decorate([
@@ -48,6 +57,33 @@ __decorate([
     __metadata("design:paramtypes", [shared_1.LoginDto]),
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "login", null);
+__decorate([
+    (0, common_1.Post)('api-keys'),
+    (0, swagger_1.ApiOperation)({ summary: 'Create API key' }),
+    (0, swagger_1.ApiResponse)({ status: 201, description: 'API key created successfully' }),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], AuthController.prototype, "createApiKey", null);
+__decorate([
+    (0, common_1.Get)('api-keys'),
+    (0, swagger_1.ApiOperation)({ summary: 'Get user API keys' }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: 'API keys retrieved successfully' }),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], AuthController.prototype, "getApiKeys", null);
+__decorate([
+    (0, common_1.Delete)('api-keys/:keyId'),
+    (0, swagger_1.ApiOperation)({ summary: 'Revoke API key' }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: 'API key revoked successfully' }),
+    __param(0, (0, common_1.Param)('keyId')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", Promise)
+], AuthController.prototype, "revokeApiKey", null);
 exports.AuthController = AuthController = __decorate([
     (0, swagger_1.ApiTags)('Authentication'),
     (0, common_1.Controller)('auth'),

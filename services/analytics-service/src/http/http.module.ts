@@ -7,4 +7,4 @@ import { AnalyticsModule } from '../analytics/analytics.module';
   controllers: [HttpController],
   providers: [],
 })
-export class HttpModule {}
+export class AnalyticsHttpModule {}

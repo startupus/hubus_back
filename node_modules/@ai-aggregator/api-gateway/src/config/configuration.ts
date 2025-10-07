@@ -144,4 +144,10 @@ export const configuration = (): MicroserviceConfig => ({
     lockoutDuration: parseInt(process.env.LOCKOUT_DURATION || '900000', 10),
     requireEmailVerification: process.env.REQUIRE_EMAIL_VERIFICATION === 'true',
   },
+  anonymization: {
+    enabled: process.env.ANONYMIZATION_ENABLED === 'true',
+    enabledForProvider: process.env.ANONYMIZATION_PROVIDER || '',
+    enabledForModel: process.env.ANONYMIZATION_MODEL || '',
+    preserveMetadata: process.env.ANONYMIZATION_PRESERVE_METADATA === 'true',
+  },
 });

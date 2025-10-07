@@ -5,4 +5,7 @@ export declare class AuthController {
     constructor(authService: AuthService);
     register(registerDto: RegisterDto): Promise<AuthResponseDto>;
     login(loginDto: LoginDto): Promise<AuthResponseDto>;
+    createApiKey(createApiKeyDto: any): Promise<any>;
+    getApiKeys(getApiKeysDto: any): Promise<any>;
+    revokeApiKey(keyId: string): Promise<any>;
 }

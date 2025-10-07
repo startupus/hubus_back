@@ -7,6 +7,7 @@ import { Decimal } from '@prisma/client/runtime/library';
 export interface UserBalance {
   id: string;
   userId: string;
+  companyId: string;
   balance: Decimal;
   currency: string;
   creditLimit?: Decimal;
@@ -18,6 +19,7 @@ export interface UserBalance {
 export interface Transaction {
   id: string;
   userId: string;
+  companyId: string;
   type: TransactionType;
   amount: Decimal;
   currency: string;
@@ -33,6 +35,7 @@ export interface Transaction {
 export interface UsageEvent {
   id: string;
   userId: string;
+  companyId: string;
   service: string;
   resource: string;
   quantity: number;
@@ -172,6 +175,7 @@ export enum BillingCycle {
 
 export interface CreateTransactionRequest {
   userId: string;
+  companyId?: string;
   type: TransactionType;
   amount: number;
   currency?: string;
@@ -189,6 +193,7 @@ export interface CreateTransactionResponse {
 
 export interface TrackUsageRequest {
   userId: string;
+  companyId?: string;
   service: string;
   resource: string;
   quantity?: number;
@@ -279,7 +284,10 @@ export interface PricingRule {
   name: string;
   service: string;
   resource: string;
-  type: 'fixed' | 'per_unit' | 'tiered';
+  provider?: string;
+  model?: string;
+  providerType: 'DOMESTIC' | 'FOREIGN';
+  type: 'fixed' | 'per_unit' | 'per_token' | 'tiered';
   price: number;
   currency: string;
   limits?: {

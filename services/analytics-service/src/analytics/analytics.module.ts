@@ -8,8 +8,14 @@ import { ReportingService } from '../services/reporting.service';
 import { PrometheusService } from '../integrations/prometheus.service';
 import { GrafanaService } from '../integrations/grafana.service';
 import { WebhookService } from '../integrations/webhook.service';
+import { NeuralNetworkRecommendationService } from './neural-network-recommendation.service';
+import { NeuralNetworkRecommendationController } from './neural-network-recommendation.controller';
 import { HttpController } from '../http/http.controller';
 import { ReportingController } from '../controllers/reporting.controller';
+import { AnalyticsCacheService } from './analytics-cache.service';
+import { ConcurrentAnalyticsService } from './concurrent-analytics.service';
+import { CriticalOperationsService } from './critical-operations.service';
+import { RedisClient, RabbitMQClient, ThreadPoolService } from '@ai-aggregator/shared';
 
 @Module({
   imports: [
@@ -22,6 +28,7 @@ import { ReportingController } from '../controllers/reporting.controller';
   controllers: [
     HttpController,
     ReportingController,
+    NeuralNetworkRecommendationController,
   ],
   providers: [
     PrismaService,
@@ -31,6 +38,13 @@ import { ReportingController } from '../controllers/reporting.controller';
     PrometheusService,
     GrafanaService,
     WebhookService,
+    NeuralNetworkRecommendationService,
+    AnalyticsCacheService,
+    ConcurrentAnalyticsService,
+    CriticalOperationsService,
+    RedisClient,
+    RabbitMQClient,
+    ThreadPoolService,
   ],
   exports: [
     DataCollectionService,
@@ -39,6 +53,10 @@ import { ReportingController } from '../controllers/reporting.controller';
     PrometheusService,
     GrafanaService,
     WebhookService,
+    NeuralNetworkRecommendationService,
+    AnalyticsCacheService,
+    ConcurrentAnalyticsService,
+    CriticalOperationsService,
   ],
 })
 export class AnalyticsModule {}

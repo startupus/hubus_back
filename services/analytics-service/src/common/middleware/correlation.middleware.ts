@@ -22,7 +22,7 @@ export class CorrelationMiddleware implements NestMiddleware {
       url: req.url,
       userAgent: req.headers['user-agent'],
       ip: req.ip,
-    }, correlationId);
+    }, Array.isArray(correlationId) ? correlationId[0] : correlationId);
     
     res.on('finish', () => {
       LoggerUtil.info('analytics-service', `${req.method} ${req.url} ${res.statusCode} - Request completed`, {
@@ -30,7 +30,7 @@ export class CorrelationMiddleware implements NestMiddleware {
         url: req.url,
         statusCode: res.statusCode,
         responseTime: Date.now() - req['startTime'],
-      }, correlationId);
+      }, Array.isArray(correlationId) ? correlationId[0] : correlationId);
     });
     
     req['startTime'] = Date.now();

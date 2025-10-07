@@ -6,11 +6,10 @@ import { AxiosResponse } from 'axios';
 import { 
   ChatCompletionRequest, 
   ChatCompletionResponse, 
-  AnonymizationService,
-  AnonymizedData,
-  LoggerUtil,
-  RabbitMQService
+  LoggerUtil
 } from '@ai-aggregator/shared';
+// import { AnonymizedData, RabbitMQService } from '@ai-aggregator/shared'; // Removed - using local implementations
+import { AnonymizationService } from '../anonymization/anonymization.service';
 
 @Injectable()
 export class ProxyService {
@@ -597,7 +596,7 @@ export class ProxyService {
           content: `Mock response from ${provider}. 
 
 ORIGINAL MESSAGE: "${originalContent}"
-ANONYMIZED MESSAGE: "${anonymizedContent.data}"
+ANONYMIZED MESSAGE: "${anonymizedContent}"
 
 The anonymization system replaced personal information with placeholders before sending to the AI provider. This ensures privacy and data protection.`
         },

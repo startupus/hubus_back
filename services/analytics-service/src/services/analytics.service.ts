@@ -53,16 +53,7 @@ export class AnalyticsService {
           orderBy,
           skip,
           take,
-          include: {
-            user: {
-              select: {
-                id: true,
-                email: true,
-                firstName: true,
-                lastName: true
-              }
-            }
-          }
+          // include удален - в AnalyticsEvent нет связи с User
         }),
         this.prisma.analyticsEvent.count({ where })
       ]);
@@ -138,10 +129,8 @@ export class AnalyticsService {
       this.logger.debug('Fetching user analytics', { userId });
 
       const userAnalytics = await this.prisma.userAnalytics.findUnique({
-        where: { userId },
-        include: {
-          user: true
-        }
+        where: { userId }
+        // include удален - в UserAnalytics нет связи с User
       });
 
       if (!userAnalytics) {
@@ -764,29 +753,22 @@ export class AnalyticsService {
             timestamp: { gte: yesterday }
           }
         }).then(result => result.length),
-        this.prisma.analyticsEvent.aggregate({
-          _sum: {
-            properties: true
-          },
+        this.prisma.analyticsEvent.count({
           where: {
             eventType: 'api_request',
             timestamp: { gte: yesterday }
           }
-        }).then(result => {
-          // Извлекаем total_tokens из properties
-          return 0; // Заглушка для total_tokens
+        }).then(() => {
+          // Заглушка для total_tokens - в реальности нужно извлекать из JSON
+          return 0;
         }),
-        this.prisma.analyticsEvent.aggregate({
-          _avg: {
-            properties: true
-          },
+        this.prisma.analyticsEvent.count({
           where: {
             eventType: 'api_request',
             timestamp: { gte: yesterday }
           }
-        }).then(result => {
-          // Извлекаем response_time из properties
-          return 120; // Заглушка для average_response_time
+        }).then(() => {
+          return 120; // Временная заглушка для среднего времени ответа
         }),
         this.prisma.analyticsEvent.count({
           where: {

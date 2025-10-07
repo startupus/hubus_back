@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { LoggerUtil } from '@ai-aggregator/shared';
-import { ThreadPoolService } from '@ai-aggregator/shared';
+// import { ThreadPoolService } from '@ai-aggregator/shared'; // Removed - using Promise.all for now
 import { ConcurrentMap, ConcurrentQueue, AtomicCounter, ConcurrentCache } from '@ai-aggregator/shared';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
@@ -64,7 +64,7 @@ export class ConcurrentOrchestratorService {
   private readonly providerLocks = new ConcurrentMap<string, Int32Array>();
   
   // Пул потоков для параллельной обработки
-  private readonly threadPool: ThreadPoolService;
+  // private readonly threadPool: ThreadPoolService; // Temporarily disabled
   
   // Провайдеры и их конфигурация
   private readonly providers = new ConcurrentMap<string, {
@@ -81,9 +81,9 @@ export class ConcurrentOrchestratorService {
 
   constructor(
     private readonly httpService: HttpService,
-    threadPool: ThreadPoolService
+    // threadPool: ThreadPoolService // Temporarily disabled
   ) {
-    this.threadPool = threadPool;
+    // this.threadPool = threadPool; // Temporarily disabled
     this.initializeProviders();
     this.startRoutingProcessor();
     this.startHealthMonitoring();
@@ -257,10 +257,11 @@ export class ConcurrentOrchestratorService {
       );
 
       // Выполняем задачи параллельно
-      const results = await this.threadPool.executeParallel(tasks, {
-        maxConcurrency: 10, // Максимум 10 параллельных запросов
-        timeout: 60000 // 60 секунд таймаут
-      });
+      // const results = await this.threadPool.executeParallel(tasks, { // Temporarily disabled
+      //   maxConcurrency: 10, // Максимум 10 параллельных запросов
+      //   timeout: 60000 // 60 секунд таймаут
+      // });
+      const results = await Promise.all(tasks.map(task => task())); // Fallback implementation
 
       return results;
     } catch (error) {
@@ -358,10 +359,11 @@ export class ConcurrentOrchestratorService {
       );
 
       // Выполняем проверки параллельно
-      const results = await this.threadPool.executeParallel(tasks, {
-        maxConcurrency: 5, // Максимум 5 параллельных проверок
-        timeout: 30000 // 30 секунд таймаут
-      });
+      // const results = await this.threadPool.executeParallel(tasks, { // Temporarily disabled
+      //   maxConcurrency: 5, // Максимум 5 параллельных проверок
+      //   timeout: 30000 // 30 секунд таймаут
+      // });
+      const results = await Promise.all(tasks.map(task => task())); // Fallback implementation
 
       return results.map((result, index) => ({
         id: providerIds[index],

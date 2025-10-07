@@ -9,6 +9,10 @@ import { AnalyticsModule } from './analytics/analytics.module';
 import { AICertificationModule } from './ai-certification/ai-certification.module';
 import { OrchestratorModule } from './orchestrator/orchestrator.module';
 import { ProxyModule } from './proxy/proxy.module';
+import { HistoryModule } from './history/history.module';
+import { PrismaModule } from './prisma/prisma.module';
+import { FsbModule } from './fsb/fsb.module';
+import { AnonymizationModule } from './anonymization/anonymization.module';
 import { configuration } from './config/configuration';
 import { validationSchema } from './config/validation.schema';
 
@@ -34,6 +38,10 @@ import { validationSchema } from './config/validation.schema';
     AICertificationModule,
     OrchestratorModule,
     ProxyModule,
+    HistoryModule,
+    PrismaModule,
+    FsbModule,
+    AnonymizationModule,
   ],
 })
 export class AppModule {}

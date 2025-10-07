@@ -8,4 +8,4 @@ import { UserModule } from '../modules/user/user.module';
   imports: [AuthModule, ApiKeyModule, UserModule],
   controllers: [HttpController],
 })
-export class HttpModule {}
+export class AuthHttpModule {}

@@ -4,7 +4,7 @@ export declare class SecurityController {
     private readonly securityService;
     constructor(securityService: SecurityService);
     getSecurityEvents(page: number, limit: number, req: Request): Promise<{
-        events: SecurityEvent[];
+        events: import("@ai-aggregator/shared").SecurityEvent[];
         total: number;
     }>;
     getLoginAttempts(page: number, limit: number, req: Request): Promise<{

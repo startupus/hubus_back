@@ -1,6 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { RedisService } from '@ai-aggregator/shared';
-import { LoggerUtil } from '@ai-aggregator/shared';
+import { LoggerUtil, RedisClient } from '@ai-aggregator/shared';
 
 /**
  * Analytics Cache Service для кэширования данных аналитики
@@ -19,7 +18,7 @@ export class AnalyticsCacheService {
   private readonly METRICS_PREFIX = 'analytics:metrics:';
   private readonly SESSION_PREFIX = 'analytics:session:';
 
-  constructor(private readonly redisService: RedisService) {}
+  constructor(private readonly redisService: RedisClient) {}
 
   /**
    * Кэширование дашборд метрик

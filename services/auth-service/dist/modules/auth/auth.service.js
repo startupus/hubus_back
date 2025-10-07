@@ -15,6 +15,7 @@ const jwt_1 = require("@nestjs/jwt");
 const config_1 = require("@nestjs/config");
 const prisma_service_1 = require("../../common/prisma/prisma.service");
 const shared_1 = require("@ai-aggregator/shared");
+const crypto_util_1 = require("../../common/utils/crypto.util");
 let AuthService = class AuthService {
     prisma;
     jwtService;
@@ -32,7 +33,7 @@ let AuthService = class AuthService {
             if (existingUser) {
                 throw new common_1.ConflictException('User with this email already exists');
             }
-            const passwordHash = await shared_1.CryptoUtil.hashPassword(registerDto.password);
+            const passwordHash = await crypto_util_1.CryptoUtil.hashPassword(registerDto.password);
             const user = await this.prisma.user.create({
                 data: {
                     email: registerDto.email,
@@ -40,6 +41,15 @@ let AuthService = class AuthService {
                     firstName: registerDto.firstName,
                     lastName: registerDto.lastName,
                     isVerified: !this.configService.get('REQUIRE_EMAIL_VERIFICATION', false),
+                    company: {
+                        create: {
+                            name: 'Default Company',
+                            email: registerDto.email,
+                            passwordHash: passwordHash,
+                            description: 'Default company for individual users',
+                            isActive: true,
+                        }
+                    }
                 },
             });
             const tokens = await this.generateTokens(user);
@@ -70,7 +80,7 @@ let AuthService = class AuthService {
                 await this.logFailedLoginAttempt(loginDto.email, ipAddress, userAgent, 'Account deactivated');
                 throw new common_1.UnauthorizedException('Account is deactivated');
             }
-            const isPasswordValid = await shared_1.CryptoUtil.comparePassword(loginDto.password, user.passwordHash);
+            const isPasswordValid = await crypto_util_1.CryptoUtil.comparePassword(loginDto.password, user.passwordHash);
             if (!isPasswordValid) {
                 await this.logFailedLoginAttempt(loginDto.email, ipAddress, userAgent, 'Invalid password');
                 throw new common_1.UnauthorizedException('Invalid credentials');
@@ -150,17 +160,17 @@ let AuthService = class AuthService {
             if (!user) {
                 throw new common_1.BadRequestException('User not found');
             }
-            const isCurrentPasswordValid = await shared_1.CryptoUtil.comparePassword(changePasswordDto.currentPassword, user.passwordHash);
+            const isCurrentPasswordValid = await crypto_util_1.CryptoUtil.comparePassword(changePasswordDto.currentPassword, user.passwordHash);
             if (!isCurrentPasswordValid) {
                 throw new common_1.UnauthorizedException('Current password is incorrect');
             }
-            const newPasswordHash = await shared_1.CryptoUtil.hashPassword(changePasswordDto.newPassword);
+            const newPasswordHash = await crypto_util_1.CryptoUtil.hashPassword(changePasswordDto.newPassword);
             await this.prisma.user.update({
                 where: { id: userId },
                 data: { passwordHash: newPasswordHash },
             });
             await this.prisma.refreshToken.updateMany({
-                where: { userId },
+                where: { ownerId: userId, ownerType: 'user' },
                 data: { isRevoked: true },
             });
             await this.logSecurityEvent(userId, 'PASSWORD_CHANGE', 'MEDIUM', 'Password changed successfully');
@@ -179,10 +189,11 @@ let AuthService = class AuthService {
             if (!user) {
                 return;
             }
-            const resetToken = shared_1.CryptoUtil.generatePasswordResetToken();
+            const resetToken = crypto_util_1.CryptoUtil.generatePasswordResetToken();
             await this.prisma.passwordResetToken.create({
                 data: {
-                    userId: user.id,
+                    ownerId: user.id,
+                    ownerType: 'user',
                     token: resetToken,
                     expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
                 },
@@ -204,10 +215,10 @@ let AuthService = class AuthService {
             if (!resetToken || resetToken.isUsed || resetToken.expiresAt < new Date()) {
                 throw new common_1.BadRequestException('Invalid or expired reset token');
             }
-            const newPasswordHash = await shared_1.CryptoUtil.hashPassword(resetPasswordDto.newPassword);
+            const newPasswordHash = await crypto_util_1.CryptoUtil.hashPassword(resetPasswordDto.newPassword);
             await this.prisma.$transaction([
                 this.prisma.user.update({
-                    where: { id: resetToken.userId },
+                    where: { id: resetToken.user?.id || resetToken.ownerId },
                     data: { passwordHash: newPasswordHash },
                 }),
                 this.prisma.passwordResetToken.update({
@@ -216,11 +227,11 @@ let AuthService = class AuthService {
                 }),
             ]);
             await this.prisma.refreshToken.updateMany({
-                where: { userId: resetToken.userId },
+                where: { ownerId: resetToken.user?.id || resetToken.ownerId, ownerType: 'user' },
                 data: { isRevoked: true },
             });
-            await this.logSecurityEvent(resetToken.userId, 'PASSWORD_RESET', 'HIGH', 'Password reset completed');
-            shared_1.LoggerUtil.info('auth-service', 'Password reset completed', { userId: resetToken.userId });
+            await this.logSecurityEvent(resetToken.user?.id || resetToken.ownerId, 'PASSWORD_RESET', 'HIGH', 'Password reset completed');
+            shared_1.LoggerUtil.info('auth-service', 'Password reset completed', { userId: resetToken.user?.id || resetToken.ownerId });
         }
         catch (error) {
             shared_1.LoggerUtil.error('auth-service', 'Password reset failed', error);
@@ -238,7 +249,7 @@ let AuthService = class AuthService {
             }
             await this.prisma.$transaction([
                 this.prisma.user.update({
-                    where: { id: verificationToken.userId },
+                    where: { id: verificationToken.user?.id || verificationToken.ownerId },
                     data: { isVerified: true },
                 }),
                 this.prisma.emailVerificationToken.update({
@@ -246,8 +257,8 @@ let AuthService = class AuthService {
                     data: { isUsed: true },
                 }),
             ]);
-            await this.logSecurityEvent(verificationToken.userId, 'EMAIL_VERIFIED', 'LOW', 'Email verified successfully');
-            shared_1.LoggerUtil.info('auth-service', 'Email verified successfully', { userId: verificationToken.userId });
+            await this.logSecurityEvent(verificationToken.user?.id || verificationToken.ownerId, 'EMAIL_VERIFIED', 'LOW', 'Email verified successfully');
+            shared_1.LoggerUtil.info('auth-service', 'Email verified successfully', { userId: verificationToken.user?.id || verificationToken.ownerId });
         }
         catch (error) {
             shared_1.LoggerUtil.error('auth-service', 'Email verification failed', error);
@@ -275,10 +286,11 @@ let AuthService = class AuthService {
             iat: Math.floor(Date.now() / 1000),
         };
         const accessToken = this.jwtService.sign(payload, { expiresIn: '24h' });
-        const refreshToken = shared_1.CryptoUtil.generateRefreshToken();
+        const refreshToken = crypto_util_1.CryptoUtil.generateRefreshToken();
         await this.prisma.refreshToken.create({
             data: {
-                userId: user.id,
+                ownerId: user.id,
+                ownerType: 'user',
                 token: refreshToken,
                 expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
             },
@@ -304,6 +316,7 @@ let AuthService = class AuthService {
             await this.prisma.loginAttempt.create({
                 data: {
                     email,
+                    ownerType: 'user',
                     ipAddress: ipAddress || 'unknown',
                     userAgent: userAgent || 'unknown',
                     success: false,
@@ -319,7 +332,8 @@ let AuthService = class AuthService {
         try {
             await this.prisma.securityEvent.create({
                 data: {
-                    userId,
+                    ownerId: userId,
+                    ownerType: 'user',
                     type: type,
                     severity: severity,
                     description,
@@ -334,13 +348,14 @@ let AuthService = class AuthService {
     }
     async createApiKey(userId, name) {
         try {
-            const apiKey = await shared_1.CryptoUtil.generateApiKey();
-            const hashedKey = await shared_1.CryptoUtil.hashApiKey(apiKey);
+            const apiKey = await crypto_util_1.CryptoUtil.generateApiKey();
+            const hashedKey = await crypto_util_1.CryptoUtil.hashApiKey(apiKey);
             const keyRecord = await this.prisma.apiKey.create({
                 data: {
-                    userId,
+                    ownerId: userId,
+                    ownerType: 'user',
                     name,
-                    keyHash: hashedKey,
+                    key: hashedKey,
                     expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
                 },
             });
@@ -365,7 +380,7 @@ let AuthService = class AuthService {
     async getApiKeys(userId) {
         try {
             const apiKeys = await this.prisma.apiKey.findMany({
-                where: { userId, isActive: true },
+                where: { ownerId: userId, ownerType: 'user', isActive: true },
                 select: {
                     id: true,
                     name: true,
@@ -388,7 +403,7 @@ let AuthService = class AuthService {
     async revokeApiKey(userId, keyId) {
         try {
             await this.prisma.apiKey.update({
-                where: { id: keyId, userId },
+                where: { id: keyId, ownerId: userId, ownerType: 'user' },
                 data: { isActive: false },
             });
             shared_1.LoggerUtil.info('auth-service', 'API key revoked', { userId, keyId });

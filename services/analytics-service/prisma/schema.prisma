@@ -3,6 +3,7 @@
 
 generator client {
   provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
 }
 
 datasource db {
@@ -337,6 +338,52 @@ model DataExport {
   @@index([userId])
   @@index([createdAt])
   @@map("data_exports")
+}
+
+// ===========================================
+// NEURAL NETWORK STATISTICS AND RECOMMENDATIONS
+// ===========================================
+
+model NeuralNetworkStats {
+  id              String   @id @default(uuid())
+  provider        String   // openai, anthropic, yandex, sber, etc.
+  model           String   // gpt-3.5-turbo, claude-3-sonnet, yandex-gpt, etc.
+  totalRequests   Int      @default(0) @map("total_requests")
+  totalTokens     Int      @default(0) @map("total_tokens")
+  totalCost       Decimal  @default(0) @db.Decimal(10, 4) @map("total_cost")
+  uniqueUsers     Int      @default(0) @map("unique_users")
+  avgResponseTime Int      @default(0) @map("avg_response_time") // in milliseconds
+  successRate     Decimal  @default(0) @db.Decimal(5, 2) @map("success_rate") // percentage
+  lastUsed        DateTime @default(now()) @map("last_used")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  
+  @@unique([provider, model])
+  @@index([provider])
+  @@index([model])
+  @@index([totalRequests])
+  @@index([lastUsed])
+  @@map("neural_network_stats")
+}
+
+model NeuralNetworkRecommendation {
+  id              String   @id @default(uuid())
+  userId          String?  // null for global recommendations
+  provider        String
+  model           String
+  reason          String   // 'popular', 'russian', 'fast', 'cheap', etc.
+  score           Decimal  @db.Decimal(5, 2) // 0-100
+  isDefault       Boolean  @default(false) @map("is_default") // for Russian defaults
+  isActive        Boolean  @default(true) @map("is_active")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  
+  @@index([userId])
+  @@index([provider])
+  @@index([model])
+  @@index([isDefault])
+  @@index([isActive])
+  @@map("neural_network_recommendations")
 }
 
 // ===========================================

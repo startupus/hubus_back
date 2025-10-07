@@ -10,8 +10,38 @@ datasource db {
   url      = env("AUTH_DATABASE_URL")
 }
 
+model Company {
+  id              String    @id @default(uuid())
+  name            String
+  email           String    @unique
+  passwordHash    String    @map("password_hash")
+  isActive        Boolean   @default(true) @map("is_active")
+  isVerified      Boolean   @default(false) @map("is_verified")
+  role            UserRole  @default(company)
+  description     String?
+  website         String?
+  phone           String?
+  address         Json?
+  settings        Json?
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  lastLoginAt     DateTime? @map("last_login_at")
+  metadata        Json?
+
+  // Relations
+  users           User[]
+  apiKeys         ApiKey[]
+  loginAttempts   LoginAttempt[]
+  passwordResets  PasswordResetToken[]
+  emailVerifications EmailVerificationToken[]
+  securityEvents  SecurityEvent[]
+
+  @@map("companies")
+}
+
 model User {
   id           String    @id @default(uuid())
+  companyId    String    @map("company_id")
   email        String    @unique
   passwordHash String    @map("password_hash")
   isActive     Boolean   @default(true) @map("is_active")
@@ -19,26 +49,33 @@ model User {
   role         UserRole  @default(user)
   firstName    String?   @map("first_name")
   lastName     String?   @map("last_name")
+  position     String?   // Должность в компании
+  department   String?   // Отдел в компании
+  permissions  Json      @default("[]") // Права доступа в компании
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
   lastLoginAt  DateTime? @map("last_login_at")
   metadata     Json?
 
   // Relations
-  apiKeys         ApiKey[]
-  refreshTokens   RefreshToken[]
-  loginAttempts   LoginAttempt[]
-  passwordResets  PasswordResetToken[]
+  company          Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  apiKeys          ApiKey[]
+  refreshTokens    RefreshToken[]
+  loginAttempts    LoginAttempt[]
+  passwordResets   PasswordResetToken[]
   emailVerifications EmailVerificationToken[]
-  securityEvents  SecurityEvent[]
+  securityEvents   SecurityEvent[]
 
   @@map("users")
+  @@index([companyId])
+  @@index([email])
 }
 
 model ApiKey {
   id          String    @id @default(uuid())
   key         String    @unique
-  userId      String    @map("user_id")
+  ownerId     String    @map("owner_id") // ID пользователя или компании
+  ownerType   OwnerType @map("owner_type") // user или company
   name        String
   description String?
   isActive    Boolean   @default(true) @map("is_active")
@@ -48,27 +85,29 @@ model ApiKey {
   createdAt   DateTime  @default(now()) @map("created_at")
   metadata    Json?
 
-  // Relations
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Relations (полиморфные связи)
+  user    User?    @relation(fields: [ownerId], references: [id], onDelete: Cascade, map: "api_key_user")
+  company Company? @relation(fields: [ownerId], references: [id], onDelete: Cascade, map: "api_key_company")
 
   @@map("api_keys")
-  @@index([userId])
+  @@index([ownerId])
+  @@index([ownerType])
   @@index([key])
 }
 
 model RefreshToken {
-  id        String   @id @default(uuid())
-  userId    String   @map("user_id")
-  token     String   @unique
-  expiresAt DateTime @map("expires_at")
-  isRevoked Boolean  @default(false) @map("is_revoked")
-  createdAt DateTime @default(now()) @map("created_at")
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  token     String    @unique
+  expiresAt DateTime  @map("expires_at")
+  isRevoked Boolean   @default(false) @map("is_revoked")
+  createdAt DateTime  @default(now()) @map("created_at")
   lastUsedAt DateTime? @map("last_used_at")
-  userAgent String?  @map("user_agent")
-  ipAddress String?  @map("ip_address")
+  userAgent String?   @map("user_agent")
+  ipAddress String?   @map("ip_address")
 
   // Relations
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("refresh_tokens")
   @@index([userId])
@@ -78,6 +117,7 @@ model RefreshToken {
 model LoginAttempt {
   id           String   @id @default(uuid())
   email        String
+  ownerType    OwnerType @map("owner_type") // user или company
   ipAddress    String   @map("ip_address")
   userAgent    String   @map("user_agent")
   success      Boolean
@@ -85,49 +125,58 @@ model LoginAttempt {
   timestamp    DateTime @default(now())
 
   // Relations
-  user User? @relation(fields: [email], references: [email])
+  user    User?    @relation(fields: [email], references: [email], map: "login_attempt_user")
+  company Company? @relation(fields: [email], references: [email], map: "login_attempt_company")
 
   @@map("login_attempts")
   @@index([email])
+  @@index([ownerType])
   @@index([ipAddress])
   @@index([timestamp])
 }
 
 model PasswordResetToken {
-  id        String   @id @default(uuid())
-  userId    String   @map("user_id")
-  token     String   @unique
-  expiresAt DateTime @map("expires_at")
-  isUsed    Boolean  @default(false) @map("is_used")
-  createdAt DateTime @default(now()) @map("created_at")
+  id        String    @id @default(uuid())
+  ownerId   String    @map("owner_id") // ID пользователя или компании
+  ownerType OwnerType @map("owner_type") // user или company
+  token     String    @unique
+  expiresAt DateTime  @map("expires_at")
+  isUsed    Boolean   @default(false) @map("is_used")
+  createdAt DateTime  @default(now()) @map("created_at")
 
-  // Relations
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Relations (полиморфные связи)
+  user    User?    @relation(fields: [ownerId], references: [id], onDelete: Cascade, map: "password_reset_user")
+  company Company? @relation(fields: [ownerId], references: [id], onDelete: Cascade, map: "password_reset_company")
 
   @@map("password_reset_tokens")
-  @@index([userId])
+  @@index([ownerId])
+  @@index([ownerType])
   @@index([token])
 }
 
 model EmailVerificationToken {
-  id        String   @id @default(uuid())
-  userId    String   @map("user_id")
-  token     String   @unique
-  expiresAt DateTime @map("expires_at")
-  isUsed    Boolean  @default(false) @map("is_used")
-  createdAt DateTime @default(now()) @map("created_at")
+  id        String    @id @default(uuid())
+  ownerId   String    @map("owner_id") // ID пользователя или компании
+  ownerType OwnerType @map("owner_type") // user или company
+  token     String    @unique
+  expiresAt DateTime  @map("expires_at")
+  isUsed    Boolean   @default(false) @map("is_used")
+  createdAt DateTime  @default(now()) @map("created_at")
 
-  // Relations
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Relations (полиморфные связи)
+  user    User?    @relation(fields: [ownerId], references: [id], onDelete: Cascade, map: "email_verification_user")
+  company Company? @relation(fields: [ownerId], references: [id], onDelete: Cascade, map: "email_verification_company")
 
   @@map("email_verification_tokens")
-  @@index([userId])
+  @@index([ownerId])
+  @@index([ownerType])
   @@index([token])
 }
 
 model SecurityEvent {
   id          String        @id @default(uuid())
-  userId      String?       @map("user_id")
+  ownerId     String?       @map("owner_id") // ID пользователя или компании
+  ownerType   OwnerType?    @map("owner_type") // user или company
   type        SecurityEventType
   severity    SecuritySeverity
   description String
@@ -136,11 +185,13 @@ model SecurityEvent {
   metadata    Json?
   timestamp   DateTime      @default(now())
 
-  // Relations
-  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  // Relations (полиморфные связи)
+  user    User?    @relation(fields: [ownerId], references: [id], onDelete: SetNull, map: "security_event_user")
+  company Company? @relation(fields: [ownerId], references: [id], onDelete: SetNull, map: "security_event_company")
 
   @@map("security_events")
-  @@index([userId])
+  @@index([ownerId])
+  @@index([ownerType])
   @@index([type])
   @@index([timestamp])
 }
@@ -148,7 +199,14 @@ model SecurityEvent {
 enum UserRole {
   admin
   user
+  company
   service
+  fsb
+}
+
+enum OwnerType {
+  user
+  company
 }
 
 enum SecurityEventType {

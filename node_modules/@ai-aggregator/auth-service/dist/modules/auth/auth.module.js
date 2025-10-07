@@ -12,9 +12,12 @@ const jwt_1 = require("@nestjs/jwt");
 const config_1 = require("@nestjs/config");
 const auth_service_1 = require("./auth.service");
 const auth_controller_1 = require("./auth.controller");
+const company_service_1 = require("./company.service");
+const company_controller_1 = require("./company.controller");
 const jwt_strategy_1 = require("./strategies/jwt.strategy");
 const local_strategy_1 = require("./strategies/local.strategy");
 const passport_1 = require("@nestjs/passport");
+const prisma_module_1 = require("../../common/prisma/prisma.module");
 let AuthModule = class AuthModule {
 };
 exports.AuthModule = AuthModule;
@@ -22,6 +25,7 @@ exports.AuthModule = AuthModule = __decorate([
     (0, common_1.Module)({
         imports: [
             passport_1.PassportModule,
+            prisma_module_1.PrismaModule,
             jwt_1.JwtModule.registerAsync({
                 imports: [config_1.ConfigModule],
                 useFactory: async (configService) => ({
@@ -35,9 +39,9 @@ exports.AuthModule = AuthModule = __decorate([
                 inject: [config_1.ConfigService],
             }),
         ],
-        providers: [auth_service_1.AuthService, jwt_strategy_1.JwtStrategy, local_strategy_1.LocalStrategy],
-        controllers: [auth_controller_1.AuthController],
-        exports: [auth_service_1.AuthService],
+        providers: [auth_service_1.AuthService, company_service_1.CompanyService, jwt_strategy_1.JwtStrategy, local_strategy_1.LocalStrategy],
+        controllers: [auth_controller_1.AuthController, company_controller_1.CompanyController],
+        exports: [auth_service_1.AuthService, company_service_1.CompanyService],
     })
 ], AuthModule);
 //# sourceMappingURL=auth.module.js.map

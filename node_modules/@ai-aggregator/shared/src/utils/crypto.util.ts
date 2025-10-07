@@ -1,47 +1,9 @@
 /**
- * Cryptographic utilities
+ * Cryptographic utilities (без нативных зависимостей)
+ * Нативные функции (bcrypt, jwt) перенесены в соответствующие сервисы
  */
 
-import * as bcrypt from 'bcrypt';
-import * as jwt from 'jsonwebtoken';
-import { v4 as uuidv4 } from 'uuid';
-
 export class CryptoUtil {
-  private static readonly SALT_ROUNDS = 12;
-  private static readonly JWT_SECRET = process.env['JWT_SECRET'] || 'default-secret';
-
-  /**
-   * Hash a password using bcrypt
-   */
-  static async hashPassword(password: string): Promise<string> {
-    return bcrypt.hash(password, this.SALT_ROUNDS);
-  }
-
-  /**
-   * Compare a password with its hash
-   */
-  static async comparePassword(password: string, hash: string): Promise<boolean> {
-    return bcrypt.compare(password, hash);
-  }
-
-  /**
-   * Generate a JWT token
-   */
-  static generateToken(payload: Record<string, unknown>, expiresIn: string = '24h'): string {
-    return jwt.sign(payload, this.JWT_SECRET, { expiresIn } as any);
-  }
-
-  /**
-   * Verify a JWT token
-   */
-  static verifyToken(token: string): Record<string, unknown> | null {
-    try {
-      return jwt.verify(token, this.JWT_SECRET) as Record<string, unknown>;
-    } catch (error) {
-      return null;
-    }
-  }
-
   /**
    * Generate a secure random string
    */
@@ -55,10 +17,14 @@ export class CryptoUtil {
   }
 
   /**
-   * Generate a UUID v4
+   * Generate a UUID v4 (простая реализация без внешних зависимостей)
    */
   static generateId(): string {
-    return uuidv4();
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0;
+      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
   }
 
   /**

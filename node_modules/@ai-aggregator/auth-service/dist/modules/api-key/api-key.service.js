@@ -13,6 +13,7 @@ exports.ApiKeyService = void 0;
 const common_1 = require("@nestjs/common");
 const prisma_service_1 = require("../../common/prisma/prisma.service");
 const shared_1 = require("@ai-aggregator/shared");
+const crypto_util_1 = require("../../common/utils/crypto.util");
 let ApiKeyService = class ApiKeyService {
     prisma;
     constructor(prisma) {
@@ -20,11 +21,12 @@ let ApiKeyService = class ApiKeyService {
     }
     async createApiKey(userId, createApiKeyDto) {
         try {
-            const key = shared_1.CryptoUtil.generateApiKey();
+            const key = crypto_util_1.CryptoUtil.generateApiKey();
             const apiKey = await this.prisma.apiKey.create({
                 data: {
                     key,
-                    userId,
+                    ownerId: userId,
+                    ownerType: 'user',
                     name: createApiKeyDto.name,
                     description: createApiKeyDto.description,
                     permissions: createApiKeyDto.permissions || [],
@@ -49,7 +51,8 @@ let ApiKeyService = class ApiKeyService {
             const apiKey = await this.prisma.apiKey.findFirst({
                 where: {
                     id: apiKeyId,
-                    userId,
+                    ownerId: userId,
+                    ownerType: 'user',
                 },
             });
             if (!apiKey) {
@@ -83,13 +86,13 @@ let ApiKeyService = class ApiKeyService {
             const skip = (page - 1) * limit;
             const [apiKeys, total] = await Promise.all([
                 this.prisma.apiKey.findMany({
-                    where: { userId },
+                    where: { ownerId: userId, ownerType: 'user' },
                     skip,
                     take: limit,
                     orderBy: { createdAt: 'desc' },
                 }),
                 this.prisma.apiKey.count({
-                    where: { userId },
+                    where: { ownerId: userId, ownerType: 'user' },
                 }),
             ]);
             return {
@@ -107,7 +110,8 @@ let ApiKeyService = class ApiKeyService {
             const existingApiKey = await this.prisma.apiKey.findFirst({
                 where: {
                     id: apiKeyId,
-                    userId,
+                    ownerId: userId,
+                    ownerType: 'user',
                 },
             });
             if (!existingApiKey) {
@@ -140,7 +144,8 @@ let ApiKeyService = class ApiKeyService {
             const existingApiKey = await this.prisma.apiKey.findFirst({
                 where: {
                     id: apiKeyId,
-                    userId,
+                    ownerId: userId,
+                    ownerType: 'user',
                 },
             });
             if (!existingApiKey) {
@@ -180,7 +185,7 @@ let ApiKeyService = class ApiKeyService {
             });
             return {
                 isValid: true,
-                userId: apiKey.userId,
+                userId: apiKey.user?.id || apiKey.ownerId,
                 permissions: apiKey.permissions,
             };
         }
@@ -208,7 +213,8 @@ let ApiKeyService = class ApiKeyService {
         try {
             await this.prisma.securityEvent.create({
                 data: {
-                    userId,
+                    ownerId: userId,
+                    ownerType: 'user',
                     type: type,
                     severity: severity,
                     description,

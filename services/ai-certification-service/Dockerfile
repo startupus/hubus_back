@@ -5,12 +5,12 @@ WORKDIR /app
 # Copy shared package
 COPY services/shared ./shared
 WORKDIR /app/shared
-RUN npm install
+RUN npm install --legacy-peer-deps
 
 # Copy service files
 WORKDIR /app
 COPY services/ai-certification-service/package*.json ./
-RUN npm install
+RUN npm install --legacy-peer-deps
 
 COPY services/ai-certification-service ./
 RUN ln -sf /app/shared /app/node_modules/@ai-aggregator/shared
@@ -23,14 +23,14 @@ RUN apk add --no-cache python3 make g++
 WORKDIR /app
 
 COPY services/ai-certification-service/package*.json ./
-RUN npm install --only=production
+RUN npm install --legacy-peer-deps --only=production
 
 COPY --from=development /app/dist ./dist
 COPY --from=development /app/shared ./shared
 RUN ln -sf /app/shared /app/node_modules/@ai-aggregator/shared
 
-# Reinstall bcrypt for current architecture
-RUN cd /app/shared && npm install bcrypt --force
+# Reinstall and rebuild bcrypt for current architecture
+RUN cd /app/shared && npm install bcrypt --force && npm rebuild bcrypt
 
 EXPOSE 3007
 

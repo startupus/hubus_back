@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
-import { CryptoUtil, LoggerUtil, ApiKey, Permission } from '@ai-aggregator/shared';
+import { LoggerUtil, ApiKey, Permission } from '@ai-aggregator/shared';
+import { CryptoUtil } from '../../common/utils/crypto.util';
 import { CreateApiKeyDto, UpdateApiKeyDto } from '@ai-aggregator/shared';
 
 @Injectable()
@@ -19,7 +20,8 @@ export class ApiKeyService {
       const apiKey = await this.prisma.apiKey.create({
         data: {
           key,
-          userId,
+          ownerId: userId,
+          ownerType: 'user',
           name: createApiKeyDto.name,
           description: createApiKeyDto.description,
           permissions: createApiKeyDto.permissions || [],
@@ -51,7 +53,8 @@ export class ApiKeyService {
       const apiKey = await this.prisma.apiKey.findFirst({
         where: {
           id: apiKeyId,
-          userId,
+          ownerId: userId,
+          ownerType: 'user',
         },
       });
 
@@ -96,13 +99,13 @@ export class ApiKeyService {
 
       const [apiKeys, total] = await Promise.all([
         this.prisma.apiKey.findMany({
-          where: { userId },
+          where: { ownerId: userId, ownerType: 'user' },
           skip,
           take: limit,
           orderBy: { createdAt: 'desc' },
         }),
         this.prisma.apiKey.count({
-          where: { userId },
+          where: { ownerId: userId, ownerType: 'user' },
         }),
       ]);
 
@@ -125,7 +128,8 @@ export class ApiKeyService {
       const existingApiKey = await this.prisma.apiKey.findFirst({
         where: {
           id: apiKeyId,
-          userId,
+          ownerId: userId,
+          ownerType: 'user',
         },
       });
 
@@ -169,7 +173,8 @@ export class ApiKeyService {
       const existingApiKey = await this.prisma.apiKey.findFirst({
         where: {
           id: apiKeyId,
-          userId,
+          ownerId: userId,
+          ownerType: 'user',
         },
       });
 
@@ -224,7 +229,7 @@ export class ApiKeyService {
 
       return {
         isValid: true,
-        userId: apiKey.userId,
+        userId: apiKey.user?.id || apiKey.ownerId,
         permissions: apiKey.permissions as Permission[],
       };
     } catch (error) {
@@ -264,7 +269,8 @@ export class ApiKeyService {
     try {
       await this.prisma.securityEvent.create({
         data: {
-          userId,
+          ownerId: userId,
+          ownerType: 'user',
           type: type as any,
           severity: severity as any,
           description,

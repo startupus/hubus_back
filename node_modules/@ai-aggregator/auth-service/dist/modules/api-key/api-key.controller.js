@@ -11,7 +11,6 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
-var _a, _b;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ApiKeyController = void 0;
 const common_1 = require("@nestjs/common");
@@ -54,7 +53,7 @@ __decorate([
     __param(0, (0, common_1.Body)()),
     __param(1, (0, common_1.Req)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [typeof (_a = typeof shared_1.CreateApiKeyDto !== "undefined" && shared_1.CreateApiKeyDto) === "function" ? _a : Object, Object]),
+    __metadata("design:paramtypes", [shared_1.CreateApiKeyDto, Object]),
     __metadata("design:returntype", Promise)
 ], ApiKeyController.prototype, "createApiKey", null);
 __decorate([
@@ -88,7 +87,7 @@ __decorate([
     __param(1, (0, common_1.Body)()),
     __param(2, (0, common_1.Req)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, typeof (_b = typeof shared_1.UpdateApiKeyDto !== "undefined" && shared_1.UpdateApiKeyDto) === "function" ? _b : Object, Object]),
+    __metadata("design:paramtypes", [String, shared_1.UpdateApiKeyDto, Object]),
     __metadata("design:returntype", Promise)
 ], ApiKeyController.prototype, "updateApiKey", null);
 __decorate([

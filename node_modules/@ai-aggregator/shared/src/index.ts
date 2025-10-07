@@ -10,6 +10,7 @@ export * from './types/billing';
 export * from './types/providers';
 export * from './types/events';
 export * from './types/ai-certification';
+export * from './types/request-history';
 
 // DTOs
 export * from './dto/base.dto';
@@ -19,19 +20,20 @@ export * from './dto/providers.dto';
 export * from './dto/chat.dto';
 export * from './dto/ai-certification.dto';
 
-// Utilities
+// Utilities (без нативных зависимостей)
 export * from './utils/crypto.util';
 export * from './utils/validation.util';
 export * from './utils/response.util';
 export * from './utils/logger.util';
 export * from './utils/concurrency.util';
 
+// HTTP API Contracts
+export * from './contracts';
+
+// HTTP Clients
+export * from './clients';
+
 // Services
-export * from './services/anonymization.service';
-export * from './services/ai-classification.service';
-export * from './services/ai-safety.service';
-export * from './services/redis.service';
-export * from './services/rabbitmq.service';
 export * from './services/thread-pool.service';
 
 // Constants
@@ -120,3 +122,18 @@ export {
   RiskFactor,
   SafetyIncident,
 } from './types/ai-certification';
+
+export {
+  RequestHistory,
+  RequestType,
+  RequestStatus,
+  CreateRequestHistoryDto,
+  UpdateRequestHistoryDto,
+  RequestHistoryQueryDto,
+  RequestHistoryResponse,
+  SessionHistory,
+  CreateSessionHistoryDto,
+  UpdateSessionHistoryDto,
+  SessionHistoryQueryDto,
+  SessionHistoryResponse,
+} from './types/request-history';

@@ -73,11 +73,11 @@ let UserService = class UserService {
                 data: { isActive: false },
             });
             await this.prisma.apiKey.updateMany({
-                where: { userId },
+                where: { ownerId: userId, ownerType: 'user' },
                 data: { isActive: false },
             });
             await this.prisma.refreshToken.updateMany({
-                where: { userId },
+                where: { ownerId: userId, ownerType: 'user' },
                 data: { isRevoked: true },
             });
             shared_1.LoggerUtil.info('auth-service', 'User deactivated', { userId });

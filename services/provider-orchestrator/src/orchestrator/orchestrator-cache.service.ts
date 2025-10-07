@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { RedisService } from '@ai-aggregator/shared';
+import { RedisClient } from '@ai-aggregator/shared';
 import { LoggerUtil } from '@ai-aggregator/shared';
 
 /**
@@ -19,7 +19,7 @@ export class OrchestratorCacheService {
   private readonly ROUTING_PREFIX = 'orchestrator:routing:';
   private readonly CONFIG_PREFIX = 'orchestrator:config:';
 
-  constructor(private readonly redisService: RedisService) {}
+  constructor(private readonly redisClient: RedisClient) {}
 
   /**
    * Кэширование статуса провайдера
@@ -40,7 +40,7 @@ export class OrchestratorCacheService {
         cachedAt: new Date().toISOString()
       };
 
-      const success = await this.redisService.set(key, data, ttl);
+      const success = await this.redisClient.set(key, data, ttl);
       
       if (success) {
         LoggerUtil.debug('provider-orchestrator', 'Provider status cached successfully', { 
@@ -70,7 +70,7 @@ export class OrchestratorCacheService {
   } | null> {
     try {
       const key = `${this.PROVIDER_PREFIX}status:${providerId}`;
-      const data = await this.redisService.get<any>(key);
+      const data = await this.redisClient.get<any>(key);
       
       if (data) {
         LoggerUtil.debug('provider-orchestrator', 'Provider status retrieved from cache', { 
@@ -105,7 +105,7 @@ export class OrchestratorCacheService {
         cachedAt: new Date().toISOString()
       };
 
-      const success = await this.redisService.set(key, data, ttl);
+      const success = await this.redisClient.set(key, data, ttl);
       
       if (success) {
         LoggerUtil.debug('provider-orchestrator', 'Performance metrics cached successfully', { 
@@ -136,7 +136,7 @@ export class OrchestratorCacheService {
   } | null> {
     try {
       const key = `${this.METRICS_PREFIX}${providerId}`;
-      const data = await this.redisService.get<any>(key);
+      const data = await this.redisClient.get<any>(key);
       
       if (data) {
         LoggerUtil.debug('provider-orchestrator', 'Performance metrics retrieved from cache', { 
@@ -169,7 +169,7 @@ export class OrchestratorCacheService {
         cachedAt: new Date().toISOString()
       };
 
-      const success = await this.redisService.set(key, data, ttl);
+      const success = await this.redisClient.set(key, data, ttl);
       
       if (success) {
         LoggerUtil.debug('provider-orchestrator', 'Routing result cached successfully', { 
@@ -198,7 +198,7 @@ export class OrchestratorCacheService {
   } | null> {
     try {
       const key = `${this.ROUTING_PREFIX}${requestHash}`;
-      const data = await this.redisService.get<any>(key);
+      const data = await this.redisClient.get<any>(key);
       
       if (data) {
         LoggerUtil.debug('provider-orchestrator', 'Routing result retrieved from cache', { 
@@ -233,7 +233,7 @@ export class OrchestratorCacheService {
         cachedAt: new Date().toISOString()
       };
 
-      const success = await this.redisService.set(key, data, ttl);
+      const success = await this.redisClient.set(key, data, ttl);
       
       if (success) {
         LoggerUtil.debug('provider-orchestrator', 'Provider config cached successfully', { 
@@ -265,7 +265,7 @@ export class OrchestratorCacheService {
   } | null> {
     try {
       const key = `${this.CONFIG_PREFIX}${providerId}`;
-      const data = await this.redisService.get<any>(key);
+      const data = await this.redisClient.get<any>(key);
       
       if (data) {
         LoggerUtil.debug('provider-orchestrator', 'Provider config retrieved from cache', { 
@@ -292,7 +292,7 @@ export class OrchestratorCacheService {
         cachedAt: new Date().toISOString()
       };
 
-      const success = await this.redisService.set(key, data, ttl);
+      const success = await this.redisClient.set(key, data, ttl);
       
       if (success) {
         LoggerUtil.debug('provider-orchestrator', 'All providers cached successfully', { 
@@ -316,7 +316,7 @@ export class OrchestratorCacheService {
   } | null> {
     try {
       const key = `${this.CONFIG_PREFIX}all`;
-      const data = await this.redisService.get<any>(key);
+      const data = await this.redisClient.get<any>(key);
       
       if (data) {
         LoggerUtil.debug('provider-orchestrator', 'All providers retrieved from cache', { 
@@ -342,7 +342,7 @@ export class OrchestratorCacheService {
         `${this.CONFIG_PREFIX}${providerId}`
       ];
 
-      const deleted = await this.redisService.mdelete(keys);
+      const deleted = await this.redisClient.mdelete(keys);
       
       LoggerUtil.info('provider-orchestrator', 'Provider cache cleared', { 
         providerId,
@@ -370,7 +370,7 @@ export class OrchestratorCacheService {
 
       let totalDeleted = 0;
       for (const pattern of patterns) {
-        const deleted = await this.redisService.clearPattern(pattern);
+        const deleted = await this.redisClient.clearPattern(pattern);
         totalDeleted += deleted;
       }
 
@@ -395,10 +395,10 @@ export class OrchestratorCacheService {
     totalConfigs: number;
   }> {
     try {
-      const providerKeys = await this.redisService.keys(`${this.PROVIDER_PREFIX}*`);
-      const metricsKeys = await this.redisService.keys(`${this.METRICS_PREFIX}*`);
-      const routingKeys = await this.redisService.keys(`${this.ROUTING_PREFIX}*`);
-      const configKeys = await this.redisService.keys(`${this.CONFIG_PREFIX}*`);
+      const providerKeys = await this.redisClient.keys(`${this.PROVIDER_PREFIX}*`);
+      const metricsKeys = await this.redisClient.keys(`${this.METRICS_PREFIX}*`);
+      const routingKeys = await this.redisClient.keys(`${this.ROUTING_PREFIX}*`);
+      const configKeys = await this.redisClient.keys(`${this.CONFIG_PREFIX}*`);
 
       return {
         totalProviders: providerKeys.length,

@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { LoggerUtil } from '@ai-aggregator/shared';
-import { ThreadPoolService } from '@ai-aggregator/shared';
+// import { ThreadPoolService } from '@ai-aggregator/shared'; // Removed - using Promise.all for now
 import { ConcurrentMap, ConcurrentQueue, AtomicCounter, ConcurrentCache } from '@ai-aggregator/shared';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { Decimal } from '@prisma/client/runtime/library';
@@ -41,13 +41,13 @@ export class ConcurrentBillingService {
   private readonly userLocks = new ConcurrentMap<string, Int32Array>();
   
   // Пул потоков для параллельной обработки
-  private readonly threadPool: ThreadPoolService;
+  // private readonly threadPool: ThreadPoolService; // Temporarily disabled
 
   constructor(
     private readonly prisma: PrismaService,
-    threadPool: ThreadPoolService
+    // threadPool: ThreadPoolService // Temporarily disabled
   ) {
-    this.threadPool = threadPool;
+    // this.threadPool = threadPool; // Temporarily disabled
     this.startTransactionProcessor();
   }
 
@@ -69,15 +69,15 @@ export class ConcurrentBillingService {
 
       try {
         // Получаем баланс из БД
-        const balance = await this.prisma.userBalance.findUnique({
-          where: { userId }
+        const balance = await this.prisma.companyBalance.findUnique({
+          where: { companyId: userId }
         });
 
         if (!balance) {
           // Создаем новый баланс
-          const newBalance = await this.prisma.userBalance.create({
+          const newBalance = await this.prisma.companyBalance.create({
             data: {
-              userId,
+              companyId: userId,
               balance: 0,
               currency: 'USD',
               creditLimit: 0
@@ -133,8 +133,8 @@ export class ConcurrentBillingService {
 
       try {
         // Получаем текущий баланс
-        const currentBalance = await this.prisma.userBalance.findUnique({
-          where: { userId }
+        const currentBalance = await this.prisma.companyBalance.findUnique({
+          where: { companyId: userId }
         });
 
         if (!currentBalance) {
@@ -153,14 +153,15 @@ export class ConcurrentBillingService {
         }
 
         // Обновляем баланс в БД
-        const updatedBalance = await this.prisma.userBalance.update({
-          where: { userId },
+        const updatedBalance = await this.prisma.companyBalance.update({
+          where: { companyId: userId },
           data: { balance: newBalance }
         });
 
         // Создаем транзакцию
         const transaction = await this.prisma.transaction.create({
           data: {
+            companyId: currentBalance.companyId,
             userId,
             type,
             amount,
@@ -266,10 +267,11 @@ export class ConcurrentBillingService {
       );
 
       // Выполняем задачи параллельно
-      const results = await this.threadPool.executeParallel(tasks, {
-        maxConcurrency: 5, // Максимум 5 параллельных операций
-        timeout: 30000 // 30 секунд таймаут
-      });
+      // const results = await this.threadPool.executeParallel(tasks, { // Temporarily disabled
+      //   maxConcurrency: 5, // Максимум 5 параллельных операций
+      //   timeout: 30000 // 30 секунд таймаут
+      // });
+      const results = await Promise.all(tasks.map(task => task())); // Fallback implementation
 
       return results.map(result => ({
         success: result.success,
@@ -480,9 +482,9 @@ export class ConcurrentBillingService {
       activeUsers: this.activeUsers.get(),
       queueSize: this.transactionQueue.size(),
       cacheStats: {
-        balanceCache: this.balanceCache.size(),
-        pricingCache: this.pricingCache.size(),
-        currencyCache: this.currencyCache.size()
+        balanceCache: (this.balanceCache as any).size(),
+        pricingCache: (this.pricingCache as any).size(),
+        currencyCache: (this.currencyCache as any).size()
       }
     };
   }

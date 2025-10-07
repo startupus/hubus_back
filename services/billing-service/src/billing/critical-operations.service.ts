@@ -1,6 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { LoggerUtil } from '@ai-aggregator/shared';
-import { RabbitMQService } from '@ai-aggregator/shared';
+import { LoggerUtil, RabbitMQClient } from '@ai-aggregator/shared';
 import { BillingService } from './billing.service';
 import { PrismaService } from '../common/prisma/prisma.service';
 
@@ -18,7 +17,7 @@ export class CriticalOperationsService {
   private readonly logger = new Logger(CriticalOperationsService.name);
 
   constructor(
-    private readonly rabbitmqService: RabbitMQService,
+    private readonly rabbitmqService: RabbitMQClient,
     private readonly billingService: BillingService,
     private readonly prisma: PrismaService
   ) {}
@@ -80,12 +79,12 @@ export class CriticalOperationsService {
         {
           operation: 'debit_balance',
           ...data,
-          timestamp: new Date().toISOString()
-        },
-        {
-          persistent: true,
-          priority: 10, // Высокий приоритет для списания
-          expiration: '300000' // 5 минут TTL
+          timestamp: new Date().toISOString(),
+          options: {
+            persistent: true,
+            priority: 10, // Высокий приоритет для списания
+            expiration: '300000' // 5 минут TTL
+          }
         }
       );
     } catch (error) {
@@ -120,12 +119,12 @@ export class CriticalOperationsService {
         {
           operation: 'create_transaction',
           ...data,
-          timestamp: new Date().toISOString()
-        },
-        {
-          persistent: true,
-          priority: 8, // Высокий приоритет для транзакций
-          expiration: '600000' // 10 минут TTL
+          timestamp: new Date().toISOString(),
+          options: {
+            persistent: true,
+            priority: 8, // Высокий приоритет для транзакций
+            expiration: '600000' // 10 минут TTL
+          }
         }
       );
     } catch (error) {
@@ -159,12 +158,12 @@ export class CriticalOperationsService {
         {
           operation: 'process_payment',
           ...data,
-          timestamp: new Date().toISOString()
-        },
-        {
-          persistent: true,
-          priority: 9, // Очень высокий приоритет для платежей
-          expiration: '900000' // 15 минут TTL
+          timestamp: new Date().toISOString(),
+          options: {
+            persistent: true,
+            priority: 9, // Очень высокий приоритет для платежей
+            expiration: '900000' // 15 минут TTL
+          }
         }
       );
     } catch (error) {
@@ -186,15 +185,18 @@ export class CriticalOperationsService {
         amount: message.amount
       });
 
-      // Проверяем баланс пользователя
-      const balance = await this.prisma.userBalance.findUnique({
-        where: { userId: message.userId }
+      // Находим пользователя и его компанию
+      const user = await this.prisma.user.findUnique({
+        where: { id: message.userId },
+        include: { company: { include: { balance: true } } }
       });
 
-      if (!balance) {
-        LoggerUtil.error('billing-service', 'User balance not found', null, { userId: message.userId });
+      if (!user || !user.company || !user.company.balance) {
+        LoggerUtil.error('billing-service', 'User or company balance not found', null, { userId: message.userId });
         return false;
       }
+
+      const balance = user.company.balance;
 
       if (balance.balance < message.amount) {
         LoggerUtil.error('billing-service', 'Insufficient balance', null, { 
@@ -206,18 +208,19 @@ export class CriticalOperationsService {
       }
 
       // Выполняем списание
-      const updatedBalance = await this.prisma.userBalance.update({
-        where: { userId: message.userId },
+      const updatedBalance = await this.prisma.companyBalance.update({
+        where: { companyId: user.companyId },
         data: {
-          balance: balance.balance - message.amount
+          balance: Number(balance.balance) - message.amount
         }
       });
 
       // Создаем транзакцию
       await this.prisma.transaction.create({
         data: {
+          companyId: user.companyId,
           userId: message.userId,
-          type: 'DEBIT',
+          type: 'DEBIT' as any,
           amount: message.amount,
           currency: message.currency,
           description: message.reason,
@@ -253,15 +256,25 @@ export class CriticalOperationsService {
         amount: message.amount
       });
 
+      // Находим пользователя для получения companyId
+      const user = await this.prisma.user.findUnique({
+        where: { id: message.userId }
+      });
+
+      if (!user) {
+        LoggerUtil.error('billing-service', 'User not found for transaction', null, { userId: message.userId });
+        return false;
+      }
+
       // Создаем транзакцию
       const transaction = await this.prisma.transaction.create({
         data: {
+          companyId: user.companyId,
           userId: message.userId,
           type: message.type,
           amount: message.amount,
           currency: message.currency,
           description: message.description,
-          provider: message.provider,
           metadata: message.metadata || {}
         }
       });
@@ -279,6 +292,7 @@ export class CriticalOperationsService {
         userId: message.userId
       });
       return false;
+    }
   }
 
   /**
@@ -311,20 +325,23 @@ export class CriticalOperationsService {
         return true; // Уже обработан
       }
 
-      // Пополняем баланс
-      const balance = await this.prisma.userBalance.findUnique({
-        where: { userId: message.userId }
+      // Находим пользователя и его компанию
+      const user = await this.prisma.user.findUnique({
+        where: { id: message.userId },
+        include: { company: { include: { balance: true } } }
       });
 
-      if (!balance) {
-        LoggerUtil.error('billing-service', 'User balance not found for payment', null, { 
+      if (!user || !user.company || !user.company.balance) {
+        LoggerUtil.error('billing-service', 'User or company balance not found for payment', null, { 
           userId: message.userId 
         });
         return false;
       }
 
-      const updatedBalance = await this.prisma.userBalance.update({
-        where: { userId: message.userId },
+      const balance = user.company.balance;
+
+      const updatedBalance = await this.prisma.companyBalance.update({
+        where: { companyId: user.companyId },
         data: {
           balance: balance.balance + message.amount
         }
@@ -333,8 +350,9 @@ export class CriticalOperationsService {
       // Создаем транзакцию
       await this.prisma.transaction.create({
         data: {
+          companyId: user.companyId,
           userId: message.userId,
-          type: 'CREDIT',
+          type: 'CREDIT' as any,
           amount: message.amount,
           currency: message.currency,
           description: `Payment via ${message.paymentMethod}`,

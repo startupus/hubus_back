@@ -6,4 +6,4 @@ import { BillingModule } from '../billing/billing.module';
   imports: [BillingModule],
   controllers: [HttpController],
 })
-export class HttpModule {}
+export class BillingHttpModule {}

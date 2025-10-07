@@ -15,14 +15,14 @@ COPY services/analytics-service/package*.json ./
 COPY services/shared/package*.json ./shared/
 
 # Install dependencies
-RUN npm install --only=production
+RUN npm install --legacy-peer-deps --only=production
 
 # Copy shared package
 COPY services/shared ./shared
 
 # Build shared package
 WORKDIR /app/shared
-RUN npm install
+RUN npm install --legacy-peer-deps
 RUN npm run build
 
 # Copy analytics service source
@@ -30,7 +30,7 @@ WORKDIR /app
 COPY services/analytics-service ./
 
 # Install shared package locally
-RUN npm install ./shared
+RUN npm install --legacy-peer-deps ./shared
 
 # Generate Prisma client
 RUN npx prisma generate

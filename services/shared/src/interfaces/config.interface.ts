@@ -135,6 +135,12 @@ export interface MicroserviceConfig {
   rateLimit: RateLimitConfig;
   monitoring: MonitoringConfig;
   security: SecurityConfig;
+  anonymization?: {
+    enabled: boolean;
+    enabledForProvider: string;
+    enabledForModel: string;
+    preserveMetadata: boolean;
+  };
 }
 
 export interface EnvironmentVariables {

@@ -1,31 +1,14 @@
 /**
- * Cryptographic utilities
+ * Cryptographic utilities (без нативных зависимостей)
+ * Нативные функции (bcrypt, jwt) перенесены в соответствующие сервисы
  */
 export declare class CryptoUtil {
-    private static readonly SALT_ROUNDS;
-    private static readonly JWT_SECRET;
-    /**
-     * Hash a password using bcrypt
-     */
-    static hashPassword(password: string): Promise<string>;
-    /**
-     * Compare a password with its hash
-     */
-    static comparePassword(password: string, hash: string): Promise<boolean>;
-    /**
-     * Generate a JWT token
-     */
-    static generateToken(payload: Record<string, unknown>, expiresIn?: string): string;
-    /**
-     * Verify a JWT token
-     */
-    static verifyToken(token: string): Record<string, unknown> | null;
     /**
      * Generate a secure random string
      */
     static generateSecureString(length?: number): string;
     /**
-     * Generate a UUID v4
+     * Generate a UUID v4 (простая реализация без внешних зависимостей)
      */
     static generateId(): string;
     /**

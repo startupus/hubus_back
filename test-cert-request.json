@@ -1,0 +1,9 @@
+{
+  "modelId": "openai/gpt-4o",
+  "provider": "openrouter",
+  "modelName": "openai/gpt-4o",
+  "requestedLevel": "BASIC",
+  "metadata": {
+    "testMode": true
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "model": "google/gemini-pro",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Привет! Как дела?"
+    }
+  ],
+  "userId": "test-user",
+  "temperature": 0.7,
+  "max_tokens": 100
+}

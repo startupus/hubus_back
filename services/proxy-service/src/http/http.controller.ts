@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Param, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, HttpCode, HttpStatus, HttpException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { LoggerUtil } from '@ai-aggregator/shared';
 import { ProxyService } from '../proxy/proxy.service';
@@ -270,9 +270,10 @@ export class HttpController {
         model: { type: 'string' },
         messages: { type: 'array', items: { type: 'object' } },
         temperature: { type: 'number' },
-        max_tokens: { type: 'number' }
+        max_tokens: { type: 'number' },
+        userId: { type: 'string' }
       },
-      required: ['model', 'messages']
+      required: ['model', 'messages', 'userId']
     }
   })
   @ApiResponse({ status: 200, description: 'OpenRouter request processed successfully' })
@@ -280,28 +281,57 @@ export class HttpController {
     try {
       LoggerUtil.debug('proxy-service', 'HTTP ProxyOpenRouter called', { 
         model: data.model,
-        messages_count: data.messages?.length 
+        messages_count: data.messages?.length,
+        userId: data.userId
       });
-      
-      // Заглушка - в реальном проекте здесь будет проксирование к OpenRouter
+
+      // Валидация запроса
+      const validation = await this.proxyService.validateRequest(data);
+      if (!validation.isValid) {
+        throw new HttpException(`Validation failed: ${validation.errors.join(', ')}`, HttpStatus.BAD_REQUEST);
+      }
+
+      // Отправляем запрос к OpenRouter через основной сервис
+      const response = await this.proxyService.processChatCompletion(
+        data,
+        data.userId,
+        'openrouter'
+      );
+
+      // Отправка события биллинга через RabbitMQ
+      try {
+        await this.proxyService.sendBillingEvent({
+          userId: data.userId,
+          service: 'ai-chat',
+          resource: data.model,
+          tokens: (response.usage?.prompt_tokens || 0) + (response.usage?.completion_tokens || 0),
+          cost: (response.usage?.prompt_tokens || 0) * 0.00003 + (response.usage?.completion_tokens || 0) * 0.00006,
+          provider: response.provider || 'openrouter',
+          model: response.model || data.model,
+          timestamp: new Date().toISOString()
+        });
+      } catch (rabbitError) {
+        LoggerUtil.warn('proxy-service', 'Failed to send billing event', { error: rabbitError });
+        // Не прерываем выполнение при ошибке RabbitMQ
+      }
+
       return {
-        id: `chatcmpl-${Date.now()}`,
-        object: 'chat.completion',
-        created: Math.floor(Date.now() / 1000),
-        model: data.model || 'gpt-3.5-turbo',
-        choices: [{
-          index: 0,
-          message: {
-            role: 'assistant',
-            content: 'Mock response from OpenRouter via proxy service'
-          },
-          finish_reason: 'stop'
-        }],
-        usage: {
-          prompt_tokens: 10,
-          completion_tokens: 20,
-          total_tokens: 30
-        }
+        success: true,
+        message: 'Request processed successfully',
+        responseText: response.choices[0]?.message?.content || 'No response',
+        inputTokens: response.usage?.prompt_tokens || 0,
+        outputTokens: response.usage?.completion_tokens || 0,
+        totalTokens: response.usage?.total_tokens || 0,
+        cost: (response.usage?.prompt_tokens || 0) * 0.00003 + (response.usage?.completion_tokens || 0) * 0.00006,
+        currency: 'USD',
+        responseTime: response.processing_time_ms || 0,
+        provider: response.provider || 'openrouter',
+        model: response.model || data.model,
+        finishReason: response.choices[0]?.finish_reason || 'stop',
+        metadata: {
+          estimatedTokens: validation.estimatedTokens,
+          estimatedCost: validation.estimatedCost
+        },
       };
     } catch (error) {
       LoggerUtil.error('proxy-service', 'HTTP ProxyOpenRouter failed', error as Error);

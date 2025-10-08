@@ -283,10 +283,10 @@ services:
       - PORT=3003
       - REDIS_URL=redis://redis:6379
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
-      - OPENAI_API_KEY=your-openai-api-key
-      - OPENROUTER_API_KEY=your-openrouter-api-key
-      - YANDEX_API_KEY=your-yandex-api-key
-      - YANDEX_FOLDER_ID=your-yandex-folder-id
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - YANDEX_API_KEY=${YANDEX_API_KEY}
+      - YANDEX_FOLDER_ID=${YANDEX_FOLDER_ID}
     depends_on:
       redis:
         condition: service_healthy

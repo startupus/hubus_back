@@ -1,0 +1,9 @@
+{
+  "modelId": "anthropic/claude-3-5-sonnet-20241022",
+  "provider": "openrouter",
+  "modelName": "anthropic/claude-3-5-sonnet-20241022",
+  "requestedLevel": "BASIC",
+  "metadata": {
+    "testMode": true
+  }
+}

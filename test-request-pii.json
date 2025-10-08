@@ -1,0 +1,12 @@
+{
+  "model": "openai/gpt-4o-mini",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Меня зовут Иван Петров, мой телефон +7 (495) 123-45-67, email: ivan.petrov@mail.ru. Расскажи мне о погоде в Москве."
+    }
+  ],
+  "temperature": 0.7,
+  "max_tokens": 200,
+  "userId": "test-user-20250108-155000"
+}

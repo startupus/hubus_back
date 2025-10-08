@@ -1,0 +1,25 @@
+declare const _default: () => {
+    serviceName: string;
+    port: number;
+    grpcPort: number;
+    host: string;
+    nodeEnv: string;
+    database: {
+        url: string;
+    };
+    redis: {
+        url: string;
+    };
+    rabbitmq: {
+        url: string;
+    };
+    providers: {
+        openai: {
+            apiKey: string;
+        };
+        openrouter: {
+            apiKey: string;
+        };
+    };
+};
+export default _default;

@@ -1,100 +1,41 @@
-# Dependencies
+# Dependencies - НЕ коммитим
 node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Runtime data
+# Environment variables - .env включен для удобства развертывания
+# ВНИМАНИЕ: Не добавляйте сюда реальные production ключи!
+.env.test
+.env.local
+.env.production
+
+# Runtime data - НЕ коммитим
 pids
 *.pid
 *.seed
 *.pid.lock
 
-# Coverage directory used by tools like istanbul
+# Logs - НЕ коммитим
+logs
+*.log
+
+# Coverage - НЕ коммитим
 coverage/
 *.lcov
-
-# nyc test coverage
 .nyc_output
 
-# Grunt intermediate storage
-.grunt
-
-# Bower dependency directory
-bower_components
-
-# node-waf configuration
-.lock-wscript
-
-# Compiled binary addons
-build/Release
-
-# Dependency directories
-jspm_packages/
-
-# TypeScript cache
-*.tsbuildinfo
-
-# Optional npm cache directory
+# Cache directories - НЕ коммитим
 .npm
-
-# Optional eslint cache
 .eslintcache
-
-# Microbundle cache
+.cache
+.parcel-cache
 .rpt2_cache/
 .rts2_cache_cjs/
 .rts2_cache_es/
 .rts2_cache_umd/
 
-# Optional REPL history
-.node_repl_history
-
-# Output of 'npm pack'
-*.tgz
-
-# Yarn Integrity file
-.yarn-integrity
-
-# dotenv environment variables file
-.env
-.env.test
-.env.local
-.env.production
-
-# parcel-bundler cache
-.cache
-.parcel-cache
-
-# Next.js build output
-.next
-
-# Nuxt.js build / generate output
-.nuxt
-dist
-
-# Gatsby files
-.cache/
-public
-
-# Storybook build outputs
-.out
-.storybook-out
-
-# Temporary folders
-tmp/
-temp/
-
-# Logs
-logs
-*.log
-
-# Database files
-*.db
-*.sqlite
-*.sqlite3
-
-# OS generated files
+# OS generated files - НЕ коммитим
 .DS_Store
 .DS_Store?
 ._*
@@ -103,21 +44,32 @@ logs
 ehthumbs.db
 Thumbs.db
 
-# IDE files
+# IDE files - НЕ коммитим
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 
-# Docker
-.dockerignore
+# Temporary folders - НЕ коммитим
+tmp/
+temp/
 
-# Prisma
+# Database files (только dev базы) - НЕ коммитим
+*.db
+*.sqlite
+*.sqlite3
 prisma/dev.db
-prisma/migrations/
 
-# Build outputs
-dist/
-build/
+# Docker volumes data - НЕ коммитим
+docker-volumes/
 
+# Build artifacts that are regenerated - НЕ коммитим
+*.tsbuildinfo
+
+# Optional: Compiled output (закомментировано, т.к. нужен для Docker)
+# dist/
+# build/
+
+# Optional: Prisma migrations (закомментировано, т.к. нужны для деплоя)
+# prisma/migrations/

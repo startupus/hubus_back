@@ -1,0 +1,31 @@
+import { PrismaService } from '../common/prisma/prisma.service';
+import { DataExport, ExportFilters, ExportType, TimeRange, ChartData, ChartType } from '../types/analytics.types';
+export declare class ReportingService {
+    private readonly prisma;
+    private readonly logger;
+    private readonly exportDir;
+    constructor(prisma: PrismaService);
+    createDataExport(exportType: ExportType, filters: ExportFilters, userId?: string): Promise<DataExport>;
+    getExportStatus(exportId: string): Promise<DataExport | null>;
+    downloadExport(exportId: string): Promise<Buffer | null>;
+    generateUsageReport(userId: string, timeRange: TimeRange, format?: 'json' | 'csv' | 'excel'): Promise<any>;
+    generateSystemHealthReport(timeRange: TimeRange): Promise<any>;
+    generateAIAnalyticsReport(timeRange: TimeRange): Promise<any>;
+    generateChartData(chartType: ChartType, timeRange: TimeRange, filters?: any): Promise<ChartData>;
+    cleanupExpiredExports(): Promise<number>;
+    private processExportAsync;
+    private generateExportData;
+    private generateExportFile;
+    private generateCSVFile;
+    private generateJSONFile;
+    private generateExcelFile;
+    private convertToCSV;
+    private convertToExcel;
+    private generateLineChartData;
+    private generateBarChartData;
+    private generatePieChartData;
+    private generateAreaChartData;
+    private generateScatterChartData;
+    private getChartTitle;
+    private mapToDataExport;
+}

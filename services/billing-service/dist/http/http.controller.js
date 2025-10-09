@@ -269,6 +269,105 @@ let HttpController = class HttpController {
             };
         }
     }
+    async getCompanyBalance(companyId) {
+        try {
+            shared_1.LoggerUtil.debug('billing-service', 'HTTP GetCompanyBalance called', { company_id: companyId });
+            const result = await this.billingService.getBalance({ userId: companyId });
+            if (!result.success) {
+                return {
+                    success: false,
+                    message: result.error || 'Failed to get company balance',
+                    balance: null,
+                };
+            }
+            return {
+                success: true,
+                message: 'Company balance retrieved successfully',
+                balance: result.balance,
+            };
+        }
+        catch (error) {
+            shared_1.LoggerUtil.error('billing-service', 'HTTP GetCompanyBalance failed', error);
+            return {
+                success: false,
+                message: error instanceof Error ? error.message : 'Unknown error',
+                balance: null,
+            };
+        }
+    }
+    async getCompanyTransactions(companyId, limit, offset) {
+        try {
+            shared_1.LoggerUtil.debug('billing-service', 'HTTP GetCompanyTransactions called', {
+                company_id: companyId,
+                limit,
+                offset
+            });
+            const result = await this.billingService.getTransactions(companyId, limit || 50, offset || 0);
+            return {
+                success: true,
+                message: 'Company transactions retrieved successfully',
+                transactions: result,
+            };
+        }
+        catch (error) {
+            shared_1.LoggerUtil.error('billing-service', 'HTTP GetCompanyTransactions failed', error);
+            return {
+                success: false,
+                message: error instanceof Error ? error.message : 'Unknown error',
+                transactions: [],
+            };
+        }
+    }
+    async getCompanyUsersStatistics(companyId, startDate, endDate) {
+        try {
+            shared_1.LoggerUtil.debug('billing-service', 'HTTP GetCompanyUsersStatistics called', {
+                company_id: companyId,
+                start_date: startDate,
+                end_date: endDate
+            });
+            const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+            const end = endDate ? new Date(endDate) : new Date();
+            const statistics = await this.billingService.getCompanyUsersStatistics(companyId, start, end);
+            return {
+                success: true,
+                message: 'Company users statistics retrieved successfully',
+                statistics,
+            };
+        }
+        catch (error) {
+            shared_1.LoggerUtil.error('billing-service', 'HTTP GetCompanyUsersStatistics failed', error);
+            return {
+                success: false,
+                message: error instanceof Error ? error.message : 'Unknown error',
+                statistics: null,
+            };
+        }
+    }
+    async getCompanyBillingReport(companyId, startDate, endDate) {
+        try {
+            shared_1.LoggerUtil.debug('billing-service', 'HTTP GetCompanyBillingReport called', {
+                company_id: companyId,
+                start_date: startDate,
+                end_date: endDate
+            });
+            const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+            const end = endDate ? new Date(endDate) : new Date();
+            const report = await this.billingService.getBillingReport(companyId, start, end);
+            return {
+                success: true,
+                message: 'Company billing report generated successfully',
+                report,
+            };
+        }
+        catch (error) {
+            shared_1.LoggerUtil.error('billing-service', 'HTTP GetCompanyBillingReport failed', error);
+            return {
+                success: false,
+                message: error instanceof Error ? error.message : 'Unknown error',
+                report: null,
+            };
+        }
+    }
 };
 exports.HttpController = HttpController;
 __decorate([
@@ -405,6 +504,48 @@ __decorate([
     __metadata("design:paramtypes", [String, String, String]),
     __metadata("design:returntype", Promise)
 ], HttpController.prototype, "getBillingReport", null);
+__decorate([
+    (0, common_1.Get)('company/:companyId/balance'),
+    (0, swagger_1.ApiOperation)({ summary: 'Get company balance' }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: 'Company balance retrieved successfully' }),
+    __param(0, (0, common_1.Param)('companyId')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", Promise)
+], HttpController.prototype, "getCompanyBalance", null);
+__decorate([
+    (0, common_1.Get)('company/:companyId/transactions'),
+    (0, swagger_1.ApiOperation)({ summary: 'Get company transactions' }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: 'Company transactions retrieved successfully' }),
+    __param(0, (0, common_1.Param)('companyId')),
+    __param(1, (0, common_1.Query)('limit')),
+    __param(2, (0, common_1.Query)('offset')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Number, Number]),
+    __metadata("design:returntype", Promise)
+], HttpController.prototype, "getCompanyTransactions", null);
+__decorate([
+    (0, common_1.Get)('company/:companyId/users/statistics'),
+    (0, swagger_1.ApiOperation)({ summary: 'Get company users statistics' }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: 'Company users statistics retrieved successfully' }),
+    __param(0, (0, common_1.Param)('companyId')),
+    __param(1, (0, common_1.Query)('startDate')),
+    __param(2, (0, common_1.Query)('endDate')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String, String]),
+    __metadata("design:returntype", Promise)
+], HttpController.prototype, "getCompanyUsersStatistics", null);
+__decorate([
+    (0, common_1.Get)('company/:companyId/report'),
+    (0, swagger_1.ApiOperation)({ summary: 'Get company billing report' }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: 'Company billing report generated successfully' }),
+    __param(0, (0, common_1.Param)('companyId')),
+    __param(1, (0, common_1.Query)('startDate')),
+    __param(2, (0, common_1.Query)('endDate')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String, String]),
+    __metadata("design:returntype", Promise)
+], HttpController.prototype, "getCompanyBillingReport", null);
 exports.HttpController = HttpController = __decorate([
     (0, swagger_1.ApiTags)('billing'),
     (0, common_1.Controller)('billing'),

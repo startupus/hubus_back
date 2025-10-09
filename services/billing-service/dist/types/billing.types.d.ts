@@ -29,6 +29,7 @@ export interface UsageEvent {
     id: string;
     userId: string;
     companyId: string;
+    initiatorCompanyId?: string;
     service: string;
     resource: string;
     quantity: number;

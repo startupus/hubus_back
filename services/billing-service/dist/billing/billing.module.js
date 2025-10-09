@@ -8,7 +8,6 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.BillingModule = void 0;
 const common_1 = require("@nestjs/common");
-const axios_1 = require("@nestjs/axios");
 const billing_service_1 = require("./billing.service");
 const pricing_service_1 = require("./pricing.service");
 const payment_gateway_service_1 = require("./payment-gateway.service");
@@ -17,13 +16,13 @@ const critical_operations_service_1 = require("./critical-operations.service");
 const prisma_module_1 = require("../common/prisma/prisma.module");
 const cache_service_1 = require("../common/cache/cache.service");
 const validation_service_1 = require("../common/validation/validation.service");
-const shared_1 = require("@ai-aggregator/shared");
+const rabbitmq_module_1 = require("../common/rabbitmq/rabbitmq.module");
 let BillingModule = class BillingModule {
 };
 exports.BillingModule = BillingModule;
 exports.BillingModule = BillingModule = __decorate([
     (0, common_1.Module)({
-        imports: [prisma_module_1.PrismaModule, axios_1.HttpModule],
+        imports: [prisma_module_1.PrismaModule, rabbitmq_module_1.RabbitMQModule],
         providers: [
             billing_service_1.BillingService,
             pricing_service_1.PricingService,
@@ -31,8 +30,7 @@ exports.BillingModule = BillingModule = __decorate([
             provider_classification_service_1.ProviderClassificationService,
             critical_operations_service_1.CriticalOperationsService,
             cache_service_1.CacheService,
-            validation_service_1.ValidationService,
-            shared_1.RabbitMQClient
+            validation_service_1.ValidationService
         ],
         exports: [
             billing_service_1.BillingService,

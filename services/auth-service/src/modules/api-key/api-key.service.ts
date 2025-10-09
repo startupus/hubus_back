@@ -20,8 +20,7 @@ export class ApiKeyService {
       const apiKey = await this.prisma.apiKey.create({
         data: {
           key,
-          ownerId: userId,
-          ownerType: 'user',
+          companyId: userId,
           name: createApiKeyDto.name,
           description: createApiKeyDto.description,
           permissions: createApiKeyDto.permissions || [],
@@ -53,8 +52,7 @@ export class ApiKeyService {
       const apiKey = await this.prisma.apiKey.findFirst({
         where: {
           id: apiKeyId,
-          ownerId: userId,
-          ownerType: 'user',
+          companyId: userId,
         },
       });
 
@@ -76,7 +74,7 @@ export class ApiKeyService {
     try {
       const apiKey = await this.prisma.apiKey.findUnique({
         where: { key },
-        include: { user: true },
+        include: { company: true },
       });
 
       if (!apiKey) {
@@ -99,13 +97,13 @@ export class ApiKeyService {
 
       const [apiKeys, total] = await Promise.all([
         this.prisma.apiKey.findMany({
-          where: { ownerId: userId, ownerType: 'user' },
+          where: { companyId: userId },
           skip,
           take: limit,
           orderBy: { createdAt: 'desc' },
         }),
         this.prisma.apiKey.count({
-          where: { ownerId: userId, ownerType: 'user' },
+          where: { companyId: userId },
         }),
       ]);
 
@@ -128,8 +126,7 @@ export class ApiKeyService {
       const existingApiKey = await this.prisma.apiKey.findFirst({
         where: {
           id: apiKeyId,
-          ownerId: userId,
-          ownerType: 'user',
+          companyId: userId,
         },
       });
 
@@ -173,8 +170,7 @@ export class ApiKeyService {
       const existingApiKey = await this.prisma.apiKey.findFirst({
         where: {
           id: apiKeyId,
-          ownerId: userId,
-          ownerType: 'user',
+          companyId: userId,
         },
       });
 
@@ -209,10 +205,10 @@ export class ApiKeyService {
     try {
       const apiKey = await this.prisma.apiKey.findUnique({
         where: { key },
-        include: { user: true },
+        include: { company: true },
       });
 
-      if (!apiKey || !apiKey.isActive || !apiKey.user.isActive) {
+      if (!apiKey || !apiKey.isActive || !apiKey.company.isActive) {
         return { isValid: false };
       }
 
@@ -229,7 +225,7 @@ export class ApiKeyService {
 
       return {
         isValid: true,
-        userId: apiKey.user?.id || apiKey.ownerId,
+        userId: apiKey.companyId,
         permissions: apiKey.permissions as Permission[],
       };
     } catch (error) {
@@ -269,8 +265,7 @@ export class ApiKeyService {
     try {
       await this.prisma.securityEvent.create({
         data: {
-          ownerId: userId,
-          ownerType: 'user',
+          companyId: userId,
           type: type as any,
           severity: severity as any,
           description,

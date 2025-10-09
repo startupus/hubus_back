@@ -22,40 +22,32 @@ model Company {
   createdAt         DateTime  @default(now()) @map("created_at")
   updatedAt         DateTime  @updatedAt @map("updated_at")
   
+  // Hierarchy fields
+  parentCompanyId   String?   @map("parent_company_id")
+  billingMode       BillingMode @default(SELF_PAID) @map("billing_mode")
+  position          String?
+  department        String?
+  
+  // Relations
+  parentCompany     Company?  @relation("CompanyHierarchy", fields: [parentCompanyId], references: [id], onDelete: SetNull)
+  childCompanies    Company[] @relation("CompanyHierarchy")
+  
   // Billing relations
   balance           CompanyBalance?
   transactions      Transaction[]
+  initiatedTransactions Transaction[] @relation("InitiatedBy")
   usageEvents       UsageEvent[]
+  initiatedUsageEvents UsageEvent[] @relation("InitiatedBy")
   invoices          Invoice[]
   subscriptions     Subscription[]
   paymentMethods    PaymentMethod[]
   discountRules     DiscountRule[]
-  users             User[]
   
   @@map("companies")
-}
-
-model User {
-  id                String    @id @default(uuid())
-  companyId         String    @map("company_id")
-  email             String    @unique
-  firstName         String?   @map("first_name")
-  lastName          String?   @map("last_name")
-  position          String?   // Должность в компании
-  department        String?   // Отдел в компании
-  isActive          Boolean   @default(true) @map("is_active")
-  createdAt         DateTime  @default(now()) @map("created_at")
-  updatedAt         DateTime  @updatedAt @map("updated_at")
-  
-  // Relations
-  company           Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  transactions      Transaction[]
-  usageEvents       UsageEvent[]
-  
-  @@map("users")
-  @@index([companyId])
+  @@index([parentCompanyId])
   @@index([email])
 }
+
 
 model CompanyBalance {
   id                String    @id @default(uuid())
@@ -75,8 +67,8 @@ model CompanyBalance {
 
 model Transaction {
   id                String            @id @default(uuid())
-  companyId         String            @map("company_id")
-  userId            String?           @map("user_id") // Пользователь, который инициировал транзакцию
+  companyId         String            @map("company_id") // Компания с которой списывается
+  initiatorCompanyId String?          @map("initiator_company_id") // Компания которая инициировала запрос
   type              TransactionType
   amount            Decimal           @db.Decimal(10, 4)
   currency          String            @default("USD")
@@ -90,7 +82,7 @@ model Transaction {
   
   // Relations
   company           Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  user              User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  initiatorCompany  Company?          @relation("InitiatedBy", fields: [initiatorCompanyId], references: [id], onDelete: SetNull)
   invoice           Invoice?          @relation(fields: [invoiceId], references: [id])
   invoiceId         String?           @map("invoice_id")
   paymentMethod     PaymentMethod?    @relation(fields: [paymentMethodId], references: [id])
@@ -98,7 +90,7 @@ model Transaction {
   
   @@map("transactions")
   @@index([companyId])
-  @@index([userId])
+  @@index([initiatorCompanyId])
   @@index([type])
   @@index([status])
   @@index([createdAt])
@@ -106,8 +98,8 @@ model Transaction {
 
 model UsageEvent {
   id                String            @id @default(uuid())
-  companyId         String            @map("company_id")
-  userId            String?           @map("user_id") // Пользователь, который использовал сервис
+  companyId         String            @map("company_id") // Компания с которой списывается
+  initiatorCompanyId String?          @map("initiator_company_id") // Компания которая сделала запрос
   service            String
   resource           String
   quantity           Int               @default(1)
@@ -119,11 +111,11 @@ model UsageEvent {
   
   // Relations
   company           Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  user              User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  initiatorCompany  Company?          @relation("InitiatedBy", fields: [initiatorCompanyId], references: [id], onDelete: SetNull)
   
   @@map("usage_events")
   @@index([companyId])
-  @@index([userId])
+  @@index([initiatorCompanyId])
   @@index([service])
   @@index([timestamp])
 }
@@ -375,4 +367,9 @@ enum DiscountType {
 enum ProviderType {
   DOMESTIC    // Отечественные (Yandex, Sber, etc.)
   FOREIGN     // Зарубежные (OpenAI, Anthropic, etc.)
+}
+
+enum BillingMode {
+  SELF_PAID     // Компания оплачивает сама
+  PARENT_PAID   // Оплачивает родительская компания
 }

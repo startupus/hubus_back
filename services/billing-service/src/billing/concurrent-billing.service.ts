@@ -30,7 +30,7 @@ export class ConcurrentBillingService {
   
   // Очередь для обработки транзакций
   private readonly transactionQueue = new ConcurrentQueue<{
-    userId: string;
+    companyId: string;
     amount: Decimal;
     type: 'DEBIT' | 'CREDIT';
     description: string;
@@ -54,30 +54,30 @@ export class ConcurrentBillingService {
   /**
    * Потокобезопасное получение баланса пользователя
    */
-  async getBalance(userId: string): Promise<{ balance: Decimal; currency: string }> {
+  async getBalance(companyId: string): Promise<{ balance: Decimal; currency: string }> {
     try {
       // Сначала проверяем кэш
-      const cached = this.balanceCache.get(userId);
+      const cached = this.balanceCache.get(companyId);
       if (cached && (Date.now() - cached.lastUpdated.getTime()) < 60000) { // 1 минута TTL
-        LoggerUtil.debug('billing-service', 'Balance retrieved from cache', { userId });
+        LoggerUtil.debug('billing-service', 'Balance retrieved from cache', { companyId });
         return { balance: cached.balance, currency: cached.currency };
       }
 
       // Получаем блокировку для пользователя
-      const userLock = this.getUserLock(userId);
+      const userLock = this.getUserLock(companyId);
       await this.acquireLock(userLock);
 
       try {
         // Получаем баланс из БД
         const balance = await this.prisma.companyBalance.findUnique({
-          where: { companyId: userId }
+          where: { companyId: companyId }
         });
 
         if (!balance) {
           // Создаем новый баланс
           const newBalance = await this.prisma.companyBalance.create({
             data: {
-              companyId: userId,
+              companyId: companyId,
               balance: 0,
               currency: 'USD',
               creditLimit: 0
@@ -85,7 +85,7 @@ export class ConcurrentBillingService {
           });
 
           // Кэшируем новый баланс
-          this.balanceCache.set(userId, {
+          this.balanceCache.set(companyId, {
             balance: newBalance.balance,
             currency: newBalance.currency,
             lastUpdated: new Date()
@@ -95,14 +95,14 @@ export class ConcurrentBillingService {
         }
 
         // Кэшируем полученный баланс
-        this.balanceCache.set(userId, {
+        this.balanceCache.set(companyId, {
           balance: balance.balance,
           currency: balance.currency,
           lastUpdated: new Date()
         });
 
         LoggerUtil.info('billing-service', 'Balance retrieved successfully', { 
-          userId, 
+          companyId, 
           balance: balance.balance.toString() 
         });
 
@@ -111,7 +111,7 @@ export class ConcurrentBillingService {
         this.releaseLock(userLock);
       }
     } catch (error) {
-      LoggerUtil.error('billing-service', 'Failed to get balance', error as Error, { userId });
+      LoggerUtil.error('billing-service', 'Failed to get balance', error as Error, { companyId });
       throw error;
     }
   }
@@ -120,7 +120,7 @@ export class ConcurrentBillingService {
    * Потокобезопасное обновление баланса
    */
   async updateBalance(
-    userId: string, 
+    companyId: string, 
     amount: Decimal, 
     type: 'DEBIT' | 'CREDIT',
     description: string,
@@ -128,17 +128,17 @@ export class ConcurrentBillingService {
   ): Promise<{ success: boolean; newBalance: Decimal; transactionId?: string }> {
     try {
       // Получаем блокировку для пользователя
-      const userLock = this.getUserLock(userId);
+      const userLock = this.getUserLock(companyId);
       await this.acquireLock(userLock);
 
       try {
-        // Получаем текущий баланс
-        const currentBalance = await this.prisma.companyBalance.findUnique({
-          where: { companyId: userId }
+      // Получаем текущий баланс
+      const currentBalance = await this.prisma.companyBalance.findUnique({
+        where: { companyId: companyId }
         });
 
         if (!currentBalance) {
-          throw new Error(`User balance not found: ${userId}`);
+          throw new Error(`User balance not found: ${companyId}`);
         }
 
         // Вычисляем новый баланс
@@ -154,7 +154,7 @@ export class ConcurrentBillingService {
 
         // Обновляем баланс в БД
         const updatedBalance = await this.prisma.companyBalance.update({
-          where: { companyId: userId },
+          where: { companyId: companyId },
           data: { balance: newBalance }
         });
 
@@ -162,7 +162,6 @@ export class ConcurrentBillingService {
         const transaction = await this.prisma.transaction.create({
           data: {
             companyId: currentBalance.companyId,
-            userId,
             type,
             amount,
             currency: currentBalance.currency,
@@ -172,7 +171,7 @@ export class ConcurrentBillingService {
         });
 
         // Обновляем кэш
-        this.balanceCache.set(userId, {
+        this.balanceCache.set(companyId, {
           balance: newBalance,
           currency: currentBalance.currency,
           lastUpdated: new Date()
@@ -185,7 +184,7 @@ export class ConcurrentBillingService {
         }
 
         LoggerUtil.info('billing-service', 'Balance updated successfully', {
-          userId,
+          companyId,
           type,
           amount: amount.toString(),
           newBalance: newBalance.toString(),
@@ -201,7 +200,7 @@ export class ConcurrentBillingService {
         this.releaseLock(userLock);
       }
     } catch (error) {
-      LoggerUtil.error('billing-service', 'Failed to update balance', error as Error, { userId });
+      LoggerUtil.error('billing-service', 'Failed to update balance', error as Error, { companyId });
       return {
         success: false,
         newBalance: new Decimal(0)
@@ -213,7 +212,7 @@ export class ConcurrentBillingService {
    * Асинхронная обработка транзакций через очередь
    */
   async processTransactionAsync(
-    userId: string,
+    companyId: string,
     amount: Decimal,
     type: 'DEBIT' | 'CREDIT',
     description: string,
@@ -222,7 +221,7 @@ export class ConcurrentBillingService {
     try {
       // Добавляем транзакцию в очередь
       const success = this.transactionQueue.enqueue({
-        userId,
+        companyId,
         amount,
         type,
         description,
@@ -230,14 +229,14 @@ export class ConcurrentBillingService {
       });
 
       if (success) {
-        LoggerUtil.debug('billing-service', 'Transaction queued for processing', { userId, type });
+        LoggerUtil.debug('billing-service', 'Transaction queued for processing', { companyId, type });
         return true;
       } else {
-        LoggerUtil.warn('billing-service', 'Transaction queue is full', { userId });
+        LoggerUtil.warn('billing-service', 'Transaction queue is full', { companyId });
         return false;
       }
     } catch (error) {
-      LoggerUtil.error('billing-service', 'Failed to queue transaction', error as Error, { userId });
+      LoggerUtil.error('billing-service', 'Failed to queue transaction', error as Error, { companyId });
       return false;
     }
   }
@@ -414,7 +413,7 @@ export class ConcurrentBillingService {
 
           // Обрабатываем транзакцию
           await this.updateBalance(
-            transaction.userId,
+            transaction.companyId,
             transaction.amount,
             transaction.type,
             transaction.description,
@@ -422,7 +421,7 @@ export class ConcurrentBillingService {
           );
 
           LoggerUtil.debug('billing-service', 'Transaction processed from queue', {
-            userId: transaction.userId,
+            companyId: transaction.companyId,
             type: transaction.type
           });
         } catch (error) {

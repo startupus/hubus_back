@@ -28,54 +28,32 @@ model Company {
   lastLoginAt     DateTime? @map("last_login_at")
   metadata        Json?
 
+  // Hierarchy fields
+  parentCompanyId String?   @map("parent_company_id")
+  billingMode     BillingMode @default(SELF_PAID) @map("billing_mode") // SELF_PAID или PARENT_PAID
+  position        String?   // Должность в родительской компании
+  department      String?   // Отдел в родительской компании
+
   // Relations
-  users           User[]
+  parentCompany   Company?  @relation("CompanyHierarchy", fields: [parentCompanyId], references: [id], onDelete: SetNull)
+  childCompanies  Company[] @relation("CompanyHierarchy")
   apiKeys         ApiKey[]
+  refreshTokens   RefreshToken[]
   loginAttempts   LoginAttempt[]
   passwordResets  PasswordResetToken[]
   emailVerifications EmailVerificationToken[]
   securityEvents  SecurityEvent[]
 
   @@map("companies")
-}
-
-model User {
-  id           String    @id @default(uuid())
-  companyId    String    @map("company_id")
-  email        String    @unique
-  passwordHash String    @map("password_hash")
-  isActive     Boolean   @default(true) @map("is_active")
-  isVerified   Boolean   @default(false) @map("is_verified")
-  role         UserRole  @default(user)
-  firstName    String?   @map("first_name")
-  lastName     String?   @map("last_name")
-  position     String?   // Должность в компании
-  department   String?   // Отдел в компании
-  permissions  Json      @default("[]") // Права доступа в компании
-  createdAt    DateTime  @default(now()) @map("created_at")
-  updatedAt    DateTime  @updatedAt @map("updated_at")
-  lastLoginAt  DateTime? @map("last_login_at")
-  metadata     Json?
-
-  // Relations
-  company          Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  apiKeys          ApiKey[]
-  refreshTokens    RefreshToken[]
-  loginAttempts    LoginAttempt[]
-  passwordResets   PasswordResetToken[]
-  emailVerifications EmailVerificationToken[]
-  securityEvents   SecurityEvent[]
-
-  @@map("users")
-  @@index([companyId])
+  @@index([parentCompanyId])
   @@index([email])
 }
+
 
 model ApiKey {
   id          String    @id @default(uuid())
   key         String    @unique
-  ownerId     String    @map("owner_id") // ID пользователя или компании
-  ownerType   OwnerType @map("owner_type") // user или company
+  companyId   String    @map("company_id")
   name        String
   description String?
   isActive    Boolean   @default(true) @map("is_active")
@@ -85,19 +63,17 @@ model ApiKey {
   createdAt   DateTime  @default(now()) @map("created_at")
   metadata    Json?
 
-  // Relations (полиморфные связи)
-  user    User?    @relation(fields: [ownerId], references: [id], onDelete: Cascade, map: "api_key_user")
-  company Company? @relation(fields: [ownerId], references: [id], onDelete: Cascade, map: "api_key_company")
+  // Relations
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@map("api_keys")
-  @@index([ownerId])
-  @@index([ownerType])
+  @@index([companyId])
   @@index([key])
 }
 
 model RefreshToken {
   id        String    @id @default(uuid())
-  userId    String    @map("user_id")
+  companyId String    @map("company_id")
   token     String    @unique
   expiresAt DateTime  @map("expires_at")
   isRevoked Boolean   @default(false) @map("is_revoked")
@@ -107,17 +83,16 @@ model RefreshToken {
   ipAddress String?   @map("ip_address")
 
   // Relations
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@map("refresh_tokens")
-  @@index([userId])
+  @@index([companyId])
   @@index([token])
 }
 
 model LoginAttempt {
   id           String   @id @default(uuid())
   email        String
-  ownerType    OwnerType @map("owner_type") // user или company
   ipAddress    String   @map("ip_address")
   userAgent    String   @map("user_agent")
   success      Boolean
@@ -125,58 +100,49 @@ model LoginAttempt {
   timestamp    DateTime @default(now())
 
   // Relations
-  user    User?    @relation(fields: [email], references: [email], map: "login_attempt_user")
   company Company? @relation(fields: [email], references: [email], map: "login_attempt_company")
 
   @@map("login_attempts")
   @@index([email])
-  @@index([ownerType])
   @@index([ipAddress])
   @@index([timestamp])
 }
 
 model PasswordResetToken {
   id        String    @id @default(uuid())
-  ownerId   String    @map("owner_id") // ID пользователя или компании
-  ownerType OwnerType @map("owner_type") // user или company
+  companyId String    @map("company_id")
   token     String    @unique
   expiresAt DateTime  @map("expires_at")
   isUsed    Boolean   @default(false) @map("is_used")
   createdAt DateTime  @default(now()) @map("created_at")
 
-  // Relations (полиморфные связи)
-  user    User?    @relation(fields: [ownerId], references: [id], onDelete: Cascade, map: "password_reset_user")
-  company Company? @relation(fields: [ownerId], references: [id], onDelete: Cascade, map: "password_reset_company")
+  // Relations
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@map("password_reset_tokens")
-  @@index([ownerId])
-  @@index([ownerType])
+  @@index([companyId])
   @@index([token])
 }
 
 model EmailVerificationToken {
   id        String    @id @default(uuid())
-  ownerId   String    @map("owner_id") // ID пользователя или компании
-  ownerType OwnerType @map("owner_type") // user или company
+  companyId String    @map("company_id")
   token     String    @unique
   expiresAt DateTime  @map("expires_at")
   isUsed    Boolean   @default(false) @map("is_used")
   createdAt DateTime  @default(now()) @map("created_at")
 
-  // Relations (полиморфные связи)
-  user    User?    @relation(fields: [ownerId], references: [id], onDelete: Cascade, map: "email_verification_user")
-  company Company? @relation(fields: [ownerId], references: [id], onDelete: Cascade, map: "email_verification_company")
+  // Relations
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@map("email_verification_tokens")
-  @@index([ownerId])
-  @@index([ownerType])
+  @@index([companyId])
   @@index([token])
 }
 
 model SecurityEvent {
   id          String        @id @default(uuid())
-  ownerId     String?       @map("owner_id") // ID пользователя или компании
-  ownerType   OwnerType?    @map("owner_type") // user или company
+  companyId   String?       @map("company_id")
   type        SecurityEventType
   severity    SecuritySeverity
   description String
@@ -185,28 +151,25 @@ model SecurityEvent {
   metadata    Json?
   timestamp   DateTime      @default(now())
 
-  // Relations (полиморфные связи)
-  user    User?    @relation(fields: [ownerId], references: [id], onDelete: SetNull, map: "security_event_user")
-  company Company? @relation(fields: [ownerId], references: [id], onDelete: SetNull, map: "security_event_company")
+  // Relations
+  company Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
 
   @@map("security_events")
-  @@index([ownerId])
-  @@index([ownerType])
+  @@index([companyId])
   @@index([type])
   @@index([timestamp])
 }
 
 enum UserRole {
   admin
-  user
   company
   service
   fsb
 }
 
-enum OwnerType {
-  user
-  company
+enum BillingMode {
+  SELF_PAID     // Оплачивает сама
+  PARENT_PAID   // Оплачивает родительская компания
 }
 
 enum SecurityEventType {

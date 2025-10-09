@@ -19,7 +19,7 @@ export declare class BillingService {
     calculateCost(request: CalculateCostRequest): Promise<CalculateCostResponse>;
     createTransaction(request: CreateTransactionRequest): Promise<CreateTransactionResponse>;
     processPayment(request: ProcessPaymentRequest): Promise<ProcessPaymentResponse>;
-    getBillingReport(userId: string, startDate: Date, endDate: Date): Promise<BillingReport>;
+    getBillingReport(companyId: string, startDate: Date, endDate: Date): Promise<BillingReport>;
     private getPricingRules;
     private getDefaultPricing;
     private calculateTieredPricing;
@@ -34,10 +34,14 @@ export declare class BillingService {
     private checkUsageLimits;
     private getUsageLimits;
     private auditOperation;
-    getTransactions(userId: string, limit?: number, offset?: number): Promise<Transaction[]>;
+    getTransactions(companyId: string, limit?: number, offset?: number): Promise<Transaction[]>;
     getTransactionById(transactionId: string): Promise<Transaction | null>;
     updateTransaction(transactionId: string, updateData: Partial<Transaction>): Promise<Transaction>;
     deleteTransaction(transactionId: string): Promise<Transaction>;
+    determinePayerCompany(initiatorCompanyId: string): Promise<{
+        payerId: string;
+        initiatorId: string;
+    }>;
     refundPayment(refundData: {
         transactionId: string;
         amount: Decimal;
@@ -47,5 +51,37 @@ export declare class BillingService {
         refundId?: string;
         status?: TransactionStatus;
         error?: string;
+    }>;
+    getCompanyUsersStatistics(companyId: string, startDate: Date, endDate: Date): Promise<{
+        companyId: string;
+        period: {
+            start: Date;
+            end: Date;
+        };
+        totals: {
+            totalChildCompanies: number;
+            totalRequests: number;
+            totalCost: number;
+            totalTransactions: number;
+        };
+        childCompanies: {
+            company: {
+                id: string;
+                name: string;
+                email: string;
+                position: string;
+                department: string;
+                billingMode: import(".prisma/client").$Enums.BillingMode;
+            };
+            statistics: {
+                totalRequests: number;
+                totalCost: number;
+                totalTransactions: number;
+                byService: Record<string, {
+                    count: number;
+                    cost: number;
+                }>;
+            };
+        }[];
     }>;
 }

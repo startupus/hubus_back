@@ -141,10 +141,10 @@ export class CacheService {
   }
 
   /**
-   * Инвалидировать кэш баланса пользователя
+   * Инвалидировать кэш баланса компании
    */
-  invalidateUserBalance(userId: string): void {
-    const key = `balance:${userId}`;
+  invalidateCompanyBalance(companyId: string): void {
+    const key = `balance:${companyId}`;
     this.delete(key);
   }
 

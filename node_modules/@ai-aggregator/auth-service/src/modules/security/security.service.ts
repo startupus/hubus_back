@@ -15,13 +15,13 @@ export class SecurityService {
 
       const [events, total] = await Promise.all([
         this.prisma.securityEvent.findMany({
-          where: { ownerId: userId, ownerType: 'user' },
+          where: { companyId: userId },
           skip,
           take: limit,
           orderBy: { timestamp: 'desc' },
         }),
         this.prisma.securityEvent.count({
-          where: { ownerId: userId, ownerType: 'user' },
+          where: { companyId: userId },
         }),
       ]);
 

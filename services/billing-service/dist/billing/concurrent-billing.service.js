@@ -30,42 +30,42 @@ let ConcurrentBillingService = ConcurrentBillingService_1 = class ConcurrentBill
         this.userLocks = new shared_2.ConcurrentMap();
         this.startTransactionProcessor();
     }
-    async getBalance(userId) {
+    async getBalance(companyId) {
         try {
-            const cached = this.balanceCache.get(userId);
+            const cached = this.balanceCache.get(companyId);
             if (cached && (Date.now() - cached.lastUpdated.getTime()) < 60000) {
-                shared_1.LoggerUtil.debug('billing-service', 'Balance retrieved from cache', { userId });
+                shared_1.LoggerUtil.debug('billing-service', 'Balance retrieved from cache', { companyId });
                 return { balance: cached.balance, currency: cached.currency };
             }
-            const userLock = this.getUserLock(userId);
+            const userLock = this.getUserLock(companyId);
             await this.acquireLock(userLock);
             try {
                 const balance = await this.prisma.companyBalance.findUnique({
-                    where: { companyId: userId }
+                    where: { companyId: companyId }
                 });
                 if (!balance) {
                     const newBalance = await this.prisma.companyBalance.create({
                         data: {
-                            companyId: userId,
+                            companyId: companyId,
                             balance: 0,
                             currency: 'USD',
                             creditLimit: 0
                         }
                     });
-                    this.balanceCache.set(userId, {
+                    this.balanceCache.set(companyId, {
                         balance: newBalance.balance,
                         currency: newBalance.currency,
                         lastUpdated: new Date()
                     });
                     return { balance: newBalance.balance, currency: newBalance.currency };
                 }
-                this.balanceCache.set(userId, {
+                this.balanceCache.set(companyId, {
                     balance: balance.balance,
                     currency: balance.currency,
                     lastUpdated: new Date()
                 });
                 shared_1.LoggerUtil.info('billing-service', 'Balance retrieved successfully', {
-                    userId,
+                    companyId,
                     balance: balance.balance.toString()
                 });
                 return { balance: balance.balance, currency: balance.currency };
@@ -75,20 +75,20 @@ let ConcurrentBillingService = ConcurrentBillingService_1 = class ConcurrentBill
             }
         }
         catch (error) {
-            shared_1.LoggerUtil.error('billing-service', 'Failed to get balance', error, { userId });
+            shared_1.LoggerUtil.error('billing-service', 'Failed to get balance', error, { companyId });
             throw error;
         }
     }
-    async updateBalance(userId, amount, type, description, metadata) {
+    async updateBalance(companyId, amount, type, description, metadata) {
         try {
-            const userLock = this.getUserLock(userId);
+            const userLock = this.getUserLock(companyId);
             await this.acquireLock(userLock);
             try {
                 const currentBalance = await this.prisma.companyBalance.findUnique({
-                    where: { companyId: userId }
+                    where: { companyId: companyId }
                 });
                 if (!currentBalance) {
-                    throw new Error(`User balance not found: ${userId}`);
+                    throw new Error(`User balance not found: ${companyId}`);
                 }
                 let newBalance;
                 if (type === 'DEBIT') {
@@ -101,13 +101,12 @@ let ConcurrentBillingService = ConcurrentBillingService_1 = class ConcurrentBill
                     newBalance = currentBalance.balance.plus(amount);
                 }
                 const updatedBalance = await this.prisma.companyBalance.update({
-                    where: { companyId: userId },
+                    where: { companyId: companyId },
                     data: { balance: newBalance }
                 });
                 const transaction = await this.prisma.transaction.create({
                     data: {
                         companyId: currentBalance.companyId,
-                        userId,
                         type,
                         amount,
                         currency: currentBalance.currency,
@@ -115,7 +114,7 @@ let ConcurrentBillingService = ConcurrentBillingService_1 = class ConcurrentBill
                         metadata: metadata || {}
                     }
                 });
-                this.balanceCache.set(userId, {
+                this.balanceCache.set(companyId, {
                     balance: newBalance,
                     currency: currentBalance.currency,
                     lastUpdated: new Date()
@@ -125,7 +124,7 @@ let ConcurrentBillingService = ConcurrentBillingService_1 = class ConcurrentBill
                     this.totalRevenue.increment();
                 }
                 shared_1.LoggerUtil.info('billing-service', 'Balance updated successfully', {
-                    userId,
+                    companyId,
                     type,
                     amount: amount.toString(),
                     newBalance: newBalance.toString(),
@@ -142,33 +141,33 @@ let ConcurrentBillingService = ConcurrentBillingService_1 = class ConcurrentBill
             }
         }
         catch (error) {
-            shared_1.LoggerUtil.error('billing-service', 'Failed to update balance', error, { userId });
+            shared_1.LoggerUtil.error('billing-service', 'Failed to update balance', error, { companyId });
             return {
                 success: false,
                 newBalance: new library_1.Decimal(0)
             };
         }
     }
-    async processTransactionAsync(userId, amount, type, description, metadata) {
+    async processTransactionAsync(companyId, amount, type, description, metadata) {
         try {
             const success = this.transactionQueue.enqueue({
-                userId,
+                companyId,
                 amount,
                 type,
                 description,
                 metadata
             });
             if (success) {
-                shared_1.LoggerUtil.debug('billing-service', 'Transaction queued for processing', { userId, type });
+                shared_1.LoggerUtil.debug('billing-service', 'Transaction queued for processing', { companyId, type });
                 return true;
             }
             else {
-                shared_1.LoggerUtil.warn('billing-service', 'Transaction queue is full', { userId });
+                shared_1.LoggerUtil.warn('billing-service', 'Transaction queue is full', { companyId });
                 return false;
             }
         }
         catch (error) {
-            shared_1.LoggerUtil.error('billing-service', 'Failed to queue transaction', error, { userId });
+            shared_1.LoggerUtil.error('billing-service', 'Failed to queue transaction', error, { companyId });
             return false;
         }
     }
@@ -279,9 +278,9 @@ let ConcurrentBillingService = ConcurrentBillingService_1 = class ConcurrentBill
                     if (!transaction) {
                         continue;
                     }
-                    await this.updateBalance(transaction.userId, transaction.amount, transaction.type, transaction.description, transaction.metadata);
+                    await this.updateBalance(transaction.companyId, transaction.amount, transaction.type, transaction.description, transaction.metadata);
                     shared_1.LoggerUtil.debug('billing-service', 'Transaction processed from queue', {
-                        userId: transaction.userId,
+                        companyId: transaction.companyId,
                         type: transaction.type
                     });
                 }

@@ -33,7 +33,7 @@ exports.AppModule = AppModule = __decorate([
             }),
             prisma_module_1.PrismaModule,
             billing_module_1.BillingModule,
-            http_module_1.HttpModule,
+            http_module_1.BillingHttpModule,
             health_module_1.HealthModule,
         ],
     })

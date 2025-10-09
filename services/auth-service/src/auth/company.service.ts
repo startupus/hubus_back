@@ -114,7 +114,7 @@ export class CompanyService {
         email: company.email
       });
 
-      return this.transformCompany(company);
+      return this.transformCompanyToResponse(company);
     } catch (error) {
       LoggerUtil.error('auth-service', 'Failed to create company', error as Error, {
         name: data.name,
@@ -144,39 +144,38 @@ export class CompanyService {
       }
 
       // Проверяем, что email не занят
-      const existingUser = await this.prisma.user.findUnique({
+      const existingCompany = await this.prisma.company.findUnique({
         where: { email: data.email }
       });
 
-      if (existingUser) {
-        throw new ConflictException('User with this email already exists');
+      if (existingCompany) {
+        throw new ConflictException('Company with this email already exists');
       }
 
       // Хешируем пароль
       const passwordHash = await CryptoUtil.hashPassword(data.password);
 
-      // Создаем пользователя
-      const user = await this.prisma.user.create({
+      // Создаем дочернюю компанию
+      const childCompany = await this.prisma.company.create({
         data: {
-          companyId: data.companyId,
+          parentCompanyId: data.companyId,
           email: data.email,
           passwordHash,
-          firstName: data.firstName,
-          lastName: data.lastName,
+          name: `${data.firstName} ${data.lastName}`,
           position: data.position,
           department: data.department,
-          permissions: data.permissions || [],
-          role: 'user'
+          role: 'company',
+          billingMode: 'PARENT_PAID'
         }
       });
 
-      LoggerUtil.info('auth-service', 'User created successfully', {
-        userId: user.id,
-        companyId: data.companyId,
-        email: user.email
+      LoggerUtil.info('auth-service', 'Child company created successfully', {
+        companyId: childCompany.id,
+        parentCompanyId: data.companyId,
+        email: childCompany.email
       });
 
-      return this.transformUser(user);
+      return this.transformCompany(company);
     } catch (error) {
       LoggerUtil.error('auth-service', 'Failed to create user', error as Error, {
         companyId: data.companyId,
@@ -202,49 +201,48 @@ export class CompanyService {
         email
       });
 
-      // Сначала ищем пользователя
-      let user = await this.prisma.user.findUnique({
+      // Ищем компанию
+      let company = await this.prisma.company.findUnique({
         where: { email },
-        include: { company: true }
-      });
-
-      if (user) {
-        // Проверяем пароль пользователя
-        const isPasswordValid = await CryptoUtil.comparePassword(password, user.passwordHash);
-        if (!isPasswordValid) {
-          throw new BadRequestException('Invalid credentials');
-        }
-
-        // Обновляем время последнего входа
-        await this.prisma.user.update({
-          where: { id: user.id },
-          data: { lastLoginAt: new Date() }
-        });
-
-        LoggerUtil.info('auth-service', 'User authenticated successfully', {
-          userId: user.id,
-          email: user.email,
-          companyId: user.companyId
-        });
-
-        return {
-          id: user.id,
-          email: user.email,
-          role: user.role,
-          ownerType: 'user',
-          companyId: user.companyId,
-          permissions: user.permissions as string[]
-        };
-      }
-
-      // Если пользователь не найден, ищем компанию
-      const company = await this.prisma.company.findUnique({
-        where: { email }
+        include: { parentCompany: true }
       });
 
       if (company) {
         // Проверяем пароль компании
         const isPasswordValid = await CryptoUtil.comparePassword(password, company.passwordHash);
+        if (!isPasswordValid) {
+          throw new BadRequestException('Invalid credentials');
+        }
+
+        // Обновляем время последнего входа
+        await this.prisma.company.update({
+          where: { id: company.id },
+          data: { lastLoginAt: new Date() }
+        });
+
+        LoggerUtil.info('auth-service', 'Company authenticated successfully', {
+          companyId: company.id,
+          email: company.email
+        });
+
+        return {
+          id: company.id,
+          email: company.email,
+          role: company.role,
+          ownerType: 'company',
+          companyId: company.parentCompanyId,
+          permissions: []
+        };
+      }
+
+      // Если компания не найдена, ищем родительскую компанию
+      const parentCompany = await this.prisma.company.findUnique({
+        where: { email }
+      });
+
+      if (parentCompany) {
+        // Проверяем пароль родительской компании
+        const isPasswordValid = await CryptoUtil.comparePassword(password, parentCompany.passwordHash);
         if (!isPasswordValid) {
           throw new BadRequestException('Invalid credentials');
         }
@@ -285,7 +283,7 @@ export class CompanyService {
       const company = await this.prisma.company.findUnique({
         where: { id },
         include: {
-          users: {
+          childCompanies: {
             select: { id: true }
           }
         }
@@ -296,8 +294,8 @@ export class CompanyService {
       }
 
       return {
-        ...this.transformCompany(company),
-        usersCount: company.users.length
+        ...this.transformCompanyToResponse(company),
+        usersCount: company.childCompanies?.length || 0
       };
     } catch (error) {
       LoggerUtil.error('auth-service', 'Failed to get company', error as Error, {
@@ -312,16 +310,16 @@ export class CompanyService {
    */
   async getUserById(id: string): Promise<UserResponse> {
     try {
-      const user = await this.prisma.user.findUnique({
+      const company = await this.prisma.company.findUnique({
         where: { id },
-        include: { company: true }
+        include: { parentCompany: true }
       });
 
-      if (!user) {
-        throw new NotFoundException('User not found');
+      if (!company) {
+        throw new NotFoundException('Company not found');
       }
 
-      return this.transformUser(user);
+      return this.transformCompany(company);
     } catch (error) {
       LoggerUtil.error('auth-service', 'Failed to get user', error as Error, {
         userId: id
@@ -335,12 +333,12 @@ export class CompanyService {
    */
   async getCompanyUsers(companyId: string): Promise<UserResponse[]> {
     try {
-      const users = await this.prisma.user.findMany({
-        where: { companyId },
+      const childCompanies = await this.prisma.company.findMany({
+        where: { parentCompanyId: companyId },
         orderBy: { createdAt: 'desc' }
       });
 
-      return users.map(user => this.transformUser(user));
+      return childCompanies.map(company => this.transformCompany(company));
     } catch (error) {
       LoggerUtil.error('auth-service', 'Failed to get company users', error as Error, {
         companyId
@@ -361,9 +359,14 @@ export class CompanyService {
     isActive?: boolean;
   }>): Promise<UserResponse> {
     try {
-      const user = await this.prisma.user.update({
+      const company = await this.prisma.company.update({
         where: { id },
-        data: updates
+        data: {
+          name: updates.firstName && updates.lastName ? `${updates.firstName} ${updates.lastName}` : undefined,
+          position: updates.position,
+          department: updates.department,
+          isActive: updates.isActive
+        }
       });
 
       LoggerUtil.info('auth-service', 'User updated successfully', {
@@ -371,7 +374,7 @@ export class CompanyService {
         updates
       });
 
-      return this.transformUser(user);
+      return this.transformCompany(company);
     } catch (error) {
       LoggerUtil.error('auth-service', 'Failed to update user', error as Error, {
         userId: id,
@@ -386,7 +389,7 @@ export class CompanyService {
    */
   async deleteUser(id: string): Promise<boolean> {
     try {
-      await this.prisma.user.delete({
+      await this.prisma.company.delete({
         where: { id }
       });
 
@@ -410,7 +413,7 @@ export class CompanyService {
     try {
       const companies = await this.prisma.company.findMany({
         include: {
-          users: {
+          childCompanies: {
             select: { id: true }
           }
         },
@@ -418,8 +421,8 @@ export class CompanyService {
       });
 
       return companies.map(company => ({
-        ...this.transformCompany(company),
-        usersCount: company.users.length
+        ...this.transformCompanyToResponse(company),
+        usersCount: company.childCompanies?.length || 0
       }));
     } catch (error) {
       LoggerUtil.error('auth-service', 'Failed to get all companies', error as Error);
@@ -432,22 +435,41 @@ export class CompanyService {
    */
   async getAllUsers(): Promise<UserResponse[]> {
     try {
-      const users = await this.prisma.user.findMany({
-        include: { company: true },
+      const companies = await this.prisma.company.findMany({
+        include: { parentCompany: true },
         orderBy: { createdAt: 'desc' }
       });
 
-      return users.map(user => this.transformUser(user));
+      return companies.map(company => this.transformCompany(company));
     } catch (error) {
       LoggerUtil.error('auth-service', 'Failed to get all users', error as Error);
       throw error;
     }
   }
 
+
   /**
    * Трансформировать компанию в ответ
    */
-  private transformCompany(company: any): CompanyResponse {
+  private transformCompany(company: any): UserResponse {
+    return {
+      id: company.id,
+      companyId: company.parentCompanyId,
+      email: company.email,
+      isActive: company.isActive,
+      isVerified: company.isVerified,
+      firstName: company.name?.split(' ')[0] || '',
+      lastName: company.name?.split(' ').slice(1).join(' ') || '',
+      position: company.position,
+      department: company.department,
+      permissions: [],
+      createdAt: company.createdAt,
+      updatedAt: company.updatedAt,
+      lastLoginAt: company.lastLoginAt
+    };
+  }
+
+  private transformCompanyToResponse(company: any): CompanyResponse {
     return {
       id: company.id,
       name: company.name,
@@ -462,27 +484,6 @@ export class CompanyService {
       createdAt: company.createdAt,
       updatedAt: company.updatedAt,
       lastLoginAt: company.lastLoginAt
-    };
-  }
-
-  /**
-   * Трансформировать пользователя в ответ
-   */
-  private transformUser(user: any): UserResponse {
-    return {
-      id: user.id,
-      companyId: user.companyId,
-      email: user.email,
-      isActive: user.isActive,
-      isVerified: user.isVerified,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      position: user.position,
-      department: user.department,
-      permissions: user.permissions as string[],
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt,
-      lastLoginAt: user.lastLoginAt
     };
   }
 }

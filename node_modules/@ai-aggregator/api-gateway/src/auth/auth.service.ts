@@ -18,31 +18,37 @@ export class AuthService {
 
   async register(registerDto: RegisterDto): Promise<AuthResponseDto> {
     try {
+      // Map RegisterDto to company registration format
+      const companyData = {
+        name: `${registerDto.firstName} ${registerDto.lastName}`.trim() || 'Default Company',
+        email: registerDto.email,
+        password: registerDto.password,
+        description: `Company for ${registerDto.firstName} ${registerDto.lastName}`.trim()
+      };
+
       const response: AxiosResponse = await firstValueFrom(
-        this.httpService.post(`${this.authServiceUrl}/auth/register`, registerDto)
+        this.httpService.post(`${this.authServiceUrl}/companies/register`, companyData)
       );
 
-      // Auth-service returns AuthResult format
-      const authResult = response.data;
+      // Auth-service returns company registration result
+      const result = response.data;
       
-      if (!authResult.success) {
-        if (authResult.error?.includes('already exists')) {
-          throw new HttpException('User with this email already exists', HttpStatus.CONFLICT);
-        }
-        throw new HttpException(authResult.error || 'Registration failed', HttpStatus.INTERNAL_SERVER_ERROR);
+      // Auth-service returns { company, accessToken, refreshToken } on success
+      if (!result.company || !result.accessToken) {
+        throw new HttpException('Registration failed - invalid response format', HttpStatus.INTERNAL_SERVER_ERROR);
       }
 
       return {
-        accessToken: authResult.token || 'temp-token',
-        refreshToken: authResult.refreshToken || 'temp-refresh-token',
+        accessToken: result.accessToken,
+        refreshToken: result.refreshToken,
         tokenType: 'Bearer',
         expiresIn: 3600,
-        user: authResult.user ? {
-          id: authResult.user.id,
-          email: authResult.user.email,
-          role: authResult.user.role,
-          isVerified: authResult.user.isVerified,
-        } : undefined,
+        user: {
+          id: result.company.id,
+          email: result.company.email,
+          role: result.company.role,
+          isVerified: result.company.isVerified,
+        },
       };
     } catch (error: any) {
       if (error instanceof HttpException) {
@@ -58,30 +64,28 @@ export class AuthService {
   async login(loginDto: LoginDto): Promise<AuthResponseDto> {
     try {
       const response: AxiosResponse = await firstValueFrom(
-        this.httpService.post(`${this.authServiceUrl}/auth/login`, loginDto)
+        this.httpService.post(`${this.authServiceUrl}/companies/login`, loginDto)
       );
 
-      // Auth-service returns AuthResult format
-      const authResult = response.data;
+      // Auth-service returns company login result
+      const result = response.data;
       
-      if (!authResult.success) {
-        if (authResult.requiresVerification) {
-          throw new HttpException('Email verification required', HttpStatus.UNAUTHORIZED);
-        }
-        throw new HttpException(authResult.error || 'Invalid credentials', HttpStatus.UNAUTHORIZED);
+      // Auth-service returns { company, accessToken, refreshToken } on success
+      if (!result.company || !result.accessToken) {
+        throw new HttpException('Login failed - invalid credentials', HttpStatus.UNAUTHORIZED);
       }
 
       return {
-        accessToken: authResult.token || 'temp-token',
-        refreshToken: authResult.refreshToken || 'temp-refresh-token',
+        accessToken: result.accessToken,
+        refreshToken: result.refreshToken,
         tokenType: 'Bearer',
         expiresIn: 3600,
-        user: authResult.user ? {
-          id: authResult.user.id,
-          email: authResult.user.email,
-          role: authResult.user.role,
-          isVerified: authResult.user.isVerified,
-        } : undefined,
+        user: {
+          id: result.company.id,
+          email: result.company.email,
+          role: result.company.role,
+          isVerified: result.company.isVerified,
+        },
       };
     } catch (error: any) {
       if (error instanceof HttpException) {

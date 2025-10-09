@@ -41,7 +41,7 @@ export class HttpController {
   @ApiResponse({ status: 200, description: 'Balance retrieved successfully' })
   async getBalance(@Param() params: GetBalanceDto) {
     try {
-      LoggerUtil.debug('billing-service', 'HTTP GetBalance called', { user_id: params.userId });
+      LoggerUtil.debug('billing-service', 'HTTP GetBalance called', { company_id: params.userId });
       
       const result = await this.billingService.getBalance({ userId: params.userId });
       
@@ -75,7 +75,7 @@ export class HttpController {
   async updateBalance(@Body() data: UpdateBalanceDto) {
     try {
       LoggerUtil.debug('billing-service', 'HTTP UpdateBalance called', { 
-        user_id: data.userId, 
+        company_id: data.userId, 
         amount: data.amount,
         operation: data.operation 
       });
@@ -125,15 +125,31 @@ export class HttpController {
     }
   })
   @ApiResponse({ status: 201, description: 'Transaction created successfully' })
-  async createTransaction(@Body() data: CreateTransactionRequest) {
+  async createTransaction(@Body() data: any) {
     try {
+      // Map user_id to userId and convert type to TransactionType
+      const request: CreateTransactionRequest = {
+        userId: data.user_id || data.userId,
+        type: data.type === 'credit' ? TransactionType.CREDIT : 
+              data.type === 'debit' ? TransactionType.DEBIT :
+              data.type === 'refund' ? TransactionType.REFUND :
+              data.type === 'chargeback' ? TransactionType.CHARGEBACK :
+              data.type as TransactionType,
+        amount: data.amount,
+        currency: data.currency,
+        description: data.description,
+        reference: data.reference,
+        metadata: data.metadata,
+        paymentMethodId: data.paymentMethodId
+      };
+
       LoggerUtil.debug('billing-service', 'HTTP CreateTransaction called', { 
-        user_id: data.userId, 
-        type: data.type,
-        amount: data.amount 
+        company_id: request.userId, 
+        type: request.type,
+        amount: request.amount 
       });
       
-      const result = await this.billingService.createTransaction(data);
+      const result = await this.billingService.createTransaction(request);
       
       if (!result.success) {
         return {
@@ -168,7 +184,7 @@ export class HttpController {
   ) {
     try {
       LoggerUtil.debug('billing-service', 'HTTP GetTransactionHistory called', { 
-        user_id: userId,
+        company_id: userId,
         page: page,
         limit: limit 
       });
@@ -215,10 +231,10 @@ export class HttpController {
   async calculateCost(@Body() data: CalculateCostRequest) {
     try {
       LoggerUtil.debug('billing-service', 'HTTP CalculateCost called', { 
-        user_id: data.userId,
+        company_id: data.userId,
         service: data.service,
         resource: data.resource,
-        quantity: data.quantity
+        quantity: data.quantity 
       });
       
       const result = await this.billingService.calculateCost(data);
@@ -273,7 +289,7 @@ export class HttpController {
   async processPayment(@Body() data: ProcessPaymentRequest) {
     try {
       LoggerUtil.debug('billing-service', 'HTTP ProcessPayment called', { 
-        user_id: data.userId,
+        company_id: data.userId,
         amount: data.amount,
         payment_method_id: data.paymentMethodId 
       });
@@ -324,10 +340,10 @@ export class HttpController {
   async trackUsage(@Body() data: TrackUsageDto) {
     try {
       LoggerUtil.debug('billing-service', 'HTTP TrackUsage called', { 
-        user_id: data.userId,
+        company_id: data.userId,
         service: data.service,
         resource: data.resource,
-        quantity: data.quantity
+        quantity: data.quantity 
       });
       
       const result = await this.billingService.trackUsage(data);
@@ -366,7 +382,7 @@ export class HttpController {
   ) {
     try {
       LoggerUtil.debug('billing-service', 'HTTP GetBillingReport called', { 
-        user_id: userId,
+        company_id: userId,
         start_date: startDate,
         end_date: endDate
       });
@@ -384,6 +400,144 @@ export class HttpController {
       };
     } catch (error) {
       LoggerUtil.error('billing-service', 'HTTP GetBillingReport failed', error as Error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Unknown error',
+        report: null,
+      };
+    }
+  }
+
+  @Get('company/:companyId/balance')
+  @ApiOperation({ summary: 'Get company balance' })
+  @ApiResponse({ status: 200, description: 'Company balance retrieved successfully' })
+  async getCompanyBalance(@Param('companyId') companyId: string) {
+    try {
+      LoggerUtil.debug('billing-service', 'HTTP GetCompanyBalance called', { company_id: companyId });
+      
+      const result = await this.billingService.getBalance({ userId: companyId });
+      
+      if (!result.success) {
+        return {
+          success: false,
+          message: result.error || 'Failed to get company balance',
+          balance: null,
+        };
+      }
+
+      return {
+        success: true,
+        message: 'Company balance retrieved successfully',
+        balance: result.balance,
+      };
+    } catch (error) {
+      LoggerUtil.error('billing-service', 'HTTP GetCompanyBalance failed', error as Error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Unknown error',
+        balance: null,
+      };
+    }
+  }
+
+  @Get('company/:companyId/transactions')
+  @ApiOperation({ summary: 'Get company transactions' })
+  @ApiResponse({ status: 200, description: 'Company transactions retrieved successfully' })
+  async getCompanyTransactions(
+    @Param('companyId') companyId: string,
+    @Query('limit') limit?: number,
+    @Query('offset') offset?: number
+  ) {
+    try {
+      LoggerUtil.debug('billing-service', 'HTTP GetCompanyTransactions called', { 
+        company_id: companyId,
+        limit,
+        offset 
+      });
+      
+      const result = await this.billingService.getTransactions(
+        companyId,
+        limit || 50,
+        offset || 0
+      );
+      
+      return {
+        success: true,
+        message: 'Company transactions retrieved successfully',
+        transactions: result,
+      };
+    } catch (error) {
+      LoggerUtil.error('billing-service', 'HTTP GetCompanyTransactions failed', error as Error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Unknown error',
+        transactions: [],
+      };
+    }
+  }
+
+  @Get('company/:companyId/users/statistics')
+  @ApiOperation({ summary: 'Get company users statistics' })
+  @ApiResponse({ status: 200, description: 'Company users statistics retrieved successfully' })
+  async getCompanyUsersStatistics(
+    @Param('companyId') companyId: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string
+  ) {
+    try {
+      LoggerUtil.debug('billing-service', 'HTTP GetCompanyUsersStatistics called', { 
+        company_id: companyId,
+        start_date: startDate,
+        end_date: endDate
+      });
+      
+      const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const end = endDate ? new Date(endDate) : new Date();
+      
+      const statistics = await this.billingService.getCompanyUsersStatistics(companyId, start, end);
+      
+      return {
+        success: true,
+        message: 'Company users statistics retrieved successfully',
+        statistics,
+      };
+    } catch (error) {
+      LoggerUtil.error('billing-service', 'HTTP GetCompanyUsersStatistics failed', error as Error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Unknown error',
+        statistics: null,
+      };
+    }
+  }
+
+  @Get('company/:companyId/report')
+  @ApiOperation({ summary: 'Get company billing report' })
+  @ApiResponse({ status: 200, description: 'Company billing report generated successfully' })
+  async getCompanyBillingReport(
+    @Param('companyId') companyId: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string
+  ) {
+    try {
+      LoggerUtil.debug('billing-service', 'HTTP GetCompanyBillingReport called', { 
+        company_id: companyId,
+        start_date: startDate,
+        end_date: endDate
+      });
+      
+      const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const end = endDate ? new Date(endDate) : new Date();
+      
+      const report = await this.billingService.getBillingReport(companyId, start, end);
+      
+      return {
+        success: true,
+        message: 'Company billing report generated successfully',
+        report,
+      };
+    } catch (error) {
+      LoggerUtil.error('billing-service', 'HTTP GetCompanyBillingReport failed', error as Error);
       return {
         success: false,
         message: error instanceof Error ? error.message : 'Unknown error',

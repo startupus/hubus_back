@@ -6,17 +6,17 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
     return c > 3 && r && Object.defineProperty(target, key, r), r;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.HttpModule = void 0;
+exports.BillingHttpModule = void 0;
 const common_1 = require("@nestjs/common");
 const http_controller_1 = require("./http.controller");
 const billing_module_1 = require("../billing/billing.module");
-let HttpModule = class HttpModule {
+let BillingHttpModule = class BillingHttpModule {
 };
-exports.HttpModule = HttpModule;
-exports.HttpModule = HttpModule = __decorate([
+exports.BillingHttpModule = BillingHttpModule;
+exports.BillingHttpModule = BillingHttpModule = __decorate([
     (0, common_1.Module)({
         imports: [billing_module_1.BillingModule],
         controllers: [http_controller_1.HttpController],
     })
-], HttpModule);
+], BillingHttpModule);
 //# sourceMappingURL=http.module.js.map

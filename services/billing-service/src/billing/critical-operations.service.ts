@@ -185,18 +185,18 @@ export class CriticalOperationsService {
         amount: message.amount
       });
 
-      // Находим пользователя и его компанию
-      const user = await this.prisma.user.findUnique({
-        where: { id: message.userId },
-        include: { company: { include: { balance: true } } }
+      // Находим компанию
+      const company = await this.prisma.company.findUnique({
+        where: { id: message.userId }, // userId фактически companyId
+        include: { balance: true }
       });
 
-      if (!user || !user.company || !user.company.balance) {
-        LoggerUtil.error('billing-service', 'User or company balance not found', null, { userId: message.userId });
+      if (!company || !company.balance) {
+        LoggerUtil.error('billing-service', 'Company balance not found', null, { companyId: message.userId });
         return false;
       }
 
-      const balance = user.company.balance;
+      const balance = company.balance;
 
       if (balance.balance < message.amount) {
         LoggerUtil.error('billing-service', 'Insufficient balance', null, { 
@@ -209,7 +209,7 @@ export class CriticalOperationsService {
 
       // Выполняем списание
       const updatedBalance = await this.prisma.companyBalance.update({
-        where: { companyId: user.companyId },
+        where: { companyId: company.id },
         data: {
           balance: Number(balance.balance) - message.amount
         }
@@ -218,8 +218,7 @@ export class CriticalOperationsService {
       // Создаем транзакцию
       await this.prisma.transaction.create({
         data: {
-          companyId: user.companyId,
-          userId: message.userId,
+          companyId: company.id,
           type: 'DEBIT' as any,
           amount: message.amount,
           currency: message.currency,
@@ -256,21 +255,13 @@ export class CriticalOperationsService {
         amount: message.amount
       });
 
-      // Находим пользователя для получения companyId
-      const user = await this.prisma.user.findUnique({
-        where: { id: message.userId }
-      });
-
-      if (!user) {
-        LoggerUtil.error('billing-service', 'User not found for transaction', null, { userId: message.userId });
-        return false;
-      }
+      // userId фактически является companyId
+      const companyId = message.userId;
 
       // Создаем транзакцию
       const transaction = await this.prisma.transaction.create({
         data: {
-          companyId: user.companyId,
-          userId: message.userId,
+          companyId: companyId,
           type: message.type,
           amount: message.amount,
           currency: message.currency,
@@ -325,23 +316,23 @@ export class CriticalOperationsService {
         return true; // Уже обработан
       }
 
-      // Находим пользователя и его компанию
-      const user = await this.prisma.user.findUnique({
-        where: { id: message.userId },
-        include: { company: { include: { balance: true } } }
+      // Находим компанию
+      const company = await this.prisma.company.findUnique({
+        where: { id: message.userId }, // userId фактически companyId
+        include: { balance: true }
       });
 
-      if (!user || !user.company || !user.company.balance) {
-        LoggerUtil.error('billing-service', 'User or company balance not found for payment', null, { 
-          userId: message.userId 
+      if (!company || !company.balance) {
+        LoggerUtil.error('billing-service', 'Company balance not found for payment', null, { 
+          companyId: message.userId 
         });
         return false;
       }
 
-      const balance = user.company.balance;
+      const balance = company.balance;
 
       const updatedBalance = await this.prisma.companyBalance.update({
-        where: { companyId: user.companyId },
+        where: { companyId: company.id },
         data: {
           balance: balance.balance + message.amount
         }
@@ -350,8 +341,7 @@ export class CriticalOperationsService {
       // Создаем транзакцию
       await this.prisma.transaction.create({
         data: {
-          companyId: user.companyId,
-          userId: message.userId,
+          companyId: company.id,
           type: 'CREDIT' as any,
           amount: message.amount,
           currency: message.currency,

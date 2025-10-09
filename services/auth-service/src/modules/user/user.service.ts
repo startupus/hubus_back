@@ -11,15 +11,15 @@ export class UserService {
    */
   async getUserById(userId: string): Promise<User> {
     try {
-      const user = await this.prisma.user.findUnique({
+      const company = await this.prisma.company.findUnique({
         where: { id: userId },
       });
 
-      if (!user) {
-        throw new NotFoundException('User not found');
+      if (!company) {
+        throw new NotFoundException('Company not found');
       }
 
-      return this.mapUserToDto(user);
+      return this.mapCompanyToDto(company);
     } catch (error) {
       LoggerUtil.error('auth-service', 'Failed to get user by ID', error as Error, { userId });
       throw error;
@@ -31,15 +31,15 @@ export class UserService {
    */
   async getUserByEmail(email: string): Promise<User> {
     try {
-      const user = await this.prisma.user.findUnique({
+      const company = await this.prisma.company.findUnique({
         where: { email },
       });
 
-      if (!user) {
-        throw new NotFoundException('User not found');
+      if (!company) {
+        throw new NotFoundException('Company not found');
       }
 
-      return this.mapUserToDto(user);
+      return this.mapCompanyToDto(company);
     } catch (error) {
       LoggerUtil.error('auth-service', 'Failed to get user by email', error as Error, { email });
       throw error;
@@ -51,18 +51,18 @@ export class UserService {
    */
   async updateUser(userId: string, updateData: Partial<User>): Promise<User> {
     try {
-      const user = await this.prisma.user.update({
+      const company = await this.prisma.company.update({
         where: { id: userId },
         data: {
-        firstName: (updateData as any).firstName,
-        lastName: (updateData as any).lastName,
+        name: (updateData as any).firstName ? `${(updateData as any).firstName}'s Company` : undefined,
+        description: (updateData as any).lastName,
         metadata: updateData.metadata as any,
         },
       });
 
-      LoggerUtil.info('auth-service', 'User updated', { userId });
+      LoggerUtil.info('auth-service', 'Company updated', { userId });
 
-      return this.mapUserToDto(user);
+      return this.mapCompanyToDto(company);
     } catch (error) {
       LoggerUtil.error('auth-service', 'Failed to update user', error as Error, { userId });
       throw error;
@@ -74,20 +74,20 @@ export class UserService {
    */
   async deactivateUser(userId: string): Promise<void> {
     try {
-      await this.prisma.user.update({
+      await this.prisma.company.update({
         where: { id: userId },
         data: { isActive: false },
       });
 
       // Revoke all API keys
       await this.prisma.apiKey.updateMany({
-        where: { ownerId: userId, ownerType: 'user' },
+        where: { companyId: userId },
         data: { isActive: false },
       });
 
       // Revoke all refresh tokens
       await this.prisma.refreshToken.updateMany({
-        where: { userId: userId },
+        where: { companyId: userId },
         data: { isRevoked: true },
       });
 
@@ -103,7 +103,7 @@ export class UserService {
    */
   async deleteUser(userId: string): Promise<void> {
     try {
-      await this.prisma.user.delete({
+      await this.prisma.company.delete({
         where: { id: userId },
       });
 
@@ -115,20 +115,20 @@ export class UserService {
   }
 
   /**
-   * Map Prisma user to DTO
+   * Map Prisma company to DTO
    */
-  private mapUserToDto(user: any): User {
+  private mapCompanyToDto(company: any): User {
     return {
-      id: user.id,
-      email: user.email,
-      passwordHash: user.passwordHash,
-      isActive: user.isActive,
-      isVerified: user.isVerified,
-      role: user.role as UserRole,
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt,
-      lastLoginAt: user.lastLoginAt,
-      metadata: user.metadata,
+      id: company.id,
+      email: company.email,
+      passwordHash: company.passwordHash,
+      isActive: company.isActive,
+      isVerified: company.isVerified,
+      role: company.role as UserRole,
+      createdAt: company.createdAt,
+      updatedAt: company.updatedAt,
+      lastLoginAt: company.lastLoginAt,
+      metadata: company.metadata,
     };
   }
 }

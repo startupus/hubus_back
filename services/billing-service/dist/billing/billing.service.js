@@ -131,7 +131,6 @@ let BillingService = BillingService_1 = class BillingService {
                     const transaction = await tx.transaction.create({
                         data: {
                             companyId: currentBalance.companyId,
-                            userId: request.userId,
                             type: request.operation === 'add' ? billing_types_1.TransactionType.CREDIT : billing_types_1.TransactionType.DEBIT,
                             amount: amount,
                             currency: currentBalance.currency,
@@ -181,14 +180,16 @@ let BillingService = BillingService_1 = class BillingService {
     }
     async trackUsage(request) {
         try {
+            const initiatorCompanyId = request.userId;
             shared_1.LoggerUtil.debug('billing-service', 'Tracking usage', {
-                userId: request.userId,
+                initiatorCompanyId,
                 service: request.service,
                 resource: request.resource,
                 quantity: request.quantity
             });
+            const { payerId, initiatorId } = await this.determinePayerCompany(initiatorCompanyId);
             const costCalculation = await this.calculateCost({
-                userId: request.userId,
+                userId: payerId,
                 service: request.service,
                 resource: request.resource,
                 quantity: request.quantity || 1,
@@ -199,8 +200,8 @@ let BillingService = BillingService_1 = class BillingService {
             }
             const usageEvent = await this.prisma.usageEvent.create({
                 data: {
-                    companyId: request.companyId || 'default-company',
-                    userId: request.userId,
+                    companyId: payerId,
+                    initiatorCompanyId: initiatorId,
                     service: request.service,
                     resource: request.resource,
                     quantity: request.quantity || 1,
@@ -211,14 +212,28 @@ let BillingService = BillingService_1 = class BillingService {
                 }
             });
             await this.updateBalance({
-                userId: request.userId,
+                userId: payerId,
                 amount: costCalculation.cost,
                 operation: 'subtract',
-                description: `Usage: ${request.service}/${request.resource}`,
+                description: `Usage by ${initiatorId === payerId ? 'self' : initiatorId}: ${request.service}/${request.resource}`,
                 reference: usageEvent.id
             });
+            await this.prisma.transaction.create({
+                data: {
+                    companyId: payerId,
+                    initiatorCompanyId: initiatorId === payerId ? null : initiatorId,
+                    type: 'DEBIT',
+                    amount: new library_1.Decimal(costCalculation.cost),
+                    currency: costCalculation.currency || 'USD',
+                    description: `Usage: ${request.service}/${request.resource}`,
+                    status: 'COMPLETED',
+                    reference: usageEvent.id,
+                    processedAt: new Date()
+                }
+            });
             shared_1.LoggerUtil.info('billing-service', 'Usage tracked successfully', {
-                userId: request.userId,
+                payerId,
+                initiatorId,
                 service: request.service,
                 resource: request.resource,
                 cost: costCalculation.cost
@@ -318,8 +333,7 @@ let BillingService = BillingService_1 = class BillingService {
             });
             const transaction = await this.prisma.transaction.create({
                 data: {
-                    companyId: request.companyId || 'default-company',
-                    userId: request.userId,
+                    companyId: request.companyId || request.userId,
                     type: request.type,
                     amount: new library_1.Decimal(request.amount),
                     currency: request.currency || 'USD',
@@ -420,12 +434,12 @@ let BillingService = BillingService_1 = class BillingService {
             };
         }
     }
-    async getBillingReport(userId, startDate, endDate) {
+    async getBillingReport(companyId, startDate, endDate) {
         try {
-            shared_1.LoggerUtil.debug('billing-service', 'Generating billing report', { userId, startDate, endDate });
+            shared_1.LoggerUtil.debug('billing-service', 'Generating billing report', { companyId, startDate, endDate });
             const usageEvents = await this.prisma.usageEvent.findMany({
                 where: {
-                    userId,
+                    companyId,
                     timestamp: {
                         gte: startDate,
                         lte: endDate
@@ -434,7 +448,7 @@ let BillingService = BillingService_1 = class BillingService {
             });
             const transactions = await this.prisma.transaction.findMany({
                 where: {
-                    userId,
+                    companyId,
                     createdAt: {
                         gte: startDate,
                         lte: endDate
@@ -449,7 +463,7 @@ let BillingService = BillingService_1 = class BillingService {
                 byDay: this.groupByDay(usageEvents)
             };
             return {
-                userId,
+                userId: companyId,
                 period: { start: startDate, end: endDate },
                 totalUsage,
                 totalCost,
@@ -459,7 +473,7 @@ let BillingService = BillingService_1 = class BillingService {
             };
         }
         catch (error) {
-            shared_1.LoggerUtil.error('billing-service', 'Failed to generate billing report', error, { userId });
+            shared_1.LoggerUtil.error('billing-service', 'Failed to generate billing report', error, { companyId });
             throw error;
         }
     }
@@ -540,16 +554,16 @@ let BillingService = BillingService_1 = class BillingService {
         const random = Math.random().toString(36).substr(2, 9);
         return `txn_${timestamp}_${random}`;
     }
-    async checkUsageLimits(userId, service, resource) {
+    async checkUsageLimits(companyId, service, resource) {
         try {
-            const limits = await this.getUsageLimits(userId, service, resource);
+            const limits = await this.getUsageLimits(companyId, service, resource);
             if (!limits)
                 return true;
             const today = new Date();
             today.setHours(0, 0, 0, 0);
             const todayUsage = await this.prisma.usageEvent.aggregate({
                 where: {
-                    userId,
+                    companyId,
                     service,
                     resource,
                     timestamp: { gte: today }
@@ -562,30 +576,30 @@ let BillingService = BillingService_1 = class BillingService {
             return true;
         }
         catch (error) {
-            shared_1.LoggerUtil.error('billing-service', 'Usage limits check failed', error, { userId, service, resource });
+            shared_1.LoggerUtil.error('billing-service', 'Usage limits check failed', error, { companyId, service, resource });
             return false;
         }
     }
-    async getUsageLimits(userId, service, resource) {
+    async getUsageLimits(companyId, service, resource) {
         return null;
     }
-    async auditOperation(operation, userId, details) {
+    async auditOperation(operation, companyId, details) {
         try {
             shared_1.LoggerUtil.info('billing-service', 'Audit operation', {
                 operation,
-                userId,
+                companyId,
                 details,
                 timestamp: new Date().toISOString()
             });
         }
         catch (error) {
-            shared_1.LoggerUtil.error('billing-service', 'Audit operation failed', error, { operation, userId });
+            shared_1.LoggerUtil.error('billing-service', 'Audit operation failed', error, { operation, companyId });
         }
     }
-    async getTransactions(userId, limit = 50, offset = 0) {
+    async getTransactions(companyId, limit = 50, offset = 0) {
         try {
             const transactions = await this.prisma.transaction.findMany({
-                where: { userId },
+                where: { companyId },
                 orderBy: { createdAt: 'desc' },
                 take: limit,
                 skip: offset
@@ -593,7 +607,7 @@ let BillingService = BillingService_1 = class BillingService {
             return transactions;
         }
         catch (error) {
-            shared_1.LoggerUtil.error('billing-service', 'Failed to get transactions', error, { userId });
+            shared_1.LoggerUtil.error('billing-service', 'Failed to get transactions', error, { companyId });
             throw error;
         }
     }
@@ -634,6 +648,42 @@ let BillingService = BillingService_1 = class BillingService {
             throw error;
         }
     }
+    async determinePayerCompany(initiatorCompanyId) {
+        try {
+            const company = await this.prisma.company.findUnique({
+                where: { id: initiatorCompanyId },
+                include: {
+                    parentCompany: {
+                        select: { id: true }
+                    }
+                }
+            });
+            if (!company) {
+                throw new billing_exceptions_1.UserNotFoundException(`Company not found: ${initiatorCompanyId}`);
+            }
+            if (company.billingMode === 'PARENT_PAID' && company.parentCompany) {
+                shared_1.LoggerUtil.debug('billing-service', 'Billing mode: PARENT_PAID', {
+                    initiatorId: initiatorCompanyId,
+                    payerId: company.parentCompany.id
+                });
+                return {
+                    payerId: company.parentCompany.id,
+                    initiatorId: initiatorCompanyId
+                };
+            }
+            shared_1.LoggerUtil.debug('billing-service', 'Billing mode: SELF_PAID', {
+                companyId: initiatorCompanyId
+            });
+            return {
+                payerId: initiatorCompanyId,
+                initiatorId: initiatorCompanyId
+            };
+        }
+        catch (error) {
+            shared_1.LoggerUtil.error('billing-service', 'Failed to determine payer company', error, { initiatorCompanyId });
+            throw error;
+        }
+    }
     async refundPayment(refundData) {
         try {
             return {
@@ -648,6 +698,109 @@ let BillingService = BillingService_1 = class BillingService {
                 success: false,
                 error: 'Refund failed'
             };
+        }
+    }
+    async getCompanyUsersStatistics(companyId, startDate, endDate) {
+        try {
+            shared_1.LoggerUtil.debug('billing-service', 'Getting company child companies statistics', {
+                companyId,
+                startDate,
+                endDate
+            });
+            const childCompanies = await this.prisma.company.findMany({
+                where: { parentCompanyId: companyId },
+                select: {
+                    id: true,
+                    name: true,
+                    email: true,
+                    position: true,
+                    department: true,
+                    billingMode: true,
+                }
+            });
+            const childCompaniesStatistics = await Promise.all(childCompanies.map(async (child) => {
+                const usageEvents = await this.prisma.usageEvent.findMany({
+                    where: {
+                        initiatorCompanyId: child.id,
+                        timestamp: {
+                            gte: startDate,
+                            lte: endDate
+                        }
+                    }
+                });
+                const transactions = await this.prisma.transaction.findMany({
+                    where: {
+                        initiatorCompanyId: child.id,
+                        createdAt: {
+                            gte: startDate,
+                            lte: endDate
+                        }
+                    }
+                });
+                const totalRequests = usageEvents.length;
+                const totalCost = usageEvents.reduce((sum, event) => sum + Number(event.cost), 0);
+                const totalTransactions = transactions.length;
+                const byService = usageEvents.reduce((acc, event) => {
+                    if (!acc[event.service]) {
+                        acc[event.service] = {
+                            count: 0,
+                            cost: 0
+                        };
+                    }
+                    acc[event.service].count += 1;
+                    acc[event.service].cost += Number(event.cost);
+                    return acc;
+                }, {});
+                return {
+                    company: {
+                        id: child.id,
+                        name: child.name,
+                        email: child.email,
+                        position: child.position,
+                        department: child.department,
+                        billingMode: child.billingMode,
+                    },
+                    statistics: {
+                        totalRequests,
+                        totalCost,
+                        totalTransactions,
+                        byService
+                    }
+                };
+            }));
+            const totalUsageEvents = await this.prisma.usageEvent.findMany({
+                where: {
+                    companyId: companyId,
+                    timestamp: {
+                        gte: startDate,
+                        lte: endDate
+                    }
+                }
+            });
+            const companyTotals = {
+                totalChildCompanies: childCompanies.length,
+                totalRequests: totalUsageEvents.length,
+                totalCost: totalUsageEvents.reduce((sum, event) => sum + Number(event.cost), 0),
+                totalTransactions: await this.prisma.transaction.count({
+                    where: {
+                        companyId: companyId,
+                        createdAt: {
+                            gte: startDate,
+                            lte: endDate
+                        }
+                    }
+                }),
+            };
+            return {
+                companyId,
+                period: { start: startDate, end: endDate },
+                totals: companyTotals,
+                childCompanies: childCompaniesStatistics
+            };
+        }
+        catch (error) {
+            shared_1.LoggerUtil.error('billing-service', 'Failed to get company child companies statistics', error, { companyId });
+            throw error;
         }
     }
 };

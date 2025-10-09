@@ -58,39 +58,39 @@ export class ValidationService {
   }
 
   /**
-   * Валидация пользователя
+   * Валидация компании
    */
-  async validateUser(userId: string, prisma: any): Promise<void> {
-    if (!userId || typeof userId !== 'string') {
-      throw new UserNotFoundException(userId);
+  async validateCompany(companyId: string, prisma: any): Promise<void> {
+    if (!companyId || typeof companyId !== 'string') {
+      throw new UserNotFoundException(companyId);
     }
 
     try {
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
+      const company = await prisma.company.findUnique({
+        where: { id: companyId },
         select: { id: true, isActive: true }
       });
 
-      if (!user) {
-        throw new UserNotFoundException(userId);
+      if (!company) {
+        throw new UserNotFoundException(companyId);
       }
 
-      if (!user.isActive) {
-        throw new UserNotFoundException(userId);
+      if (!company.isActive) {
+        throw new UserNotFoundException(companyId);
       }
     } catch (error) {
       if (error instanceof UserNotFoundException) {
         throw error;
       }
-      LoggerUtil.error('billing-service', 'User validation error', error as Error, { userId });
-      throw new UserNotFoundException(userId);
+      LoggerUtil.error('billing-service', 'Company validation error', error as Error, { companyId });
+      throw new UserNotFoundException(companyId);
     }
   }
 
   /**
    * Валидация способа оплаты
    */
-  async validatePaymentMethod(paymentMethodId: string, userId: string, prisma: any): Promise<void> {
+  async validatePaymentMethod(paymentMethodId: string, companyId: string, prisma: any): Promise<void> {
     if (!paymentMethodId) {
       return; // Способ оплаты не обязателен
     }
@@ -99,7 +99,7 @@ export class ValidationService {
       const paymentMethod = await prisma.paymentMethod.findFirst({
         where: { 
           id: paymentMethodId,
-          userId: userId
+          companyId: companyId
         },
         select: { id: true, isActive: true }
       });
@@ -111,7 +111,7 @@ export class ValidationService {
       if (error instanceof PaymentMethodNotFoundException) {
         throw error;
       }
-      LoggerUtil.error('billing-service', 'Payment method validation error', error as Error, { paymentMethodId, userId });
+      LoggerUtil.error('billing-service', 'Payment method validation error', error as Error, { paymentMethodId, companyId });
       throw new PaymentMethodNotFoundException(paymentMethodId);
     }
   }
@@ -149,13 +149,13 @@ export class ValidationService {
     type: string,
     amount: number,
     currency: string,
-    userId: string
+    companyId: string
   ): void {
     this.validateAmount(amount, currency);
     this.validateCurrency(currency);
 
-    if (!userId || typeof userId !== 'string') {
-      throw new Error('Invalid user ID');
+    if (!companyId || typeof companyId !== 'string') {
+      throw new Error('Invalid company ID');
     }
 
     const validTypes = ['CREDIT', 'DEBIT', 'REFUND', 'CHARGEBACK'];

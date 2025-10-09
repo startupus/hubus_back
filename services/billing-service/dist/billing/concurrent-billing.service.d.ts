@@ -12,16 +12,16 @@ export declare class ConcurrentBillingService {
     private readonly transactionQueue;
     private readonly userLocks;
     constructor(prisma: PrismaService);
-    getBalance(userId: string): Promise<{
+    getBalance(companyId: string): Promise<{
         balance: Decimal;
         currency: string;
     }>;
-    updateBalance(userId: string, amount: Decimal, type: 'DEBIT' | 'CREDIT', description: string, metadata?: any): Promise<{
+    updateBalance(companyId: string, amount: Decimal, type: 'DEBIT' | 'CREDIT', description: string, metadata?: any): Promise<{
         success: boolean;
         newBalance: Decimal;
         transactionId?: string;
     }>;
-    processTransactionAsync(userId: string, amount: Decimal, type: 'DEBIT' | 'CREDIT', description: string, metadata?: any): Promise<boolean>;
+    processTransactionAsync(companyId: string, amount: Decimal, type: 'DEBIT' | 'CREDIT', description: string, metadata?: any): Promise<boolean>;
     processBatchTransactions(transactions: Array<{
         userId: string;
         amount: Decimal;

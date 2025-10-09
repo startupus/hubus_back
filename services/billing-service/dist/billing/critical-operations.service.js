@@ -116,15 +116,15 @@ let CriticalOperationsService = CriticalOperationsService_1 = class CriticalOper
                 userId: message.userId,
                 amount: message.amount
             });
-            const user = await this.prisma.user.findUnique({
+            const company = await this.prisma.company.findUnique({
                 where: { id: message.userId },
-                include: { company: { include: { balance: true } } }
+                include: { balance: true }
             });
-            if (!user || !user.company || !user.company.balance) {
-                shared_1.LoggerUtil.error('billing-service', 'User or company balance not found', null, { userId: message.userId });
+            if (!company || !company.balance) {
+                shared_1.LoggerUtil.error('billing-service', 'Company balance not found', null, { companyId: message.userId });
                 return false;
             }
-            const balance = user.company.balance;
+            const balance = company.balance;
             if (balance.balance < message.amount) {
                 shared_1.LoggerUtil.error('billing-service', 'Insufficient balance', null, {
                     userId: message.userId,
@@ -134,15 +134,14 @@ let CriticalOperationsService = CriticalOperationsService_1 = class CriticalOper
                 return false;
             }
             const updatedBalance = await this.prisma.companyBalance.update({
-                where: { companyId: user.companyId },
+                where: { companyId: company.id },
                 data: {
                     balance: Number(balance.balance) - message.amount
                 }
             });
             await this.prisma.transaction.create({
                 data: {
-                    companyId: user.companyId,
-                    userId: message.userId,
+                    companyId: company.id,
                     type: 'DEBIT',
                     amount: message.amount,
                     currency: message.currency,
@@ -173,17 +172,10 @@ let CriticalOperationsService = CriticalOperationsService_1 = class CriticalOper
                 type: message.type,
                 amount: message.amount
             });
-            const user = await this.prisma.user.findUnique({
-                where: { id: message.userId }
-            });
-            if (!user) {
-                shared_1.LoggerUtil.error('billing-service', 'User not found for transaction', null, { userId: message.userId });
-                return false;
-            }
+            const companyId = message.userId;
             const transaction = await this.prisma.transaction.create({
                 data: {
-                    companyId: user.companyId,
-                    userId: message.userId,
+                    companyId: companyId,
                     type: message.type,
                     amount: message.amount,
                     currency: message.currency,
@@ -229,27 +221,26 @@ let CriticalOperationsService = CriticalOperationsService_1 = class CriticalOper
                 });
                 return true;
             }
-            const user = await this.prisma.user.findUnique({
+            const company = await this.prisma.company.findUnique({
                 where: { id: message.userId },
-                include: { company: { include: { balance: true } } }
+                include: { balance: true }
             });
-            if (!user || !user.company || !user.company.balance) {
-                shared_1.LoggerUtil.error('billing-service', 'User or company balance not found for payment', null, {
-                    userId: message.userId
+            if (!company || !company.balance) {
+                shared_1.LoggerUtil.error('billing-service', 'Company balance not found for payment', null, {
+                    companyId: message.userId
                 });
                 return false;
             }
-            const balance = user.company.balance;
+            const balance = company.balance;
             const updatedBalance = await this.prisma.companyBalance.update({
-                where: { companyId: user.companyId },
+                where: { companyId: company.id },
                 data: {
                     balance: balance.balance + message.amount
                 }
             });
             await this.prisma.transaction.create({
                 data: {
-                    companyId: user.companyId,
-                    userId: message.userId,
+                    companyId: company.id,
                     type: 'CREDIT',
                     amount: message.amount,
                     currency: message.currency,

@@ -6,12 +6,16 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
     return c > 3 && r && Object.defineProperty(target, key, r), r;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.BillingGrpcController = void 0;
+exports.RabbitMQModule = void 0;
 const common_1 = require("@nestjs/common");
-let BillingGrpcController = class BillingGrpcController {
+const shared_1 = require("@ai-aggregator/shared");
+let RabbitMQModule = class RabbitMQModule {
 };
-exports.BillingGrpcController = BillingGrpcController;
-exports.BillingGrpcController = BillingGrpcController = __decorate([
-    (0, common_1.Controller)()
-], BillingGrpcController);
-//# sourceMappingURL=grpc.controller.js.map
+exports.RabbitMQModule = RabbitMQModule;
+exports.RabbitMQModule = RabbitMQModule = __decorate([
+    (0, common_1.Module)({
+        providers: [shared_1.RabbitMQClient],
+        exports: [shared_1.RabbitMQClient],
+    })
+], RabbitMQModule);
+//# sourceMappingURL=rabbitmq.module.js.map

@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
+import { HttpModule } from '@nestjs/axios';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
@@ -14,6 +15,10 @@ import { PrismaModule } from '../../common/prisma/prisma.module';
   imports: [
     PassportModule,
     PrismaModule,
+    HttpModule.register({
+      timeout: 10000,
+      maxRedirects: 3,
+    }),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({

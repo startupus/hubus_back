@@ -108,7 +108,7 @@ describe('HttpController', () => {
           provide: ValidationService,
           useValue: {
             validateAmount: jest.fn(),
-            validateUserId: jest.fn(),
+            validateCompany: jest.fn(),
             validateTransactionType: jest.fn(),
           },
         },

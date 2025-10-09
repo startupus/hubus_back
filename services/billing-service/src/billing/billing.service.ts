@@ -79,8 +79,8 @@ export class BillingService {
         };
       }
 
-      // Валидация пользователя
-      await this.validationService.validateUser(request.userId, this.prisma);
+      // Валидация компании
+      await this.validationService.validateCompany(request.userId, this.prisma);
 
       // Получаем баланс из БД
       const balance = await this.prisma.companyBalance.findUnique({
@@ -91,7 +91,9 @@ export class BillingService {
         // Создаем баланс для нового пользователя
         const newBalance = await this.prisma.companyBalance.create({
           data: {
-            companyId: request.userId,
+            company: {
+              connect: { id: request.userId }
+            },
             balance: 0,
             currency: 'USD',
             creditLimit: 0
@@ -158,8 +160,8 @@ export class BillingService {
           attempt
         });
 
-        // Валидация пользователя
-        await this.validationService.validateUser(request.userId, this.prisma);
+        // Валидация компании
+        await this.validationService.validateCompany(request.userId, this.prisma);
 
         const result = await this.prisma.$transaction(async (tx) => {
           // Получаем текущий баланс с блокировкой
@@ -206,8 +208,9 @@ export class BillingService {
           // Создаем запись транзакции
           const transaction = await tx.transaction.create({
             data: {
-              companyId: currentBalance.companyId,
-              userId: request.userId,
+              company: {
+                connect: { id: currentBalance.companyId }
+              },
               type: request.operation === 'add' ? TransactionType.CREDIT : TransactionType.DEBIT,
               amount: amount,
               currency: currentBalance.currency,
@@ -223,7 +226,7 @@ export class BillingService {
         });
 
         // Инвалидируем кэш баланса
-        this.cacheService.invalidateUserBalance(request.userId);
+        this.cacheService.invalidateCompanyBalance(request.userId);
 
         LoggerUtil.info('billing-service', 'Balance updated successfully', {
           userId: request.userId,
@@ -235,7 +238,7 @@ export class BillingService {
         return {
           success: true,
           balance: result.updatedBalance as UserBalance,
-          transaction: result.transaction as Transaction
+          transaction: result.transaction as any
         };
 
       } catch (error) {
@@ -273,16 +276,22 @@ export class BillingService {
    */
   async trackUsage(request: TrackUsageRequest): Promise<TrackUsageResponse> {
     try {
+      // userId теперь является companyId
+      const initiatorCompanyId = request.userId;
+      
       LoggerUtil.debug('billing-service', 'Tracking usage', {
-        userId: request.userId,
+        initiatorCompanyId,
         service: request.service,
         resource: request.resource,
         quantity: request.quantity
       });
 
+      // Определить кто платит
+      const { payerId, initiatorId } = await this.determinePayerCompany(initiatorCompanyId);
+
       // Calculate cost based on pricing rules
       const costCalculation = await this.calculateCost({
-        userId: request.userId,
+        userId: payerId, // Расчет на основе плательщика
         service: request.service,
         resource: request.resource,
         quantity: request.quantity || 1,
@@ -296,8 +305,12 @@ export class BillingService {
       // Create usage event
       const usageEvent = await this.prisma.usageEvent.create({
         data: {
-          companyId: request.companyId || 'default-company', // Временная заглушка
-          userId: request.userId,
+          company: {
+            connect: { id: payerId }
+          },
+          initiatorCompany: initiatorId ? {
+            connect: { id: initiatorId }
+          } : undefined,
           service: request.service,
           resource: request.resource,
           quantity: request.quantity || 1,
@@ -308,17 +321,37 @@ export class BillingService {
         }
       });
 
-      // Update user balance (subtract cost)
+      // Update payer balance (subtract cost)
       await this.updateBalance({
-        userId: request.userId,
+        userId: payerId,  // Списываем с плательщика
         amount: costCalculation.cost,
         operation: 'subtract',
-        description: `Usage: ${request.service}/${request.resource}`,
+        description: `Usage by ${initiatorId === payerId ? 'self' : initiatorId}: ${request.service}/${request.resource}`,
         reference: usageEvent.id
       });
 
+      // Create transaction record
+      await this.prisma.transaction.create({
+        data: {
+          company: {
+            connect: { id: payerId }
+          },
+          initiatorCompany: initiatorId && initiatorId !== payerId ? {
+            connect: { id: initiatorId }
+          } : undefined,
+          type: 'DEBIT',
+          amount: new Decimal(costCalculation.cost),
+          currency: costCalculation.currency || 'USD',
+          description: `Usage: ${request.service}/${request.resource}`,
+          status: 'COMPLETED',
+          reference: usageEvent.id,
+          processedAt: new Date()
+        }
+      });
+
       LoggerUtil.info('billing-service', 'Usage tracked successfully', {
-        userId: request.userId,
+        payerId,
+        initiatorId,
         service: request.service,
         resource: request.resource,
         cost: costCalculation.cost
@@ -326,7 +359,7 @@ export class BillingService {
 
       return {
         success: true,
-        usageEvent: usageEvent as UsageEvent,
+        usageEvent: usageEvent as any,
         cost: costCalculation.cost
       };
     } catch (error) {
@@ -435,13 +468,19 @@ export class BillingService {
       LoggerUtil.debug('billing-service', 'Creating transaction', {
         userId: request.userId,
         type: request.type,
-        amount: request.amount
+        amount: request.amount,
+        fullRequest: request
       });
+
+      if (!request.userId) {
+        throw new Error('userId is required');
+      }
 
       const transaction = await this.prisma.transaction.create({
         data: {
-          companyId: request.companyId || 'default-company', // Временная заглушка
-          userId: request.userId,
+          company: {
+            connect: { id: request.userId }
+          },
           type: request.type,
           amount: new Decimal(request.amount),
           currency: request.currency || 'USD',
@@ -449,7 +488,9 @@ export class BillingService {
           reference: request.reference,
           status: TransactionStatus.PENDING,
           metadata: request.metadata,
-          paymentMethodId: request.paymentMethodId
+          paymentMethod: request.paymentMethodId ? {
+            connect: { id: request.paymentMethodId }
+          } : undefined
         }
       });
 
@@ -481,7 +522,7 @@ export class BillingService {
 
       return {
         success: true,
-        transaction: transaction as Transaction
+        transaction: transaction as any
       };
     } catch (error) {
       LoggerUtil.error('billing-service', 'Failed to create transaction', error as Error, { userId: request.userId });
@@ -562,14 +603,14 @@ export class BillingService {
   /**
    * Get billing report
    */
-  async getBillingReport(userId: string, startDate: Date, endDate: Date): Promise<BillingReport> {
+  async getBillingReport(companyId: string, startDate: Date, endDate: Date): Promise<BillingReport> {
     try {
-      LoggerUtil.debug('billing-service', 'Generating billing report', { userId, startDate, endDate });
+      LoggerUtil.debug('billing-service', 'Generating billing report', { companyId, startDate, endDate });
 
       // Get usage events
       const usageEvents = await this.prisma.usageEvent.findMany({
         where: {
-          userId,
+          companyId,
           timestamp: {
             gte: startDate,
             lte: endDate
@@ -580,7 +621,7 @@ export class BillingService {
       // Get transactions
       const transactions = await this.prisma.transaction.findMany({
         where: {
-          userId,
+          companyId,
           createdAt: {
             gte: startDate,
             lte: endDate
@@ -600,16 +641,16 @@ export class BillingService {
       };
 
       return {
-        userId,
+        userId: companyId, // для обратной совместимости
         period: { start: startDate, end: endDate },
         totalUsage,
         totalCost,
         currency: 'USD',
         breakdown,
-        transactions: transactions as Transaction[]
+        transactions: transactions as any
       };
     } catch (error) {
-      LoggerUtil.error('billing-service', 'Failed to generate billing report', error as Error, { userId });
+      LoggerUtil.error('billing-service', 'Failed to generate billing report', error as Error, { companyId });
       throw error;
     }
   }
@@ -737,10 +778,10 @@ export class BillingService {
   /**
    * Проверка лимитов использования
    */
-  private async checkUsageLimits(userId: string, service: string, resource: string): Promise<boolean> {
+  private async checkUsageLimits(companyId: string, service: string, resource: string): Promise<boolean> {
     try {
       // Получаем лимиты из конфигурации или БД
-      const limits = await this.getUsageLimits(userId, service, resource);
+      const limits = await this.getUsageLimits(companyId, service, resource);
       
       if (!limits) return true; // Лимиты не установлены
 
@@ -750,7 +791,7 @@ export class BillingService {
       
       const todayUsage = await this.prisma.usageEvent.aggregate({
         where: {
-          userId,
+          companyId,
           service,
           resource,
           timestamp: { gte: today }
@@ -764,7 +805,7 @@ export class BillingService {
 
       return true;
     } catch (error) {
-      LoggerUtil.error('billing-service', 'Usage limits check failed', error as Error, { userId, service, resource });
+      LoggerUtil.error('billing-service', 'Usage limits check failed', error as Error, { companyId, service, resource });
       return false;
     }
   }
@@ -772,7 +813,7 @@ export class BillingService {
   /**
    * Получение лимитов использования
    */
-  private async getUsageLimits(userId: string, service: string, resource: string): Promise<any> {
+  private async getUsageLimits(companyId: string, service: string, resource: string): Promise<any> {
     // TODO: Реализовать получение лимитов из БД или конфигурации
     return null;
   }
@@ -782,28 +823,28 @@ export class BillingService {
    */
   private async auditOperation(
     operation: string,
-    userId: string,
+    companyId: string,
     details: Record<string, any>
   ): Promise<void> {
     try {
       LoggerUtil.info('billing-service', 'Audit operation', {
         operation,
-        userId,
+        companyId,
         details,
         timestamp: new Date().toISOString()
       });
     } catch (error) {
-      LoggerUtil.error('billing-service', 'Audit operation failed', error as Error, { operation, userId });
+      LoggerUtil.error('billing-service', 'Audit operation failed', error as Error, { operation, companyId });
     }
   }
 
   /**
-   * Получить все транзакции пользователя
+   * Получить все транзакции компании
    */
-  async getTransactions(userId: string, limit: number = 50, offset: number = 0): Promise<Transaction[]> {
+  async getTransactions(companyId: string, limit: number = 50, offset: number = 0): Promise<Transaction[]> {
     try {
       const transactions = await this.prisma.transaction.findMany({
-        where: { userId },
+        where: { companyId },
         orderBy: { createdAt: 'desc' },
         take: limit,
         skip: offset
@@ -811,7 +852,7 @@ export class BillingService {
 
       return transactions as any;
     } catch (error) {
-      LoggerUtil.error('billing-service', 'Failed to get transactions', error as Error, { userId });
+      LoggerUtil.error('billing-service', 'Failed to get transactions', error as Error, { companyId });
       throw error;
     }
   }
@@ -866,6 +907,52 @@ export class BillingService {
   }
 
   /**
+   * Определить компанию-плательщика
+   * Логика: если у компании режим PARENT_PAID и есть родитель - платит родитель,
+   * иначе платит сама компания
+   */
+  async determinePayerCompany(initiatorCompanyId: string): Promise<{ payerId: string; initiatorId: string }> {
+    try {
+      const company = await this.prisma.company.findUnique({
+        where: { id: initiatorCompanyId },
+        include: { 
+          parentCompany: {
+            select: { id: true }
+          }
+        }
+      });
+
+      if (!company) {
+        throw new UserNotFoundException(`Company not found: ${initiatorCompanyId}`);
+      }
+
+      // Если режим PARENT_PAID и есть родитель - платит родитель
+      if (company.billingMode === 'PARENT_PAID' && company.parentCompany) {
+        LoggerUtil.debug('billing-service', 'Billing mode: PARENT_PAID', {
+          initiatorId: initiatorCompanyId,
+          payerId: company.parentCompany.id
+        });
+        return {
+          payerId: company.parentCompany.id,
+          initiatorId: initiatorCompanyId
+        };
+      }
+
+      // Иначе платит сама
+      LoggerUtil.debug('billing-service', 'Billing mode: SELF_PAID', {
+        companyId: initiatorCompanyId
+      });
+      return {
+        payerId: initiatorCompanyId,
+        initiatorId: initiatorCompanyId
+      };
+    } catch (error) {
+      LoggerUtil.error('billing-service', 'Failed to determine payer company', error as Error, { initiatorCompanyId });
+      throw error;
+    }
+  }
+
+  /**
    * Обработать возврат платежа
    */
   async refundPayment(refundData: { transactionId: string; amount: Decimal; reason: string }): Promise<{ success: boolean; refundId?: string; status?: TransactionStatus; error?: string }> {
@@ -882,6 +969,130 @@ export class BillingService {
         success: false,
         error: 'Refund failed'
       };
+    }
+  }
+
+  /**
+   * Get company child companies statistics
+   */
+  async getCompanyUsersStatistics(companyId: string, startDate: Date, endDate: Date) {
+    try {
+      LoggerUtil.debug('billing-service', 'Getting company child companies statistics', { 
+        companyId, 
+        startDate, 
+        endDate 
+      });
+
+      // Get all child companies
+      const childCompanies = await this.prisma.company.findMany({
+        where: { parentCompanyId: companyId },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          position: true,
+          department: true,
+          billingMode: true,
+        }
+      });
+
+      // Get usage statistics for each child company
+      const childCompaniesStatistics = await Promise.all(
+        childCompanies.map(async (child) => {
+          // Get usage events initiated by this child
+          const usageEvents = await this.prisma.usageEvent.findMany({
+            where: {
+              initiatorCompanyId: child.id,
+              timestamp: {
+                gte: startDate,
+                lte: endDate
+              }
+            }
+          });
+
+          // Get transactions for this child
+          const transactions = await this.prisma.transaction.findMany({
+            where: {
+              initiatorCompanyId: child.id,
+              createdAt: {
+                gte: startDate,
+                lte: endDate
+              }
+            }
+          });
+
+          // Calculate totals
+          const totalRequests = usageEvents.length;
+          const totalCost = usageEvents.reduce((sum, event) => sum + Number(event.cost), 0);
+          const totalTransactions = transactions.length;
+
+          // Group by service
+          const byService = usageEvents.reduce((acc, event) => {
+            if (!acc[event.service]) {
+              acc[event.service] = {
+                count: 0,
+                cost: 0
+              };
+            }
+            acc[event.service].count += 1;
+            acc[event.service].cost += Number(event.cost);
+            return acc;
+          }, {} as Record<string, { count: number; cost: number }>);
+
+          return {
+            company: {
+              id: child.id,
+              name: child.name,
+              email: child.email,
+              position: child.position,
+              department: child.department,
+              billingMode: child.billingMode,
+            },
+            statistics: {
+              totalRequests,
+              totalCost,
+              totalTransactions,
+              byService
+            }
+          };
+        })
+      );
+
+      // Calculate company totals (including requests paid by this company)
+      const totalUsageEvents = await this.prisma.usageEvent.findMany({
+        where: {
+          companyId: companyId, // Все что оплачено этой компанией
+          timestamp: {
+            gte: startDate,
+            lte: endDate
+          }
+        }
+      });
+
+      const companyTotals = {
+        totalChildCompanies: childCompanies.length,
+        totalRequests: totalUsageEvents.length,
+        totalCost: totalUsageEvents.reduce((sum, event) => sum + Number(event.cost), 0),
+        totalTransactions: await this.prisma.transaction.count({
+          where: {
+            companyId: companyId,
+            createdAt: {
+              gte: startDate,
+              lte: endDate
+            }
+          }
+        }),
+      };
+
+      return {
+        companyId,
+        period: { start: startDate, end: endDate },
+        totals: companyTotals,
+        childCompanies: childCompaniesStatistics
+      };
+    } catch (error) {
+      LoggerUtil.error('billing-service', 'Failed to get company child companies statistics', error as Error, { companyId });
+      throw error;
     }
   }
 }

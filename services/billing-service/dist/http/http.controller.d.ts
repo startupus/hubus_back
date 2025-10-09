@@ -79,4 +79,55 @@ export declare class HttpController {
         message: string;
         report: import("../types/billing.types").BillingReport;
     }>;
+    getCompanyBalance(companyId: string): Promise<{
+        success: boolean;
+        message: string;
+        balance: import("../types/billing.types").UserBalance;
+    }>;
+    getCompanyTransactions(companyId: string, limit?: number, offset?: number): Promise<{
+        success: boolean;
+        message: string;
+        transactions: import("../types/billing.types").Transaction[];
+    }>;
+    getCompanyUsersStatistics(companyId: string, startDate?: string, endDate?: string): Promise<{
+        success: boolean;
+        message: string;
+        statistics: {
+            companyId: string;
+            period: {
+                start: Date;
+                end: Date;
+            };
+            totals: {
+                totalChildCompanies: number;
+                totalRequests: number;
+                totalCost: number;
+                totalTransactions: number;
+            };
+            childCompanies: {
+                company: {
+                    id: string;
+                    name: string;
+                    email: string;
+                    position: string;
+                    department: string;
+                    billingMode: import(".prisma/client").$Enums.BillingMode;
+                };
+                statistics: {
+                    totalRequests: number;
+                    totalCost: number;
+                    totalTransactions: number;
+                    byService: Record<string, {
+                        count: number;
+                        cost: number;
+                    }>;
+                };
+            }[];
+        };
+    }>;
+    getCompanyBillingReport(companyId: string, startDate?: string, endDate?: string): Promise<{
+        success: boolean;
+        message: string;
+        report: import("../types/billing.types").BillingReport;
+    }>;
 }

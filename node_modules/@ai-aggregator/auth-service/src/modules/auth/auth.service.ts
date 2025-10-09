@@ -19,52 +19,42 @@ export class AuthService {
    */
   async register(registerDto: RegisterDto): Promise<AuthResult> {
     try {
-      // Check if user already exists
-      const existingUser = await this.prisma.user.findUnique({
+      // Check if company already exists
+      const existingCompany = await this.prisma.company.findUnique({
         where: { email: registerDto.email },
       });
 
-      if (existingUser) {
-        throw new ConflictException('User with this email already exists');
+      if (existingCompany) {
+        throw new ConflictException('Company with this email already exists');
       }
 
       // Hash password
       const passwordHash = await CryptoUtil.hashPassword(registerDto.password);
 
-      // Create company first
+      // Create company
       const company = await this.prisma.company.create({
         data: {
-          name: 'Default Company',
+          name: registerDto.firstName ? `${registerDto.firstName}'s Company` : 'Default Company',
           email: registerDto.email,
           passwordHash: passwordHash,
           description: 'Default company for individual users',
           isActive: true,
-        }
-      });
-
-      // Create user
-      const user = await this.prisma.user.create({
-        data: {
-          email: registerDto.email,
-          passwordHash,
-          firstName: registerDto.firstName,
-          lastName: registerDto.lastName,
-          companyId: company.id,
           isVerified: !this.configService.get('REQUIRE_EMAIL_VERIFICATION', false),
+          role: 'company',
         },
       });
 
       // Generate tokens
-      const tokens = await this.generateTokens(user as any);
+      const tokens = await this.generateTokens(company as any);
 
       // Log security event
-      await this.logSecurityEvent(user.id, 'USER_CREATED', 'LOW', 'User account created');
+      await this.logSecurityEvent(company.id, 'USER_CREATED', 'LOW', 'Company account created');
 
-      LoggerUtil.info('auth-service', 'User registered successfully', { userId: user.id, email: user.email });
+      LoggerUtil.info('auth-service', 'Company registered successfully', { companyId: company.id, email: company.email });
 
       return {
         success: true,
-        user: this.mapUserToDto(user),
+        user: this.mapCompanyToDto(company),
         token: tokens.accessToken,
         refreshToken: tokens.refreshToken,
       };
@@ -79,31 +69,31 @@ export class AuthService {
    */
   async login(loginDto: LoginDto, ipAddress?: string, userAgent?: string): Promise<AuthResult> {
     try {
-      // Find user
-      const user = await this.prisma.user.findUnique({
+      // Find company
+      const company = await this.prisma.company.findUnique({
         where: { email: loginDto.email },
       });
 
-      if (!user) {
-        await this.logFailedLoginAttempt(loginDto.email, ipAddress, userAgent, 'User not found');
+      if (!company) {
+        await this.logFailedLoginAttempt(loginDto.email, ipAddress, userAgent, 'Company not found');
         throw new UnauthorizedException('Invalid credentials');
       }
 
-      // Check if user is active
-      if (!user.isActive) {
+      // Check if company is active
+      if (!company.isActive) {
         await this.logFailedLoginAttempt(loginDto.email, ipAddress, userAgent, 'Account deactivated');
         throw new UnauthorizedException('Account is deactivated');
       }
 
       // Verify password
-      const isPasswordValid = await CryptoUtil.comparePassword(loginDto.password, user.passwordHash);
+      const isPasswordValid = await CryptoUtil.comparePassword(loginDto.password, company.passwordHash);
       if (!isPasswordValid) {
         await this.logFailedLoginAttempt(loginDto.email, ipAddress, userAgent, 'Invalid password');
         throw new UnauthorizedException('Invalid credentials');
       }
 
       // Check if email verification is required
-      if (this.configService.get('REQUIRE_EMAIL_VERIFICATION', false) && !user.isVerified) {
+      if (this.configService.get('REQUIRE_EMAIL_VERIFICATION', false) && !company.isVerified) {
         return {
           success: false,
           error: 'Email verification required',
@@ -112,22 +102,22 @@ export class AuthService {
       }
 
       // Generate tokens
-      const tokens = await this.generateTokens(user as any);
+      const tokens = await this.generateTokens(company as any);
 
       // Update last login
-      await this.prisma.user.update({
-        where: { id: user.id },
+      await this.prisma.company.update({
+        where: { id: company.id },
         data: { lastLoginAt: new Date() },
       });
 
       // Log successful login
-      await this.logSecurityEvent(user.id, 'LOGIN', 'LOW', 'User logged in successfully', ipAddress, userAgent);
+      await this.logSecurityEvent(company.id, 'LOGIN', 'LOW', 'Company logged in successfully', ipAddress, userAgent);
 
-      LoggerUtil.info('auth-service', 'User logged in successfully', { userId: user.id, email: user.email });
+      LoggerUtil.info('auth-service', 'Company logged in successfully', { companyId: company.id, email: company.email });
 
       return {
         success: true,
-        user: this.mapUserToDto(user),
+        user: this.mapCompanyToDto(company),
         token: tokens.accessToken,
         refreshToken: tokens.refreshToken,
       };
@@ -145,7 +135,7 @@ export class AuthService {
       // Find refresh token
       const tokenRecord = await this.prisma.refreshToken.findUnique({
         where: { token: refreshToken },
-        include: { user: true },
+        include: { company: true },
       });
 
       if (!tokenRecord || tokenRecord.isRevoked || tokenRecord.expiresAt < new Date()) {
@@ -153,12 +143,12 @@ export class AuthService {
       }
 
       // Check if user is still active
-      if (!tokenRecord.user.isActive) {
-        throw new UnauthorizedException('User account is deactivated');
+      if (!tokenRecord.company.isActive) {
+        throw new UnauthorizedException('Company account is deactivated');
       }
 
       // Generate new tokens
-      const tokens = await this.generateTokens(tokenRecord.user as any);
+      const tokens = await this.generateTokens(tokenRecord.company as any);
 
       // Revoke old refresh token
       await this.prisma.refreshToken.update({
@@ -166,7 +156,7 @@ export class AuthService {
         data: { isRevoked: true },
       });
 
-      LoggerUtil.info('auth-service', 'Token refreshed successfully', { userId: tokenRecord.user.id });
+      LoggerUtil.info('auth-service', 'Token refreshed successfully', { companyId: tokenRecord.company.id });
 
       return tokens;
     } catch (error) {
@@ -182,12 +172,12 @@ export class AuthService {
     try {
       const payload = this.jwtService.verify(token) as JwtPayload;
       
-      // Check if user still exists and is active
-      const user = await this.prisma.user.findUnique({
+      // Check if company still exists and is active
+      const company = await this.prisma.company.findUnique({
         where: { id: payload.sub },
       });
 
-      if (!user || !user.isActive) {
+      if (!company || !company.isActive) {
         return null;
       }
 
@@ -203,18 +193,18 @@ export class AuthService {
    */
   async changePassword(userId: string, changePasswordDto: ChangePasswordDto): Promise<void> {
     try {
-      const user = await this.prisma.user.findUnique({
+      const company = await this.prisma.company.findUnique({
         where: { id: userId },
       });
 
-      if (!user) {
-        throw new BadRequestException('User not found');
+      if (!company) {
+        throw new BadRequestException('Company not found');
       }
 
       // Verify current password
       const isCurrentPasswordValid = await CryptoUtil.comparePassword(
         changePasswordDto.currentPassword,
-        user.passwordHash
+        company.passwordHash
       );
 
       if (!isCurrentPasswordValid) {
@@ -225,14 +215,14 @@ export class AuthService {
       const newPasswordHash = await CryptoUtil.hashPassword(changePasswordDto.newPassword);
 
       // Update password
-      await this.prisma.user.update({
+      await this.prisma.company.update({
         where: { id: userId },
         data: { passwordHash: newPasswordHash },
       });
 
       // Revoke all refresh tokens
       await this.prisma.refreshToken.updateMany({
-        where: { userId: userId },
+        where: { companyId: userId },
         data: { isRevoked: true },
       });
 
@@ -251,12 +241,12 @@ export class AuthService {
    */
   async requestPasswordReset(requestPasswordResetDto: ResetPasswordRequestDto): Promise<void> {
     try {
-      const user = await this.prisma.user.findUnique({
+      const company = await this.prisma.company.findUnique({
         where: { email: requestPasswordResetDto.email },
       });
 
-      if (!user) {
-        // Don't reveal if user exists or not
+      if (!company) {
+        // Don't reveal if company exists or not
         return;
       }
 
@@ -266,18 +256,17 @@ export class AuthService {
       // Save reset token
       await this.prisma.passwordResetToken.create({
         data: {
-          ownerId: user.id,
-          ownerType: 'user',
+          companyId: company.id,
           token: resetToken,
           expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
         },
       });
 
       // TODO: Send email with reset token
-      LoggerUtil.info('auth-service', 'Password reset requested', { userId: user.id, email: user.email });
+      LoggerUtil.info('auth-service', 'Password reset requested', { companyId: company.id, email: company.email });
 
       // Log security event
-      await this.logSecurityEvent(user.id, 'PASSWORD_RESET_REQUESTED', 'MEDIUM', 'Password reset requested');
+      await this.logSecurityEvent(company.id, 'PASSWORD_RESET_REQUESTED', 'MEDIUM', 'Password reset requested');
     } catch (error) {
       LoggerUtil.error('auth-service', 'Password reset request failed', error as Error, { email: requestPasswordResetDto.email });
       throw error;
@@ -292,7 +281,7 @@ export class AuthService {
       // Find reset token
       const resetToken = await this.prisma.passwordResetToken.findUnique({
         where: { token: resetPasswordDto.token },
-        include: { user: true },
+        include: { company: true },
       });
 
       if (!resetToken || resetToken.isUsed || resetToken.expiresAt < new Date()) {
@@ -304,8 +293,8 @@ export class AuthService {
 
       // Update password and mark token as used
       await this.prisma.$transaction([
-        this.prisma.user.update({
-          where: { id: resetToken.user?.id || resetToken.ownerId },
+        this.prisma.company.update({
+          where: { id: resetToken.companyId },
           data: { passwordHash: newPasswordHash },
         }),
         this.prisma.passwordResetToken.update({
@@ -316,14 +305,14 @@ export class AuthService {
 
       // Revoke all refresh tokens
       await this.prisma.refreshToken.updateMany({
-        where: { userId: resetToken.user?.id || resetToken.ownerId },
+        where: { companyId: resetToken.companyId },
         data: { isRevoked: true },
       });
 
       // Log security event
-      await this.logSecurityEvent(resetToken.user?.id || resetToken.ownerId, 'PASSWORD_RESET', 'HIGH', 'Password reset completed');
+      await this.logSecurityEvent(resetToken.companyId, 'PASSWORD_RESET', 'HIGH', 'Password reset completed');
 
-      LoggerUtil.info('auth-service', 'Password reset completed', { userId: resetToken.user?.id || resetToken.ownerId });
+      LoggerUtil.info('auth-service', 'Password reset completed', { companyId: resetToken.companyId });
     } catch (error) {
       LoggerUtil.error('auth-service', 'Password reset failed', error as Error);
       throw error;
@@ -338,7 +327,7 @@ export class AuthService {
       // Find verification token
       const verificationToken = await this.prisma.emailVerificationToken.findUnique({
         where: { token: verifyEmailDto.token },
-        include: { user: true },
+        include: { company: true },
       });
 
       if (!verificationToken || verificationToken.isUsed || verificationToken.expiresAt < new Date()) {
@@ -347,8 +336,8 @@ export class AuthService {
 
       // Mark email as verified and token as used
       await this.prisma.$transaction([
-        this.prisma.user.update({
-          where: { id: verificationToken.user?.id || verificationToken.ownerId },
+        this.prisma.company.update({
+          where: { id: verificationToken.companyId },
           data: { isVerified: true },
         }),
         this.prisma.emailVerificationToken.update({
@@ -358,9 +347,9 @@ export class AuthService {
       ]);
 
       // Log security event
-      await this.logSecurityEvent(verificationToken.user?.id || verificationToken.ownerId, 'EMAIL_VERIFIED', 'LOW', 'Email verified successfully');
+      await this.logSecurityEvent(verificationToken.companyId, 'EMAIL_VERIFIED', 'LOW', 'Email verified successfully');
 
-      LoggerUtil.info('auth-service', 'Email verified successfully', { userId: verificationToken.user?.id || verificationToken.ownerId });
+      LoggerUtil.info('auth-service', 'Email verified successfully', { companyId: verificationToken.companyId });
     } catch (error) {
       LoggerUtil.error('auth-service', 'Email verification failed', error as Error);
       throw error;
@@ -402,7 +391,7 @@ export class AuthService {
     // Save refresh token
     await this.prisma.refreshToken.create({
       data: {
-        userId: user.id,
+        companyId: user.id,
         token: refreshToken,
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
       },
@@ -412,20 +401,20 @@ export class AuthService {
   }
 
   /**
-   * Map Prisma user to DTO
+   * Map Prisma company to DTO
    */
-  private mapUserToDto(user: any): User {
+  private mapCompanyToDto(company: any): User {
     return {
-      id: user.id,
-      email: user.email,
-      passwordHash: user.passwordHash,
-      isActive: user.isActive,
-      isVerified: user.isVerified,
-      role: user.role,
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt,
-      lastLoginAt: user.lastLoginAt,
-      metadata: user.metadata,
+      id: company.id,
+      email: company.email,
+      passwordHash: company.passwordHash,
+      isActive: company.isActive,
+      isVerified: company.isVerified,
+      role: company.role,
+      createdAt: company.createdAt,
+      updatedAt: company.updatedAt,
+      lastLoginAt: company.lastLoginAt,
+      metadata: company.metadata,
     };
   }
 
@@ -437,7 +426,6 @@ export class AuthService {
       await this.prisma.loginAttempt.create({
         data: {
           email,
-          ownerType: 'user',
           ipAddress: ipAddress || 'unknown',
           userAgent: userAgent || 'unknown',
           success: false,
@@ -453,7 +441,7 @@ export class AuthService {
    * Log security event
    */
   private async logSecurityEvent(
-    userId: string,
+    companyId: string,
     type: string,
     severity: string,
     description: string,
@@ -463,8 +451,7 @@ export class AuthService {
     try {
       await this.prisma.securityEvent.create({
         data: {
-          ownerId: userId,
-          ownerType: 'user',
+          companyId: companyId,
           type: type as any,
           severity: severity as any,
           description,
@@ -487,8 +474,7 @@ export class AuthService {
       
       const keyRecord = await this.prisma.apiKey.create({
         data: {
-          ownerId: userId,
-          ownerType: 'user',
+          companyId: userId,
           name,
           key: hashedKey,
           expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 1 year
@@ -520,7 +506,7 @@ export class AuthService {
   async getApiKeys(userId: string): Promise<any> {
     try {
       const apiKeys = await this.prisma.apiKey.findMany({
-        where: { ownerId: userId, ownerType: 'user', isActive: true },
+        where: { companyId: userId, isActive: true },
         select: {
           id: true,
           name: true,
@@ -547,7 +533,7 @@ export class AuthService {
   async revokeApiKey(userId: string, keyId: string): Promise<any> {
     try {
       await this.prisma.apiKey.update({
-        where: { id: keyId, ownerId: userId, ownerType: 'user' },
+        where: { id: keyId, companyId: userId },
         data: { isActive: false },
       });
 

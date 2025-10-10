@@ -125,18 +125,18 @@ export class CacheService {
   // Специализированные методы для биллинга
 
   /**
-   * Кэшировать баланс пользователя
+   * Кэшировать баланс компании
    */
-  cacheUserBalance(userId: string, balance: any): void {
-    const key = `balance:${userId}`;
+  cacheCompanyBalance(companyId: string, balance: any): void {
+    const key = `balance:${companyId}`;
     this.set(key, balance, 2 * 60 * 1000); // 2 минуты
   }
 
   /**
-   * Получить кэшированный баланс пользователя
+   * Получить кэшированный баланс компании
    */
-  getCachedUserBalance(userId: string): any | null {
-    const key = `balance:${userId}`;
+  getCachedCompanyBalance(companyId: string): any | null {
+    const key = `balance:${companyId}`;
     return this.get(key);
   }
 

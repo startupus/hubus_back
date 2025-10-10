@@ -6,6 +6,7 @@ import { BillingModule } from './billing/billing.module';
 import { BillingHttpModule } from './http/http.module';
 import { HealthModule } from './health/health.module';
 import { PrismaModule } from './common/prisma/prisma.module';
+import { PricingModule } from './pricing/pricing.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { PrismaModule } from './common/prisma/prisma.module';
     BillingModule,
     BillingHttpModule,
     HealthModule,
+    PricingModule,
   ],
 })
 export class AppModule {}

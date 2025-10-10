@@ -1,122 +1,236 @@
-# AI Aggregator - Микросервисная архитектура
+# AI Aggregator Platform Documentation
 
-## 🎯 Обзор
+Welcome to the comprehensive documentation for the AI Aggregator Platform - a microservices-based system that provides unified access to multiple AI providers with advanced features.
 
-AI Aggregator - это масштабируемая микросервисная платформа для агрегации и маршрутизации запросов к различным AI провайдерам (OpenAI, OpenRouter, Yandex и др.).
+## 📚 Documentation Index
 
-## 🏗️ Архитектура
+### 🚀 Getting Started
+- **[Main README](../README.md)** - Project overview, quick start, and basic usage
+- **[API Documentation](./API.md)** - Complete API reference with examples
+- **[Deployment Guide](./DEPLOYMENT.md)** - Production deployment instructions
 
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   API Gateway   │────│  Auth Service   │    │ Billing Service │
-│   (Port: 3000)  │    │  (Port: 3001)   │    │  (Port: 3004)   │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-         │                       │                       │
-         │              ┌─────────────────┐               │
-         └──────────────│Provider Orchestrator│───────────┘
-                        │   (Port: 3002)   │
-                        └─────────────────┘
-                                 │
-                        ┌─────────────────┐
-                        │  Proxy Service  │
-                        │  (Port: 3003)   │
-                        └─────────────────┘
-                                 │
-                        ┌─────────────────┐
-                        │Analytics Service │
-                        │  (Port: 3005)    │
-                        └─────────────────┘
-```
+### 🏗️ Architecture & Design
+- **[Architecture Documentation](./ARCHITECTURE.md)** - System architecture and design patterns
+- **[Service Documentation](./services/)** - Individual service documentation
 
-## 🚀 Быстрый старт
+### 🧪 Testing & Quality
+- **[Testing Guide](./TESTING.md)** - Comprehensive testing documentation
+- **[Testing Cleanup Report](../TESTING_CLEANUP_FINAL_REPORT.md)** - Testing system status
 
-### Предварительные требования
-- Docker & Docker Compose
+## 🎯 Quick Navigation
+
+### For Developers
+1. **Start Here**: [Main README](../README.md)
+2. **API Reference**: [API Documentation](./API.md)
+3. **Architecture**: [Architecture Documentation](./ARCHITECTURE.md)
+4. **Testing**: [Testing Guide](./TESTING.md)
+
+### For DevOps
+1. **Deployment**: [Deployment Guide](./DEPLOYMENT.md)
+2. **Architecture**: [Architecture Documentation](./ARCHITECTURE.md)
+3. **Monitoring**: See deployment guide for monitoring setup
+
+### For API Users
+1. **API Reference**: [API Documentation](./API.md)
+2. **Authentication**: See API documentation for auth flows
+3. **Examples**: Code examples in API documentation
+
+## 🔧 Service Documentation
+
+### Core Services
+- **[API Gateway](./services/api-gateway.md)** - Main entry point and request routing
+- **[Auth Service](./services/auth-service.md)** - Authentication and user management
+- **[Billing Service](./services/billing-service.md)** - Billing and transaction management
+
+### Integration Services
+- **[Provider Orchestrator](./services/provider-orchestrator.md)** - AI provider management
+- **[Proxy Service](./services/proxy-service.md)** - AI provider integration
+- **[Analytics Service](./services/analytics-service.md)** - Usage analytics and monitoring
+
+## 📊 Key Features
+
+### 🔐 Authentication & Security
+- JWT-based authentication
+- API key management
+- Role-based access control
+- Secure password handling
+
+### 💰 Advanced Billing
+- Pay-as-you-go billing
+- Subscription plans with discounts
+- Real-time balance tracking
+- Referral commission system
+
+### 🤖 AI Provider Integration
+- Multi-provider support (OpenAI, OpenRouter, etc.)
+- Intelligent provider selection
+- Cost optimization
+- Failover and retry logic
+
+### 📈 Analytics & Monitoring
+- Usage analytics
+- Performance monitoring
+- Cost tracking
+- Health checks
+
+## 🚀 Quick Start
+
+### Prerequisites
 - Node.js 18+
-- PostgreSQL
-- Redis
+- Docker & Docker Compose
+- PostgreSQL 14+
 - RabbitMQ
 
-### Запуск системы
+### Installation
 ```bash
-# Клонирование репозитория
-git clone https://github.com/teramisuslik/MVP.git
-cd MVP
+# Clone repository
+git clone <repository-url>
+cd ai-aggregator-platform
 
-# Запуск всех сервисов
+# Install dependencies
+npm install
+
+# Start services
 docker-compose up -d
 
-# Проверка статуса
-docker-compose ps
+# Verify installation
+curl http://localhost:3000/health
 ```
 
-## 📚 Документация сервисов
-
-- [API Gateway](services/api-gateway/README.md) - Единая точка входа
-- [Auth Service](services/auth-service/README.md) - Аутентификация и авторизация
-- [Billing Service](services/billing-service/README.md) - Биллинг и тарификация
-- [Provider Orchestrator](services/provider-orchestrator/README.md) - Маршрутизация запросов
-- [Proxy Service](services/proxy-service/README.md) - Проксирование к AI провайдерам
-- [Analytics Service](services/analytics-service/README.md) - Аналитика и мониторинг
-
-## 🔧 API Endpoints
-
-### Основные endpoints
-- `POST /v1/auth/register` - Регистрация пользователя
-- `POST /v1/auth/login` - Вход в систему
-- `POST /v1/chat/completions` - AI запросы
-- `GET /v1/billing/balance` - Баланс пользователя
-- `GET /v1/analytics/dashboard` - Аналитическая панель
-
-## 🛠️ Разработка
-
-### Структура проекта
-```
-services/
-├── api-gateway/          # Единая точка входа
-├── auth-service/         # Аутентификация
-├── billing-service/      # Биллинг
-├── provider-orchestrator/ # Маршрутизация
-├── proxy-service/        # Проксирование
-├── analytics-service/    # Аналитика
-└── shared/              # Общие библиотеки
+### First API Call
+```bash
+# Register a company
+curl -X POST http://localhost:3000/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "My Company",
+    "email": "company@example.com",
+    "password": "securepassword"
+  }'
 ```
 
-### Технологический стек
-- **Backend**: NestJS, TypeScript
-- **Database**: PostgreSQL, Redis
-- **Message Queue**: RabbitMQ
-- **Containerization**: Docker
-- **Monitoring**: Prometheus, Grafana
+## 📖 API Quick Reference
 
-## 📊 Мониторинг
+### Authentication
+```http
+POST /v1/auth/register    # Register company
+POST /v1/auth/login       # Login company
+POST /v1/auth/api-keys    # Create API key
+```
 
-- **Health Checks**: `/health` на каждом сервисе
-- **Metrics**: Prometheus endpoints
-- **Logs**: Централизованное логирование
-- **Tracing**: Распределенная трассировка
+### Billing
+```http
+GET  /v1/billing/balance      # Get balance
+POST /v1/billing/balance      # Update balance
+GET  /v1/billing/transactions # Get transactions
+```
 
-## 🔒 Безопасность
+### AI Chat
+```http
+POST /v1/chat/completions  # Send chat request
+GET  /v1/models           # Get available models
+```
 
-- JWT токены для аутентификации
-- API ключи для внешних интеграций
-- Валидация всех входящих данных
-- Rate limiting и защита от DDoS
+## 🧪 Testing
 
-## 📈 Масштабирование
+### Run Tests
+```bash
+# All tests
+npm test
 
-- Горизонтальное масштабирование сервисов
-- Load balancing через API Gateway
-- Кэширование в Redis
-- Асинхронная обработка через RabbitMQ
+# Specific test types
+npm run test:unit
+npm run test:integration
+npm run test:e2e
 
-## 🤝 Вклад в проект
+# With coverage
+npm run test:coverage
+```
 
-1. Fork репозитория
-2. Создайте feature branch
-3. Внесите изменения
-4. Создайте Pull Request
+### Test Structure
+- **Unit Tests**: Individual component testing
+- **Integration Tests**: Service interaction testing
+- **E2E Tests**: Complete workflow testing
 
-## 📄 Лицензия
+## 🔧 Configuration
 
-MIT License - см. [LICENSE](LICENSE) файл для деталей.
+### Environment Variables
+```env
+# Database
+AUTH_DATABASE_URL=postgresql://user:pass@localhost:5432/auth
+BILLING_DATABASE_URL=postgresql://user:pass@localhost:5432/billing
+
+# JWT
+JWT_SECRET=your-jwt-secret
+JWT_EXPIRES_IN=1h
+
+# RabbitMQ
+RABBITMQ_URL=amqp://user:pass@localhost:5672
+
+# AI Providers
+OPENAI_API_KEY=your-openai-key
+OPENROUTER_API_KEY=your-openrouter-key
+```
+
+## 📊 Monitoring
+
+### Health Checks
+- **API Gateway**: `http://localhost:3000/health`
+- **Auth Service**: `http://localhost:3001/health`
+- **Billing Service**: `http://localhost:3004/health`
+
+### Metrics
+- Request counts and response times
+- Error rates and success rates
+- Resource usage (CPU, memory, disk)
+- Business metrics (usage, costs)
+
+## 🚀 Deployment
+
+### Docker (Recommended)
+```bash
+# Development
+docker-compose up -d
+
+# Production
+docker-compose -f docker-compose.prod.yml up -d
+```
+
+### Manual Deployment
+See [Deployment Guide](./DEPLOYMENT.md) for detailed instructions.
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests for new functionality
+5. Run the test suite
+6. Submit a pull request
+
+## 📄 License
+
+This project is licensed under the MIT License.
+
+## 🆘 Support
+
+- **Documentation**: Check this documentation first
+- **Issues**: Create an issue in the repository
+- **Discussions**: Use GitHub discussions for questions
+
+## 🔄 Changelog
+
+### v1.0.0 (December 2024)
+- Initial release with core functionality
+- Multi-provider AI integration
+- Advanced billing system
+- Referral system
+- API key management
+- Provider preferences
+- Comprehensive testing suite
+
+---
+
+**Last Updated**: December 2024  
+**Documentation Version**: 1.0.0  
+**Platform Version**: 1.0.0

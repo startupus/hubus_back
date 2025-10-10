@@ -3,6 +3,7 @@
 
 generator client {
   provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
 }
 
 datasource db {
@@ -34,6 +35,11 @@ model Company {
   position        String?   // Должность в родительской компании
   department      String?   // Отдел в родительской компании
 
+  // Referral fields
+  referralCode    String?   @unique @map("referral_code") // Уникальный реферальный код компании
+  referredBy      String?   @map("referred_by") // ID компании, которая пригласила
+  referralCodeId  String?   @map("referral_code_id") // ID реферального кода, по которому зарегистрировались
+
   // Relations
   parentCompany   Company?  @relation("CompanyHierarchy", fields: [parentCompanyId], references: [id], onDelete: SetNull)
   childCompanies  Company[] @relation("CompanyHierarchy")
@@ -43,10 +49,19 @@ model Company {
   passwordResets  PasswordResetToken[]
   emailVerifications EmailVerificationToken[]
   securityEvents  SecurityEvent[]
+  providerPreferences CompanyProviderPreference[]
+  
+  // Referral relations
+  referralCodes   ReferralCode[] @relation("ReferralCodeOwner")
+  referredCompanies Company[] @relation("ReferredBy")
+  usedReferralCode ReferralCode? @relation("UsedReferralCode", fields: [referralCodeId], references: [id], onDelete: SetNull)
+  referrer        Company?  @relation("ReferredBy", fields: [referredBy], references: [id], onDelete: SetNull)
 
   @@map("companies")
   @@index([parentCompanyId])
   @@index([email])
+  @@index([referralCode])
+  @@index([referredBy])
 }
 
 
@@ -186,4 +201,53 @@ enum SecuritySeverity {
   MEDIUM
   HIGH
   CRITICAL
+}
+
+model ReferralCode {
+  id              String    @id @default(uuid())
+  code            String    @unique // Уникальный код для ссылки
+  companyId       String    @map("company_id") // Владелец реферального кода
+  isActive        Boolean   @default(true) @map("is_active")
+  maxUses         Int?      @map("max_uses") // Максимальное количество использований (null = без ограничений)
+  usedCount       Int       @default(0) @map("used_count") // Количество использований
+  expiresAt       DateTime? @map("expires_at") // Дата истечения (null = бессрочно)
+  description     String?   // Описание кода
+  metadata        Json?     // Дополнительные данные
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  owner           Company   @relation("ReferralCodeOwner", fields: [companyId], references: [id], onDelete: Cascade)
+  usedBy          Company[] @relation("UsedReferralCode") // Компании, которые использовали этот код
+
+  @@map("referral_codes")
+  @@index([companyId])
+  @@index([code])
+  @@index([isActive])
+  @@index([expiresAt])
+}
+
+model CompanyProviderPreference {
+  id              String    @id @default(uuid())
+  companyId       String    @map("company_id")
+  model           String    // Название модели (например, "gpt-4")
+  preferredProvider String  @map("preferred_provider") // Предпочитаемый провайдер (например, "openai", "openrouter")
+  isActive        Boolean   @default(true) @map("is_active")
+  priority        Int       @default(1) // Приоритет (1 = высший)
+  fallbackProviders String[] @map("fallback_providers") // Резервные провайдеры
+  costLimit       Decimal?  @map("cost_limit") @db.Decimal(10, 6) // Лимит стоимости за токен
+  maxTokens       Int?      @map("max_tokens") // Максимальное количество токенов
+  metadata        Json?     // Дополнительные настройки
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  company         Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@map("company_provider_preferences")
+  @@index([companyId])
+  @@index([model])
+  @@index([preferredProvider])
+  @@index([isActive])
+  @@unique([companyId, model]) // Один предпочтение на модель для компании
 }

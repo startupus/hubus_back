@@ -11,7 +11,7 @@ export class ApiKeyService {
   /**
    * Create a new API key
    */
-  async createApiKey(userId: string, createApiKeyDto: CreateApiKeyDto): Promise<ApiKey> {
+  async createApiKey(companyId: string, createApiKeyDto: CreateApiKeyDto): Promise<ApiKey> {
     try {
       // Generate API key
       const key = CryptoUtil.generateApiKey();
@@ -20,7 +20,7 @@ export class ApiKeyService {
       const apiKey = await this.prisma.apiKey.create({
         data: {
           key,
-          companyId: userId,
+          companyId: companyId,
           name: createApiKeyDto.name,
           description: createApiKeyDto.description,
           permissions: createApiKeyDto.permissions || [],
@@ -29,17 +29,17 @@ export class ApiKeyService {
       });
 
       // Log security event
-      await this.logSecurityEvent(userId, 'API_KEY_CREATED', 'MEDIUM', `API key created: ${createApiKeyDto.name}`);
+      await this.logSecurityEvent(companyId, 'API_KEY_CREATED', 'MEDIUM', `API key created: ${createApiKeyDto.name}`);
 
       LoggerUtil.info('auth-service', 'API key created', { 
         apiKeyId: apiKey.id, 
-        userId, 
+        companyId, 
         name: createApiKeyDto.name 
       });
 
       return this.mapApiKeyToDto(apiKey);
     } catch (error) {
-      LoggerUtil.error('auth-service', 'Failed to create API key', error as Error, { userId });
+      LoggerUtil.error('auth-service', 'Failed to create API key', error as Error, { companyId });
       throw error;
     }
   }
@@ -47,12 +47,12 @@ export class ApiKeyService {
   /**
    * Get API key by ID
    */
-  async getApiKeyById(apiKeyId: string, userId: string): Promise<ApiKey> {
+  async getApiKeyById(apiKeyId: string, companyId: string): Promise<ApiKey> {
     try {
       const apiKey = await this.prisma.apiKey.findFirst({
         where: {
           id: apiKeyId,
-          companyId: userId,
+          companyId: companyId,
         },
       });
 
@@ -62,7 +62,7 @@ export class ApiKeyService {
 
       return this.mapApiKeyToDto(apiKey);
     } catch (error) {
-      LoggerUtil.error('auth-service', 'Failed to get API key', error as Error, { apiKeyId, userId });
+      LoggerUtil.error('auth-service', 'Failed to get API key', error as Error, { apiKeyId, companyId });
       throw error;
     }
   }
@@ -91,19 +91,19 @@ export class ApiKeyService {
   /**
    * List user's API keys
    */
-  async listApiKeys(userId: string, page: number = 1, limit: number = 10): Promise<{ apiKeys: ApiKey[]; total: number }> {
+  async listApiKeys(companyId: string, page: number = 1, limit: number = 10): Promise<{ apiKeys: ApiKey[]; total: number }> {
     try {
       const skip = (page - 1) * limit;
 
       const [apiKeys, total] = await Promise.all([
         this.prisma.apiKey.findMany({
-          where: { companyId: userId },
+          where: { companyId: companyId },
           skip,
           take: limit,
           orderBy: { createdAt: 'desc' },
         }),
         this.prisma.apiKey.count({
-          where: { companyId: userId },
+          where: { companyId: companyId },
         }),
       ]);
 
@@ -112,7 +112,7 @@ export class ApiKeyService {
         total,
       };
     } catch (error) {
-      LoggerUtil.error('auth-service', 'Failed to list API keys', error as Error, { userId });
+      LoggerUtil.error('auth-service', 'Failed to list API keys', error as Error, { companyId });
       throw error;
     }
   }
@@ -120,13 +120,13 @@ export class ApiKeyService {
   /**
    * Update API key
    */
-  async updateApiKey(apiKeyId: string, userId: string, updateApiKeyDto: UpdateApiKeyDto): Promise<ApiKey> {
+  async updateApiKey(apiKeyId: string, companyId: string, updateApiKeyDto: UpdateApiKeyDto): Promise<ApiKey> {
     try {
       // Check if API key exists and belongs to user
       const existingApiKey = await this.prisma.apiKey.findFirst({
         where: {
           id: apiKeyId,
-          companyId: userId,
+          companyId: companyId,
         },
       });
 
@@ -146,17 +146,17 @@ export class ApiKeyService {
       });
 
       // Log security event
-      await this.logSecurityEvent(userId, 'API_KEY_UPDATED', 'LOW', `API key updated: ${apiKey.name}`);
+      await this.logSecurityEvent(companyId, 'API_KEY_UPDATED', 'LOW', `API key updated: ${apiKey.name}`);
 
       LoggerUtil.info('auth-service', 'API key updated', { 
         apiKeyId, 
-        userId, 
+        companyId, 
         name: apiKey.name 
       });
 
       return this.mapApiKeyToDto(apiKey);
     } catch (error) {
-      LoggerUtil.error('auth-service', 'Failed to update API key', error as Error, { apiKeyId, userId });
+      LoggerUtil.error('auth-service', 'Failed to update API key', error as Error, { apiKeyId, companyId });
       throw error;
     }
   }
@@ -164,13 +164,13 @@ export class ApiKeyService {
   /**
    * Revoke API key
    */
-  async revokeApiKey(apiKeyId: string, userId: string): Promise<void> {
+  async revokeApiKey(apiKeyId: string, companyId: string): Promise<void> {
     try {
       // Check if API key exists and belongs to user
       const existingApiKey = await this.prisma.apiKey.findFirst({
         where: {
           id: apiKeyId,
-          companyId: userId,
+          companyId: companyId,
         },
       });
 
@@ -185,15 +185,15 @@ export class ApiKeyService {
       });
 
       // Log security event
-      await this.logSecurityEvent(userId, 'API_KEY_REVOKED', 'MEDIUM', `API key revoked: ${existingApiKey.name}`);
+      await this.logSecurityEvent(companyId, 'API_KEY_REVOKED', 'MEDIUM', `API key revoked: ${existingApiKey.name}`);
 
       LoggerUtil.info('auth-service', 'API key revoked', { 
         apiKeyId, 
-        userId, 
+        companyId, 
         name: existingApiKey.name 
       });
     } catch (error) {
-      LoggerUtil.error('auth-service', 'Failed to revoke API key', error as Error, { apiKeyId, userId });
+      LoggerUtil.error('auth-service', 'Failed to revoke API key', error as Error, { apiKeyId, companyId });
       throw error;
     }
   }
@@ -201,7 +201,7 @@ export class ApiKeyService {
   /**
    * Validate API key
    */
-  async validateApiKey(key: string): Promise<{ isValid: boolean; userId?: string; permissions?: Permission[] }> {
+  async validateApiKey(key: string): Promise<{ isValid: boolean; companyId?: string; permissions?: Permission[] }> {
     try {
       const apiKey = await this.prisma.apiKey.findUnique({
         where: { key },
@@ -225,7 +225,7 @@ export class ApiKeyService {
 
       return {
         isValid: true,
-        userId: apiKey.companyId,
+        companyId: apiKey.companyId,
         permissions: apiKey.permissions as Permission[],
       };
     } catch (error) {
@@ -241,7 +241,7 @@ export class ApiKeyService {
     return {
       id: apiKey.id,
       key: apiKey.key,
-      userId: apiKey.userId,
+      companyId: apiKey.companyId,
       name: apiKey.name,
       description: apiKey.description,
       isActive: apiKey.isActive,
@@ -257,7 +257,7 @@ export class ApiKeyService {
    * Log security event
    */
   private async logSecurityEvent(
-    userId: string,
+    companyId: string,
     type: string,
     severity: string,
     description: string
@@ -265,7 +265,7 @@ export class ApiKeyService {
     try {
       await this.prisma.securityEvent.create({
         data: {
-          companyId: userId,
+          companyId: companyId,
           type: type as any,
           severity: severity as any,
           description,

@@ -1,129 +1,278 @@
 # API Documentation
 
-## 🎯 Обзор
+## 🔗 Base URLs
 
-AI Aggregator предоставляет RESTful API для взаимодействия с AI провайдерами. Все запросы проходят через API Gateway, который обеспечивает аутентификацию, маршрутизацию и агрегацию ответов.
+- **API Gateway**: `http://localhost:3000`
+- **Auth Service**: `http://localhost:3001`
+- **Billing Service**: `http://localhost:3004`
 
-## 🔐 Аутентификация
+## 🔐 Authentication
 
-### JWT Токены
-```bash
-# В заголовке
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+All API endpoints (except health checks and registration) require authentication using JWT tokens or API keys.
 
-# Или в query параметре
-?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+### JWT Authentication
+```http
+Authorization: Bearer <jwt-token>
 ```
 
-### API Ключи
-```bash
-# В заголовке
-Authorization: Bearer ak_live_1234567890abcdef...
-
-# Или в query параметре
-?api_key=ak_live_1234567890abcdef...
+### API Key Authentication
+```http
+X-API-Key: <api-key>
+# OR
+?api_key=<api-key>
 ```
 
-## 📡 Base URL
+## 📋 API Endpoints
 
-```
-Production: https://api.ai-aggregator.com
-Development: http://localhost:3000
-```
+### Authentication Service
 
-## 🔄 Аутентификация
-
-### Регистрация пользователя
+#### Register Company
 ```http
 POST /v1/auth/register
 Content-Type: application/json
 
 {
-  "email": "user@example.com",
-  "password": "securePassword123",
-  "firstName": "John",
-  "lastName": "Doe"
+  "name": "Company Name",
+  "email": "company@example.com",
+  "password": "securepassword",
+  "description": "Company description",
+  "website": "https://company.com",
+  "phone": "+1234567890",
+  "address": {
+    "city": "New York",
+    "country": "USA"
+  },
+  "referralLink": "https://example.com/ref/ABC123" // Optional
 }
 ```
 
-**Ответ:**
+**Response:**
 ```json
 {
   "success": true,
-  "message": "User registered successfully",
-  "data": {
-    "id": "b6793877-246a-4e3a-807f-50e494aa5188",
-    "email": "user@example.com",
-    "firstName": "John",
-    "lastName": "Doe",
+  "message": "Company registered successfully",
+  "company": {
+    "id": "company-id",
+    "name": "Company Name",
+    "email": "company@example.com",
     "isActive": true,
-    "createdAt": "2025-10-05T22:30:00Z"
-  }
+    "isVerified": true,
+    "role": "company",
+    "createdAt": "2024-12-01T00:00:00.000Z"
+  },
+  "accessToken": "jwt-token"
 }
 ```
 
-### Вход в систему
+#### Login Company
 ```http
 POST /v1/auth/login
 Content-Type: application/json
 
 {
-  "email": "user@example.com",
-  "password": "securePassword123"
+  "email": "company@example.com",
+  "password": "securepassword"
 }
 ```
 
-**Ответ:**
+**Response:**
 ```json
 {
   "success": true,
   "message": "Login successful",
-  "data": {
-    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "user": {
-      "id": "b6793877-246a-4e3a-807f-50e494aa5188",
-      "email": "user@example.com",
-      "firstName": "John",
-      "lastName": "Doe"
-    }
+  "accessToken": "jwt-token",
+  "company": {
+    "id": "company-id",
+    "name": "Company Name",
+    "email": "company@example.com",
+    "isActive": true,
+    "isVerified": true,
+    "role": "company"
   }
 }
 ```
 
-### Создание API ключа
+#### Create API Key
 ```http
 POST /v1/auth/api-keys
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+Authorization: Bearer <jwt-token>
 Content-Type: application/json
 
 {
   "name": "My API Key",
-  "expiresAt": "2025-12-31T23:59:59Z"
+  "description": "API key for external integration",
+  "expiresAt": "2025-12-01T00:00:00.000Z" // Optional
 }
 ```
 
-**Ответ:**
+**Response:**
 ```json
 {
   "success": true,
-  "message": "API key created successfully",
-  "data": {
-    "id": "uuid",
-    "key": "ak_live_1234567890abcdef...",
+  "apiKey": {
+    "id": "api-key-id",
     "name": "My API Key",
-    "expiresAt": "2025-12-31T23:59:59Z",
-    "createdAt": "2025-10-05T22:30:00Z"
+    "key": "ak_xxxxxxxxxxxxxxxx",
+    "isActive": true,
+    "expiresAt": "2025-12-01T00:00:00.000Z",
+    "createdAt": "2024-12-01T00:00:00.000Z"
   }
 }
 ```
 
-## 🤖 AI Запросы
+#### List API Keys
+```http
+GET /v1/auth/api-keys
+Authorization: Bearer <jwt-token>
+```
 
-### Chat Completions
+**Response:**
+```json
+{
+  "success": true,
+  "apiKeys": [
+    {
+      "id": "api-key-id",
+      "name": "My API Key",
+      "key": "ak_xxxxxxxxxxxxxxxx",
+      "isActive": true,
+      "expiresAt": "2025-12-01T00:00:00.000Z",
+      "createdAt": "2024-12-01T00:00:00.000Z"
+    }
+  ]
+}
+```
+
+### Billing Service
+
+#### Get Balance
+```http
+GET /v1/billing/balance
+Authorization: Bearer <jwt-token>
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "balance": {
+    "id": "balance-id",
+    "userId": "company-id",
+    "balance": 100.0,
+    "currency": "USD",
+    "updatedAt": "2024-12-01T00:00:00.000Z"
+  }
+}
+```
+
+#### Update Balance
+```http
+POST /v1/billing/balance
+Authorization: Bearer <jwt-token>
+Content-Type: application/json
+
+{
+  "amount": 100.0,
+  "operation": "CREDIT" // or "DEBIT"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Balance updated successfully",
+  "balance": {
+    "id": "balance-id",
+    "userId": "company-id",
+    "balance": 200.0,
+    "currency": "USD",
+    "updatedAt": "2024-12-01T00:00:00.000Z"
+  }
+}
+```
+
+#### Get Transactions
+```http
+GET /v1/billing/transactions?limit=50&offset=0
+Authorization: Bearer <jwt-token>
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "transactions": [
+    {
+      "id": "transaction-id",
+      "userId": "company-id",
+      "type": "DEBIT",
+      "amount": 10.0,
+      "currency": "USD",
+      "description": "AI request",
+      "provider": "openai",
+      "metadata": {
+        "model": "gpt-4",
+        "tokens": 100
+      },
+      "createdAt": "2024-12-01T00:00:00.000Z"
+    }
+  ],
+  "pagination": {
+    "total": 100,
+    "limit": 50,
+    "offset": 0,
+    "hasMore": true
+  }
+}
+```
+
+#### Create Transaction
+```http
+POST /v1/billing/transactions
+Authorization: Bearer <jwt-token>
+Content-Type: application/json
+
+{
+  "type": "DEBIT",
+  "amount": 10.0,
+  "currency": "USD",
+  "description": "AI request",
+  "provider": "openai",
+  "metadata": {
+    "model": "gpt-4",
+    "tokens": 100
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "transaction": {
+    "id": "transaction-id",
+    "userId": "company-id",
+    "type": "DEBIT",
+    "amount": 10.0,
+    "currency": "USD",
+    "description": "AI request",
+    "provider": "openai",
+    "metadata": {
+      "model": "gpt-4",
+      "tokens": 100
+    },
+    "createdAt": "2024-12-01T00:00:00.000Z"
+  }
+}
+```
+
+### AI Chat Service
+
+#### Send Chat Request
 ```http
 POST /v1/chat/completions
-Authorization: Bearer ak_live_1234567890abcdef...
+Authorization: Bearer <jwt-token>
 Content-Type: application/json
 
 {
@@ -134,12 +283,13 @@ Content-Type: application/json
       "content": "Hello, how are you?"
     }
   ],
-  "max_tokens": 100,
-  "temperature": 0.7
+  "max_tokens": 1000,
+  "temperature": 0.7,
+  "stream": false
 }
 ```
 
-**Ответ:**
+**Response:**
 ```json
 {
   "id": "chatcmpl-123",
@@ -157,20 +307,20 @@ Content-Type: application/json
     }
   ],
   "usage": {
-    "prompt_tokens": 9,
-    "completion_tokens": 12,
-    "total_tokens": 21
+    "prompt_tokens": 10,
+    "completion_tokens": 20,
+    "total_tokens": 30
   }
 }
 ```
 
-### Список моделей
+#### Get Available Models
 ```http
 GET /v1/models
-Authorization: Bearer ak_live_1234567890abcdef...
+Authorization: Bearer <jwt-token>
 ```
 
-**Ответ:**
+**Response:**
 ```json
 {
   "success": true,
@@ -178,194 +328,137 @@ Authorization: Bearer ak_live_1234567890abcdef...
     {
       "id": "gpt-4",
       "name": "GPT-4",
-      "provider": "OpenAI",
-      "status": "available",
-      "costPerToken": 0.00003,
-      "maxTokens": 4096
+      "provider": "openai",
+      "description": "Most capable GPT-4 model",
+      "pricing": {
+        "input": 0.03,
+        "output": 0.06
+      }
     },
     {
       "id": "gpt-3.5-turbo",
       "name": "GPT-3.5 Turbo",
-      "provider": "OpenAI",
-      "status": "available",
-      "costPerToken": 0.00002,
-      "maxTokens": 4096
+      "provider": "openai",
+      "description": "Fast and efficient GPT-3.5 model",
+      "pricing": {
+        "input": 0.001,
+        "output": 0.002
+      }
     }
   ]
 }
 ```
 
-## 💰 Биллинг
+### Referral System
 
-### Получение баланса
+#### Get Referral Stats
 ```http
-GET /v1/billing/balance
-Authorization: Bearer ak_live_1234567890abcdef...
+GET /v1/referrals/stats
+Authorization: Bearer <jwt-token>
 ```
 
-**Ответ:**
+**Response:**
 ```json
 {
   "success": true,
-  "message": "Balance retrieved successfully",
-  "balance": {
-    "id": "uuid",
-    "userId": "b6793877-246a-4e3a-807f-50e494aa5188",
-    "balance": "100.00",
-    "currency": "USD",
-    "creditLimit": null,
-    "lastUpdated": "2025-10-05T22:17:59.301Z"
+  "stats": {
+    "totalReferrals": 10,
+    "activeReferrals": 8,
+    "totalCommission": 150.0,
+    "referralCode": "ABC123",
+    "referralLink": "https://example.com/ref/ABC123"
   }
 }
 ```
 
-### История транзакций
+#### Get Referral History
 ```http
-GET /v1/billing/history?limit=10&offset=0
-Authorization: Bearer ak_live_1234567890abcdef...
+GET /v1/referrals/history
+Authorization: Bearer <jwt-token>
 ```
 
-**Ответ:**
+**Response:**
 ```json
 {
   "success": true,
-  "transactions": [
+  "referrals": [
     {
-      "id": "uuid",
-      "type": "DEBIT",
-      "amount": 0.05,
-      "description": "GPT-4 usage",
-      "provider": "openai",
-      "model": "gpt-4",
-      "tokens": 30,
-      "createdAt": "2025-10-05T22:30:00Z"
+      "id": "referral-id",
+      "referredCompany": {
+        "id": "company-id",
+        "name": "Referred Company",
+        "email": "referred@example.com"
+      },
+      "commissionAmount": 15.0,
+      "status": "ACTIVE",
+      "createdAt": "2024-12-01T00:00:00.000Z"
     }
-  ],
-  "pagination": {
-    "total": 150,
-    "limit": 10,
-    "offset": 0,
-    "hasMore": true
-  }
+  ]
 }
 ```
 
-### Пополнение баланса
+### Provider Preferences
+
+#### Set Provider Preference
 ```http
-POST /v1/billing/balance/credit
-Authorization: Bearer ak_live_1234567890abcdef...
+POST /v1/provider-preferences
+Authorization: Bearer <jwt-token>
 Content-Type: application/json
 
 {
-  "amount": 50.0,
-  "currency": "USD",
-  "paymentMethod": "card"
+  "model": "gpt-4",
+  "provider": "openai",
+  "priority": 1
 }
 ```
 
-**Ответ:**
+**Response:**
 ```json
 {
   "success": true,
-  "message": "Balance updated successfully",
-  "balance": {
-    "id": "uuid",
-    "userId": "b6793877-246a-4e3a-807f-50e494aa5188",
-    "balance": "150.00",
-    "currency": "USD",
-    "lastUpdated": "2025-10-05T22:30:00Z"
-  }
-}
-```
-
-## 📊 Аналитика
-
-### Основной дашборд
-```http
-GET /v1/analytics/dashboard
-Authorization: Bearer ak_live_1234567890abcdef...
-```
-
-**Ответ:**
-```json
-{
-  "success": true,
-  "dashboard": {
-    "overview": {
-      "totalRequests": 150,
-      "totalTokens": 4500,
-      "totalCost": 12.50,
-      "averageResponseTime": 1500
-    },
-    "usage": {
-      "requestsToday": 5,
-      "requestsThisWeek": 35,
-      "requestsThisMonth": 150
-    },
-    "costs": {
-      "spentToday": 0.50,
-      "spentThisWeek": 3.50,
-      "spentThisMonth": 12.50
-    }
-  }
-}
-```
-
-### Отправка события
-```http
-POST /v1/analytics/events
-Authorization: Bearer ak_live_1234567890abcdef...
-Content-Type: application/json
-
-{
-  "eventType": "ai_interaction",
-  "eventName": "chat_completion",
-  "properties": {
+  "preference": {
+    "id": "preference-id",
+    "companyId": "company-id",
     "model": "gpt-4",
-    "tokens": 30,
-    "cost": 0.05
+    "provider": "openai",
+    "priority": 1,
+    "createdAt": "2024-12-01T00:00:00.000Z"
   }
 }
 ```
 
-**Ответ:**
+#### Get Provider Preferences
+```http
+GET /v1/provider-preferences
+Authorization: Bearer <jwt-token>
+```
+
+**Response:**
 ```json
 {
   "success": true,
-  "data": {
-    "id": "uuid",
-    "eventType": "ai_interaction",
-    "eventName": "chat_completion",
-    "properties": {
+  "preferences": [
+    {
+      "id": "preference-id",
       "model": "gpt-4",
-      "tokens": 30,
-      "cost": 0.05
-    },
-    "timestamp": "2025-10-05T22:30:00Z"
-  },
-  "message": "Event tracked successfully"
+      "provider": "openai",
+      "priority": 1,
+      "createdAt": "2024-12-01T00:00:00.000Z"
+    }
+  ]
 }
 ```
 
-## 🚨 Коды ошибок
+## 📊 Error Responses
 
-### HTTP Status Codes
-- `200 OK` - Успешный запрос
-- `201 Created` - Ресурс создан
-- `400 Bad Request` - Неверные данные
-- `401 Unauthorized` - Неверная аутентификация
-- `403 Forbidden` - Недостаточно прав
-- `404 Not Found` - Ресурс не найден
-- `429 Too Many Requests` - Превышен лимит
-- `500 Internal Server Error` - Внутренняя ошибка
+All endpoints return consistent error responses:
 
-### Формат ошибок
 ```json
 {
   "success": false,
   "error": {
-    "code": "INVALID_REQUEST",
-    "message": "Invalid request data",
+    "code": "VALIDATION_ERROR",
+    "message": "Invalid input data",
     "details": {
       "field": "email",
       "reason": "Invalid email format"
@@ -374,108 +467,101 @@ Content-Type: application/json
 }
 ```
 
-### Типы ошибок
-- `INVALID_REQUEST` - Неверные данные запроса
-- `UNAUTHORIZED` - Проблемы с аутентификацией
-- `FORBIDDEN` - Недостаточно прав
-- `NOT_FOUND` - Ресурс не найден
-- `RATE_LIMITED` - Превышен лимит запросов
-- `INSUFFICIENT_FUNDS` - Недостаточно средств
-- `PROVIDER_ERROR` - Ошибка провайдера
-- `INTERNAL_ERROR` - Внутренняя ошибка
+### Common Error Codes
+
+- `VALIDATION_ERROR`: Input validation failed
+- `UNAUTHORIZED`: Authentication required
+- `FORBIDDEN`: Insufficient permissions
+- `NOT_FOUND`: Resource not found
+- `CONFLICT`: Resource already exists
+- `INSUFFICIENT_BALANCE`: Not enough balance for operation
+- `RATE_LIMITED`: Too many requests
+- `INTERNAL_ERROR`: Server error
 
 ## 🔄 Rate Limiting
 
-### Лимиты
-- **Пользователи**: 100 запросов в минуту
-- **API ключи**: 1000 запросов в минуту
-- **Премиум пользователи**: 5000 запросов в минуту
+- **Authentication endpoints**: 10 requests per minute
+- **Billing endpoints**: 100 requests per minute
+- **AI Chat endpoints**: 1000 requests per minute
+- **General endpoints**: 100 requests per minute
 
-### Заголовки ответа
-```http
-X-RateLimit-Limit: 100
-X-RateLimit-Remaining: 95
-X-RateLimit-Reset: 1640995200
+## 📝 Pagination
+
+List endpoints support pagination:
+
+```
+GET /v1/endpoint?limit=50&offset=0
 ```
 
-## 📈 Webhooks
+**Parameters:**
+- `limit`: Number of items per page (default: 50, max: 100)
+- `offset`: Number of items to skip (default: 0)
 
-### Настройка webhook
-```http
-POST /v1/webhooks
-Authorization: Bearer ak_live_1234567890abcdef...
-Content-Type: application/json
+## 🔍 Filtering and Sorting
 
-{
-  "url": "https://your-app.com/webhook",
-  "events": ["chat.completion", "billing.charge"],
-  "secret": "your-webhook-secret"
-}
+Many list endpoints support filtering and sorting:
+
+```
+GET /v1/endpoint?filter[status]=active&sort=createdAt&order=desc
 ```
 
-### Формат webhook
-```json
-{
-  "id": "uuid",
-  "type": "chat.completion",
-  "data": {
-    "userId": "b6793877-246a-4e3a-807f-50e494aa5188",
-    "model": "gpt-4",
-    "tokens": 30,
-    "cost": 0.05
-  },
-  "timestamp": "2025-10-05T22:30:00Z",
-  "signature": "sha256=..."
-}
-```
+**Parameters:**
+- `filter[field]`: Filter by specific field value
+- `sort`: Field to sort by
+- `order`: Sort order (asc/desc)
 
-## 🔧 SDK
+## 📱 SDKs and Examples
 
 ### JavaScript/Node.js
-```bash
-npm install @ai-aggregator/sdk
-```
-
 ```javascript
-import { AIClient } from '@ai-aggregator/sdk';
-
-const client = new AIClient({
-  apiKey: 'ak_live_1234567890abcdef...',
-  baseURL: 'https://api.ai-aggregator.com'
+const response = await fetch('http://localhost:3000/v1/chat/completions', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer your-jwt-token',
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    model: 'gpt-4',
+    messages: [{ role: 'user', content: 'Hello!' }]
+  })
 });
 
-const response = await client.chat.completions.create({
-  model: 'gpt-4',
-  messages: [
-    { role: 'user', content: 'Hello!' }
-  ]
-});
+const data = await response.json();
+console.log(data.choices[0].message.content);
 ```
 
 ### Python
-```bash
-pip install ai-aggregator-sdk
-```
-
 ```python
-from ai_aggregator import AIClient
+import requests
 
-client = AIClient(
-    api_key='ak_live_1234567890abcdef...',
-    base_url='https://api.ai-aggregator.com'
+response = requests.post(
+    'http://localhost:3000/v1/chat/completions',
+    headers={
+        'Authorization': 'Bearer your-jwt-token',
+        'Content-Type': 'application/json'
+    },
+    json={
+        'model': 'gpt-4',
+        'messages': [{'role': 'user', 'content': 'Hello!'}]
+    }
 )
 
-response = client.chat.completions.create(
-    model='gpt-4',
-    messages=[
-        {'role': 'user', 'content': 'Hello!'}
-    ]
-)
+data = response.json()
+print(data['choices'][0]['message']['content'])
 ```
 
-## 📚 Дополнительные ресурсы
+### cURL
+```bash
+curl -X POST http://localhost:3000/v1/chat/completions \
+  -H "Authorization: Bearer your-jwt-token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-4",
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'
+```
 
-- [Swagger UI](http://localhost:3000/api) - Интерактивная документация
-- [Postman Collection](docs/postman-collection.json) - Готовые запросы
-- [SDK Documentation](docs/sdk/) - Документация SDK
-- [Examples](docs/examples/) - Примеры использования
+---
+
+**Last Updated**: December 2024
+**API Version**: v1

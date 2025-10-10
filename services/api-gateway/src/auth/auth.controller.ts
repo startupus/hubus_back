@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Get, Param, Delete } from '@nestjs/common';
+import { Controller, Post, Body, Get, Param, Delete, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { RegisterDto, LoginDto, AuthResponseDto } from '@ai-aggregator/shared';
@@ -11,8 +11,8 @@ export class AuthController {
   @Post('register')
   @ApiOperation({ summary: 'Register a new user' })
   @ApiResponse({ status: 201, description: 'User registered successfully', type: AuthResponseDto })
-  async register(@Body() registerDto: RegisterDto) {
-    return this.authService.register(registerDto);
+  async register(@Body() registerDto: RegisterDto, @Query('ref') referralCode?: string) {
+    return this.authService.register(registerDto, referralCode);
   }
 
   @Post('login')

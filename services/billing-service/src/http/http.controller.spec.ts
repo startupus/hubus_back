@@ -6,7 +6,7 @@ import { BillingService } from '../billing/billing.service';
 import { PricingService } from '../billing/pricing.service';
 import { PaymentGatewayService } from '../billing/payment-gateway.service';
 import { ValidationService } from '../common/validation/validation.service';
-// import { Decimal } from 'decimal.js'; // Временно отключено
+import { Decimal } from '@prisma/client/runtime/library';
 import request from 'supertest';
 
 describe('HttpController', () => {
@@ -17,7 +17,6 @@ describe('HttpController', () => {
 
   const mockUserBalance = {
     id: 'test-balance-id',
-    userId: 'test-user-id',
     companyId: 'test-company-id',
     balance: 100.00 as any,
     currency: 'USD',
@@ -29,7 +28,6 @@ describe('HttpController', () => {
 
   const mockTransaction = {
     id: 'test-transaction-id',
-    userId: 'test-user-id',
     companyId: 'test-company-id',
     currency: 'USD',
     createdAt: new Date(),
@@ -44,7 +42,7 @@ describe('HttpController', () => {
   };
 
   const mockBillingReport = {
-    userId: 'test-user-id',
+    companyId: 'test-company-id',
     period: {
       start: new Date('2023-01-01'),
       end: new Date('2023-12-31')
@@ -127,7 +125,7 @@ describe('HttpController', () => {
     await app.close();
   });
 
-  describe('GET /billing/balance/:userId', () => {
+  describe('GET /billing/balance/:companyId', () => {
     it('should return user balance', async () => {
       jest.spyOn(billingService, 'getBalance').mockResolvedValue({
         success: true,
@@ -135,12 +133,12 @@ describe('HttpController', () => {
       });
 
       const response = await request(app.getHttpServer())
-        .get('/billing/balance/test-user-id')
+        .get('/billing/balance/test-company-id')
         .expect(200);
 
       expect(response.body).toEqual({
         id: 'test-balance-id',
-        userId: 'test-user-id',
+        companyId: 'test-company-id',
         balance: '100.00',
         currency: 'USD',
         createdAt: mockUserBalance.createdAt.toISOString(),
@@ -151,7 +149,7 @@ describe('HttpController', () => {
     it('should return 404 when user balance not found', async () => {
       jest.spyOn(billingService, 'getBalance').mockResolvedValue({
         success: false,
-        balance: null
+        balance: undefined
       });
 
       await request(app.getHttpServer())
@@ -163,12 +161,12 @@ describe('HttpController', () => {
       jest.spyOn(billingService, 'getBalance').mockRejectedValue(new Error('Database error'));
 
       await request(app.getHttpServer())
-        .get('/billing/balance/test-user-id')
+        .get('/billing/balance/test-company-id')
         .expect(500);
     });
   });
 
-  describe('POST /billing/balance/:userId', () => {
+  describe('POST /billing/balance/:companyId', () => {
     it('should update user balance', async () => {
       const updateData = { amount: 50.00 };
       const updatedBalance = { ...mockUserBalance, balance: 150.00 as any };
@@ -179,13 +177,13 @@ describe('HttpController', () => {
       });
 
       const response = await request(app.getHttpServer())
-        .post('/billing/balance/test-user-id')
+        .post('/billing/balance/test-company-id')
         .send(updateData)
         .expect(200);
 
       expect(response.body).toEqual({
         id: 'test-balance-id',
-        userId: 'test-user-id',
+        companyId: 'test-company-id',
         balance: '150.00',
         currency: 'USD',
         createdAt: mockUserBalance.createdAt.toISOString(),
@@ -197,7 +195,7 @@ describe('HttpController', () => {
       const invalidData = { amount: 'invalid' };
 
       await request(app.getHttpServer())
-        .post('/billing/balance/test-user-id')
+        .post('/billing/balance/test-company-id')
         .send(invalidData)
         .expect(400);
     });
@@ -207,7 +205,7 @@ describe('HttpController', () => {
       jest.spyOn(billingService, 'updateBalance').mockRejectedValue(new Error('Database error'));
 
       await request(app.getHttpServer())
-        .post('/billing/balance/test-user-id')
+        .post('/billing/balance/test-company-id')
         .send(updateData)
         .expect(500);
     });
@@ -216,7 +214,7 @@ describe('HttpController', () => {
   describe('POST /billing/transaction', () => {
     it('should create transaction', async () => {
       const transactionData = {
-        userId: 'test-user-id',
+        companyId: 'test-company-id',
         type: 'DEBIT',
         amount: 10.50,
         description: 'Test transaction',
@@ -234,7 +232,7 @@ describe('HttpController', () => {
 
       expect(response.body).toEqual({
         id: 'test-transaction-id',
-        userId: 'test-user-id',
+        companyId: 'test-company-id',
         type: 'DEBIT',
         amount: '10.50',
         description: 'Test transaction',
@@ -244,7 +242,7 @@ describe('HttpController', () => {
 
     it('should validate transaction data', async () => {
       const invalidData = {
-        userId: 'test-user-id',
+        companyId: 'test-company-id',
         type: 'INVALID_TYPE',
         amount: -10.50,
         description: 'Test transaction',
@@ -258,7 +256,7 @@ describe('HttpController', () => {
 
     it('should handle service errors', async () => {
       const transactionData = {
-        userId: 'test-user-id',
+        companyId: 'test-company-id',
         type: 'DEBIT',
         amount: 10.50,
         description: 'Test transaction',
@@ -273,19 +271,19 @@ describe('HttpController', () => {
     });
   });
 
-  describe('GET /billing/transactions/:userId', () => {
+  describe('GET /billing/transactions/:companyId', () => {
     it('should return user transactions', async () => {
       const transactions = [mockTransaction];
       jest.spyOn(billingService, 'getTransactions').mockResolvedValue(transactions);
 
       const response = await request(app.getHttpServer())
-        .get('/billing/transactions/test-user-id')
+        .get('/billing/transactions/test-company-id')
         .expect(200);
 
       expect(response.body).toEqual([
         {
           id: 'test-transaction-id',
-          userId: 'test-user-id',
+          companyId: 'test-company-id',
           type: 'DEBIT',
           amount: '10.50',
           description: 'Test transaction',
@@ -317,16 +315,16 @@ describe('HttpController', () => {
     });
   });
 
-  describe('GET /billing/report/:userId', () => {
+  describe('GET /billing/report/:companyId', () => {
     it('should return billing report', async () => {
       jest.spyOn(billingService, 'getBillingReport').mockResolvedValue(mockBillingReport);
 
       const response = await request(app.getHttpServer())
-        .get('/billing/report/test-user-id')
+        .get('/billing/report/test-company-id')
         .expect(200);
 
       expect(response.body).toEqual({
-        userId: 'test-user-id',
+        companyId: 'test-company-id',
         startDate: '2023-01-01T00:00:00.000Z',
         endDate: '2023-12-31T00:00:00.000Z',
         totalTransactions: 1,
@@ -335,7 +333,7 @@ describe('HttpController', () => {
         transactions: [
           {
             id: 'test-transaction-id',
-            userId: 'test-user-id',
+            companyId: 'test-company-id',
             type: 'DEBIT',
             amount: '10.50',
             description: 'Test transaction',
@@ -359,7 +357,7 @@ describe('HttpController', () => {
       jest.spyOn(billingService, 'getBillingReport').mockRejectedValue(new Error('Database error'));
 
       await request(app.getHttpServer())
-        .get('/billing/report/test-user-id')
+        .get('/billing/report/test-company-id')
         .expect(500);
     });
   });
@@ -367,7 +365,7 @@ describe('HttpController', () => {
   describe('POST /billing/usage/track', () => {
     it('should track usage', async () => {
       const usageData = {
-        userId: 'test-user-id',
+        companyId: 'test-company-id',
         service: 'openai',
         tokens: 1000,
         model: 'gpt-3.5-turbo',
@@ -377,7 +375,6 @@ describe('HttpController', () => {
         success: true,
         usageEvent: {
           id: 'test-usage-id',
-          userId: 'test-user-id',
           companyId: 'test-company-id',
           service: 'openai',
           resource: 'gpt-3.5-turbo',
@@ -397,7 +394,7 @@ describe('HttpController', () => {
 
       expect(response.body).toEqual({
         id: 'test-transaction-id',
-        userId: 'test-user-id',
+        companyId: 'test-company-id',
         type: 'DEBIT',
         amount: '10.50',
         description: 'Test transaction',
@@ -407,7 +404,7 @@ describe('HttpController', () => {
 
     it('should validate usage data', async () => {
       const invalidData = {
-        userId: 'test-user-id',
+        companyId: 'test-company-id',
         service: 'openai',
         tokens: -1000, // Invalid negative tokens
         model: 'gpt-3.5-turbo',
@@ -421,7 +418,7 @@ describe('HttpController', () => {
 
     it('should handle service errors', async () => {
       const usageData = {
-        userId: 'test-user-id',
+        companyId: 'test-company-id',
         service: 'openai',
         tokens: 1000,
         model: 'gpt-3.5-turbo',
@@ -439,7 +436,7 @@ describe('HttpController', () => {
   describe('POST /billing/payment/process', () => {
     it('should process payment', async () => {
       const paymentData = {
-        userId: 'test-user-id',
+        companyId: 'test-company-id',
         amount: 50.00,
         paymentMethod: 'stripe',
         paymentToken: 'test-token',
@@ -458,7 +455,7 @@ describe('HttpController', () => {
 
       expect(response.body).toEqual({
         id: 'test-transaction-id',
-        userId: 'test-user-id',
+        companyId: 'test-company-id',
         type: 'DEBIT',
         amount: '10.50',
         description: 'Test transaction',
@@ -468,7 +465,7 @@ describe('HttpController', () => {
 
     it('should validate payment data', async () => {
       const invalidData = {
-        userId: 'test-user-id',
+        companyId: 'test-company-id',
         amount: -50.00, // Invalid negative amount
         paymentMethod: 'stripe',
         paymentToken: 'test-token',
@@ -482,7 +479,7 @@ describe('HttpController', () => {
 
     it('should handle service errors', async () => {
       const paymentData = {
-        userId: 'test-user-id',
+        companyId: 'test-company-id',
         amount: 50.00,
         paymentMethod: 'stripe',
         paymentToken: 'test-token',
@@ -500,7 +497,7 @@ describe('HttpController', () => {
   describe('POST /billing/payment/refund', () => {
     it('should refund payment', async () => {
       const refundData = {
-        userId: 'test-user-id',
+        companyId: 'test-company-id',
         transactionId: 'test-transaction-id',
         amount: 25.00,
       };
@@ -518,7 +515,7 @@ describe('HttpController', () => {
 
       expect(response.body).toEqual({
         id: 'test-transaction-id',
-        userId: 'test-user-id',
+        companyId: 'test-company-id',
         type: 'DEBIT',
         amount: '10.50',
         description: 'Test transaction',
@@ -528,7 +525,7 @@ describe('HttpController', () => {
 
     it('should validate refund data', async () => {
       const invalidData = {
-        userId: 'test-user-id',
+        companyId: 'test-company-id',
         transactionId: 'test-transaction-id',
         amount: -25.00, // Invalid negative amount
       };
@@ -541,7 +538,7 @@ describe('HttpController', () => {
 
     it('should handle service errors', async () => {
       const refundData = {
-        userId: 'test-user-id',
+        companyId: 'test-company-id',
         transactionId: 'test-transaction-id',
         amount: 25.00,
       };
@@ -566,7 +563,7 @@ describe('HttpController', () => {
 
       expect(response.body).toEqual({
         id: 'test-transaction-id',
-        userId: 'test-user-id',
+        companyId: 'test-company-id',
         type: 'DEBIT',
         amount: '10.50',
         description: 'Test transaction',
@@ -602,7 +599,7 @@ describe('HttpController', () => {
 
       expect(response.body).toEqual({
         id: 'test-transaction-id',
-        userId: 'test-user-id',
+        companyId: 'test-company-id',
         type: 'DEBIT',
         amount: '10.50',
         description: 'Updated transaction',
@@ -636,7 +633,7 @@ describe('HttpController', () => {
 
       expect(response.body).toEqual({
         id: 'test-transaction-id',
-        userId: 'test-user-id',
+        companyId: 'test-company-id',
         type: 'DEBIT',
         amount: '10.50',
         description: 'Test transaction',

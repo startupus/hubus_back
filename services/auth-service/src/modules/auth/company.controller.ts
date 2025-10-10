@@ -18,6 +18,8 @@ export class CompanyController {
     email: string;
     password: string;
     description?: string;
+    referralCode?: string;
+    referralLink?: string;
   }) {
     return this.companyService.registerCompany(companyData);
   }
@@ -38,27 +40,6 @@ export class CompanyController {
     );
   }
 
-  /**
-   * Create a child company (employee company)
-   */
-  @Post(':companyId/child-companies')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('company', 'admin')
-  @HttpCode(HttpStatus.CREATED)
-  async createChildCompany(
-    @Param('companyId') companyId: string,
-    @Body() companyData: {
-      name: string;
-      email: string;
-      password: string;
-      billingMode?: 'SELF_PAID' | 'PARENT_PAID';
-      position?: string;
-      department?: string;
-      description?: string;
-    }
-  ) {
-    return this.companyService.createChildCompany(companyId, companyData);
-  }
 
   /**
    * Get company by ID
@@ -87,28 +68,7 @@ export class CompanyController {
     return this.companyService.updateCompany(companyId, updateData);
   }
 
-  /**
-   * Get child companies
-   */
-  @Get(':companyId/child-companies')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('company', 'admin')
-  async getChildCompanies(@Param('companyId') companyId: string) {
-    return this.companyService.getChildCompanies(companyId);
-  }
 
-  /**
-   * Get company hierarchy
-   */
-  @Get(':companyId/hierarchy')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('company', 'admin')
-  async getCompanyHierarchy(
-    @Param('companyId') companyId: string,
-    @Query('depth') depth?: number
-  ) {
-    return this.companyService.getCompanyHierarchy(companyId, depth || 3);
-  }
 
   /**
    * Update billing mode

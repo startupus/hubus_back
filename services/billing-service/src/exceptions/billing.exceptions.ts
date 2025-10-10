@@ -70,11 +70,11 @@ export class InvalidTransactionStatusException extends BillingException {
 }
 
 /**
- * Исключение при неверном пользователе
+ * Исключение при неверной компании
  */
-export class UserNotFoundException extends BillingException {
-  constructor(userId: string) {
-    super(`User not found: ${userId}`, HttpStatus.NOT_FOUND);
+export class CompanyNotFoundException extends BillingException {
+  constructor(companyId: string) {
+    super(`Company not found: ${companyId}`, HttpStatus.NOT_FOUND);
   }
 }
 
@@ -109,7 +109,7 @@ export class CostCalculationException extends BillingException {
  * Исключение при неверном отчете
  */
 export class ReportGenerationException extends BillingException {
-  constructor(userId: string, message: string) {
-    super(`Report generation error for user ${userId}: ${message}`, HttpStatus.INTERNAL_SERVER_ERROR);
+  constructor(companyId: string, message: string) {
+    super(`Report generation error for company ${companyId}: ${message}`, HttpStatus.INTERNAL_SERVER_ERROR);
   }
 }

@@ -23,7 +23,10 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "noEmit": false
+    "noEmit": false,
+    "paths": {
+      "@ai-aggregator/shared": ["../shared/src"]
+    }
   },
   "include": ["src/**/*", "src/types/**/*"],
   "exclude": ["node_modules", "dist", "test", "**/*spec.ts"]

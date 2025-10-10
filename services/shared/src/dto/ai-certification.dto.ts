@@ -12,15 +12,15 @@ import {
 export class AIClassificationRequestDto {
   @ApiProperty({ description: 'Model ID' })
   @IsString()
-  modelId: string;
+  modelId!: string;
 
   @ApiProperty({ description: 'Provider name' })
   @IsString()
-  provider: string;
+  provider!: string;
 
   @ApiProperty({ description: 'Model name' })
   @IsString()
-  modelName: string;
+  modelName!: string;
 
   @ApiProperty({ description: 'Model description', required: false })
   @IsOptional()
@@ -47,7 +47,7 @@ export class AIClassificationRequestDto {
 export class AIClassificationResponseDto {
   @ApiProperty({ description: 'Success status' })
   @IsBoolean()
-  success: boolean;
+  success!: boolean;
 
   @ApiProperty({ description: 'Classification result', required: false })
   @IsOptional()
@@ -76,19 +76,19 @@ export class AIClassificationResponseDto {
 export class CertificationRequestDto {
   @ApiProperty({ description: 'Model ID' })
   @IsString()
-  modelId: string;
+  modelId!: string;
 
   @ApiProperty({ description: 'Provider name' })
   @IsString()
-  provider: string;
+  provider!: string;
 
   @ApiProperty({ description: 'Model name' })
   @IsString()
-  modelName: string;
+  modelName!: string;
 
   @ApiProperty({ description: 'Requested certification level', enum: AICertificationLevel })
   @IsEnum(AICertificationLevel)
-  requestedLevel: AICertificationLevel;
+  requestedLevel!: AICertificationLevel;
 
   @ApiProperty({ description: 'Test data', required: false })
   @IsOptional()
@@ -104,7 +104,7 @@ export class CertificationRequestDto {
 export class CertificationResponseDto {
   @ApiProperty({ description: 'Success status' })
   @IsBoolean()
-  success: boolean;
+  success!: boolean;
 
   @ApiProperty({ description: 'Certification result', required: false })
   @IsOptional()
@@ -133,11 +133,11 @@ export class CertificationResponseDto {
 export class SafetyTestRequestDto {
   @ApiProperty({ description: 'Model ID' })
   @IsString()
-  modelId: string;
+  modelId!: string;
 
   @ApiProperty({ description: 'Test type', enum: ['comprehensive', 'quick', 'targeted'] })
   @IsEnum(['comprehensive', 'quick', 'targeted'])
-  testType: 'comprehensive' | 'quick' | 'targeted';
+  testType!: 'comprehensive' | 'quick' | 'targeted';
 
   @ApiProperty({ description: 'Test data', required: false })
   @IsOptional()
@@ -154,7 +154,7 @@ export class SafetyTestRequestDto {
 export class SafetyTestResponseDto {
   @ApiProperty({ description: 'Success status' })
   @IsBoolean()
-  success: boolean;
+  success!: boolean;
 
   @ApiProperty({ description: 'Safety assessment', required: false })
   @IsOptional()
@@ -183,23 +183,23 @@ export class SafetyTestResponseDto {
 export class SafetyIncidentDto {
   @ApiProperty({ description: 'Model ID' })
   @IsString()
-  modelId: string;
+  modelId!: string;
 
   @ApiProperty({ description: 'Incident type' })
   @IsString()
-  incidentType: string;
+  incidentType!: string;
 
   @ApiProperty({ description: 'Incident description' })
   @IsString()
-  description: string;
+  description!: string;
 
   @ApiProperty({ description: 'Severity level', enum: ['low', 'medium', 'high', 'critical'] })
   @IsEnum(['low', 'medium', 'high', 'critical'])
-  severity: 'low' | 'medium' | 'high' | 'critical';
+  severity!: 'low' | 'medium' | 'high' | 'critical';
 
   @ApiProperty({ description: 'Occurred at' })
   @IsString()
-  occurredAt: string;
+  occurredAt!: string;
 
   @ApiProperty({ description: 'Resolution description', required: false })
   @IsOptional()
@@ -208,92 +208,92 @@ export class SafetyIncidentDto {
 
   @ApiProperty({ description: 'Reported by' })
   @IsString()
-  reportedBy: string;
+  reportedBy!: string;
 
   @ApiProperty({ description: 'Number of affected users' })
   @IsNumber()
-  affectedUsers: number;
+  affectedUsers!: number;
 }
 
 export class RevokeCertificationDto {
   @ApiProperty({ description: 'Revocation reason' })
   @IsString()
-  reason: string;
+  reason!: string;
 }
 
 export class CategoryInfoDto {
   @ApiProperty({ description: 'Category name', enum: AICategory })
   @IsEnum(AICategory)
-  category: AICategory;
+  category!: AICategory;
 
   @ApiProperty({ description: 'Category description' })
   @IsString()
-  description: string;
+  description!: string;
 
   @ApiProperty({ description: 'Use cases', type: [String] })
   @IsArray()
   @IsString({ each: true })
-  useCases: string[];
+  useCases!: string[];
 }
 
 export class CertificationLevelInfoDto {
   @ApiProperty({ description: 'Certification level', enum: AICertificationLevel })
   @IsEnum(AICertificationLevel)
-  level: AICertificationLevel;
+  level!: AICertificationLevel;
 
   @ApiProperty({ description: 'Minimum score required' })
   @IsNumber()
-  minScore: number;
+  minScore!: number;
 
   @ApiProperty({ description: 'Minimum pass rate required' })
   @IsNumber()
-  minPassRate: number;
+  minPassRate!: number;
 
   @ApiProperty({ description: 'Required tests', type: [String] })
   @IsArray()
   @IsString({ each: true })
-  requiredTests: string[];
+  requiredTests!: string[];
 
   @ApiProperty({ description: 'Compliance standards', type: [String] })
   @IsArray()
   @IsString({ each: true })
-  complianceStandards: string[];
+  complianceStandards!: string[];
 }
 
 export class SafetyLevelInfoDto {
   @ApiProperty({ description: 'Safety level', enum: AISafetyLevel })
   @IsEnum(AISafetyLevel)
-  level: AISafetyLevel;
+  level!: AISafetyLevel;
 
   @ApiProperty({ description: 'Level description' })
   @IsString()
-  description: string;
+  description!: string;
 
   @ApiProperty({ description: 'Requirements', type: [String] })
   @IsArray()
   @IsString({ each: true })
-  requirements: string[];
+  requirements!: string[];
 
   @ApiProperty({ description: 'Restrictions', type: [String] })
   @IsArray()
   @IsString({ each: true })
-  restrictions: string[];
+  restrictions!: string[];
 }
 
 export class SafetyStatisticsDto {
   @ApiProperty({ description: 'Total incidents' })
   @IsNumber()
-  totalIncidents: number;
+  totalIncidents!: number;
 
   @ApiProperty({ description: 'Critical incidents' })
   @IsNumber()
-  criticalIncidents: number;
+  criticalIncidents!: number;
 
   @ApiProperty({ description: 'Resolved incidents' })
   @IsNumber()
-  resolvedIncidents: number;
+  resolvedIncidents!: number;
 
   @ApiProperty({ description: 'Average resolution time in milliseconds' })
   @IsNumber()
-  averageResolutionTime: number;
+  averageResolutionTime!: number;
 }

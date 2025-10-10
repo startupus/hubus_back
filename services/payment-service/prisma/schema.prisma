@@ -1,0 +1,41 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("PAYMENT_DATABASE_URL")
+}
+
+model Payment {
+  id              String        @id @default(uuid())
+  companyId       String        @map("company_id")
+  amount          Decimal       // Сумма в рублях
+  amountUsd       Decimal?      @map("amount_usd") // Сумма в долларах (для конвертации)
+  currency        String        @default("RUB")
+  status          PaymentStatus @default(PENDING)
+  yookassaId      String?       @map("yookassa_id") // ID платежа в ЮKassa
+  yookassaUrl     String?       @map("yookassa_url") // URL для оплаты
+  description     String?
+  commission      Decimal?      // Комиссия ЮKassa
+  exchangeRate    Decimal?      @map("exchange_rate") // Курс валют на момент платежа
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+  paidAt          DateTime?     @map("paid_at")
+  
+  @@map("payments")
+  @@index([companyId])
+  @@index([yookassaId])
+  @@index([status])
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  CANCELED
+  FAILED
+}

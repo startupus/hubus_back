@@ -4,6 +4,7 @@ import { CacheService } from '../common/cache/cache.service';
 import { ValidationService } from '../common/validation/validation.service';
 import { LoggerUtil } from '@ai-aggregator/shared';
 import { RabbitMQClient } from '@ai-aggregator/shared';
+import { ReferralService } from './referral.service';
 import {
   UserBalance,
   Transaction,
@@ -31,7 +32,7 @@ import {
   InsufficientBalanceException,
   InvalidAmountException,
   InvalidCurrencyException,
-  UserNotFoundException,
+  CompanyNotFoundException,
   PaymentMethodNotFoundException,
   CostCalculationException
 } from '../exceptions/billing.exceptions';
@@ -57,6 +58,7 @@ export class BillingService {
     private readonly cacheService: CacheService,
     private readonly validationService: ValidationService,
     private readonly rabbitmq: RabbitMQClient,
+    private readonly referralService: ReferralService,
   ) {}
 
   /**
@@ -65,14 +67,14 @@ export class BillingService {
   async getBalance(request: GetBalanceRequest): Promise<GetBalanceResponse> {
     try {
       // Валидация входных данных
-      this.validationService.validateId(request.userId, 'User ID');
+      this.validationService.validateId(request.companyId, 'User ID');
       
-      LoggerUtil.debug('billing-service', 'Getting user balance', { userId: request.userId });
+      LoggerUtil.debug('billing-service', 'Getting user balance', { companyId: request.companyId });
 
       // Проверяем кэш
-      const cachedBalance = this.cacheService.getCachedUserBalance(request.userId);
+      const cachedBalance = this.cacheService.getCachedCompanyBalance(request.companyId);
       if (cachedBalance) {
-        LoggerUtil.debug('billing-service', 'Balance retrieved from cache', { userId: request.userId });
+        LoggerUtil.debug('billing-service', 'Balance retrieved from cache', { companyId: request.companyId });
         return {
           success: true,
           balance: cachedBalance
@@ -80,11 +82,11 @@ export class BillingService {
       }
 
       // Валидация компании
-      await this.validationService.validateCompany(request.userId, this.prisma);
+      await this.validationService.validateCompany(request.companyId, this.prisma);
 
       // Получаем баланс из БД
       const balance = await this.prisma.companyBalance.findUnique({
-        where: { companyId: request.userId }
+        where: { companyId: request.companyId }
       });
 
       if (!balance) {
@@ -92,7 +94,7 @@ export class BillingService {
         const newBalance = await this.prisma.companyBalance.create({
           data: {
             company: {
-              connect: { id: request.userId }
+              connect: { id: request.companyId }
             },
             balance: 0,
             currency: 'USD',
@@ -101,9 +103,9 @@ export class BillingService {
         });
 
         // Кэшируем новый баланс
-        this.cacheService.cacheUserBalance(request.userId, newBalance);
+        this.cacheService.cacheCompanyBalance(request.companyId, newBalance);
 
-        LoggerUtil.info('billing-service', 'New balance created', { userId: request.userId });
+        LoggerUtil.info('billing-service', 'New balance created', { companyId: request.companyId });
         return {
           success: true,
           balance: newBalance as UserBalance
@@ -111,10 +113,10 @@ export class BillingService {
       }
 
       // Кэшируем полученный баланс
-      this.cacheService.cacheUserBalance(request.userId, balance);
+      this.cacheService.cacheCompanyBalance(request.companyId, balance);
 
       LoggerUtil.info('billing-service', 'Balance retrieved successfully', { 
-        userId: request.userId,
+        companyId: request.companyId,
         balance: balance.balance.toString()
       });
 
@@ -123,10 +125,10 @@ export class BillingService {
         balance: balance as UserBalance
       };
     } catch (error) {
-      LoggerUtil.error('billing-service', 'Failed to get balance', error as Error, { userId: request.userId });
+      LoggerUtil.error('billing-service', 'Failed to get balance', error as Error, { companyId: request.companyId });
       
       // Возвращаем специфичные ошибки
-      if (error instanceof UserNotFoundException) {
+      if (error instanceof CompanyNotFoundException) {
         return {
           success: false,
           error: error.message
@@ -149,24 +151,24 @@ export class BillingService {
     for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
       try {
         // Валидация входных данных
-        this.validationService.validateId(request.userId, 'User ID');
+        this.validationService.validateId(request.companyId, 'User ID');
         this.validationService.validateAmount(request.amount);
         this.validationService.validateMetadata(request.metadata);
 
         LoggerUtil.debug('billing-service', 'Updating user balance', {
-          userId: request.userId,
+          companyId: request.companyId,
           amount: request.amount,
           operation: request.operation,
           attempt
         });
 
         // Валидация компании
-        await this.validationService.validateCompany(request.userId, this.prisma);
+        await this.validationService.validateCompany(request.companyId, this.prisma);
 
         const result = await this.prisma.$transaction(async (tx) => {
           // Получаем текущий баланс с блокировкой
           const currentBalance = await tx.companyBalance.findUnique({
-            where: { companyId: request.userId }
+            where: { companyId: request.companyId }
           });
 
           if (!currentBalance) {
@@ -178,7 +180,7 @@ export class BillingService {
             currentBalance.balance,
             request.amount,
             request.operation,
-            currentBalance.creditLimit
+            currentBalance.creditLimit || new Decimal(0)
           );
 
           // Вычисляем новый баланс
@@ -198,7 +200,7 @@ export class BillingService {
 
           // Обновляем баланс
           const updatedBalance = await tx.companyBalance.update({
-            where: { companyId: request.userId },
+            where: { companyId: request.companyId },
             data: { 
               balance: newBalance,
               lastUpdated: new Date()
@@ -226,10 +228,31 @@ export class BillingService {
         });
 
         // Инвалидируем кэш баланса
-        this.cacheService.invalidateCompanyBalance(request.userId);
+        this.cacheService.invalidateCompanyBalance(request.companyId);
+
+        // Обрабатываем реферальные бонусы для DEBIT операций (списания за AI запросы)
+        if (request.operation === 'subtract' && request.metadata?.inputTokens && request.metadata?.outputTokens) {
+          try {
+            await this.processReferralBonus(
+              request.companyId,
+              result.transaction.id,
+              request.metadata.inputTokens,
+              request.metadata.outputTokens,
+              request.metadata.inputTokenPrice,
+              request.metadata.outputTokenPrice
+            );
+          } catch (referralError) {
+            // Логируем ошибку, но не прерываем основной процесс
+            LoggerUtil.warn('billing-service', 'Failed to process referral bonus', {
+              companyId: request.companyId,
+              transactionId: result.transaction.id,
+              error: referralError instanceof Error ? referralError.message : String(referralError),
+            });
+          }
+        }
 
         LoggerUtil.info('billing-service', 'Balance updated successfully', {
-          userId: request.userId,
+          companyId: request.companyId,
           newBalance: result.updatedBalance.balance.toString(),
           operation: request.operation,
           attempt
@@ -253,7 +276,7 @@ export class BillingService {
         await this.delay(this.retryDelay * attempt);
         
         LoggerUtil.warn('billing-service', 'Balance update retry', {
-          userId: request.userId,
+          companyId: request.companyId,
           attempt,
           error: error instanceof Error ? error.message : 'Unknown error'
         });
@@ -261,7 +284,7 @@ export class BillingService {
     }
 
     LoggerUtil.error('billing-service', 'Failed to update balance after retries', lastError as Error, { 
-      userId: request.userId,
+      companyId: request.companyId,
       attempts: this.maxRetries
     });
 
@@ -276,8 +299,8 @@ export class BillingService {
    */
   async trackUsage(request: TrackUsageRequest): Promise<TrackUsageResponse> {
     try {
-      // userId теперь является companyId
-      const initiatorCompanyId = request.userId;
+      // companyId используется для идентификации компании
+      const initiatorCompanyId = request.companyId;
       
       LoggerUtil.debug('billing-service', 'Tracking usage', {
         initiatorCompanyId,
@@ -291,7 +314,7 @@ export class BillingService {
 
       // Calculate cost based on pricing rules
       const costCalculation = await this.calculateCost({
-        userId: payerId, // Расчет на основе плательщика
+        companyId: payerId, // Расчет на основе плательщика
         service: request.service,
         resource: request.resource,
         quantity: request.quantity || 1,
@@ -323,7 +346,7 @@ export class BillingService {
 
       // Update payer balance (subtract cost)
       await this.updateBalance({
-        userId: payerId,  // Списываем с плательщика
+        companyId: payerId,  // Списываем с плательщика
         amount: costCalculation.cost,
         operation: 'subtract',
         description: `Usage by ${initiatorId === payerId ? 'self' : initiatorId}: ${request.service}/${request.resource}`,
@@ -363,7 +386,7 @@ export class BillingService {
         cost: costCalculation.cost
       };
     } catch (error) {
-      LoggerUtil.error('billing-service', 'Failed to track usage', error as Error, { userId: request.userId });
+      LoggerUtil.error('billing-service', 'Failed to track usage', error as Error, { companyId: request.companyId });
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error'
@@ -377,7 +400,7 @@ export class BillingService {
   async calculateCost(request: CalculateCostRequest): Promise<CalculateCostResponse> {
     try {
       LoggerUtil.debug('billing-service', 'Calculating cost', {
-        userId: request.userId,
+        companyId: request.companyId,
         service: request.service,
         resource: request.resource,
         quantity: request.quantity
@@ -452,7 +475,7 @@ export class BillingService {
         breakdown
       };
     } catch (error) {
-      LoggerUtil.error('billing-service', 'Failed to calculate cost', error as Error, { userId: request.userId });
+      LoggerUtil.error('billing-service', 'Failed to calculate cost', error as Error, { companyId: request.companyId });
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error'
@@ -466,20 +489,20 @@ export class BillingService {
   async createTransaction(request: CreateTransactionRequest): Promise<CreateTransactionResponse> {
     try {
       LoggerUtil.debug('billing-service', 'Creating transaction', {
-        userId: request.userId,
+        companyId: request.companyId,
         type: request.type,
         amount: request.amount,
         fullRequest: request
       });
 
-      if (!request.userId) {
-        throw new Error('userId is required');
+      if (!request.companyId) {
+        throw new Error('companyId is required');
       }
 
       const transaction = await this.prisma.transaction.create({
         data: {
           company: {
-            connect: { id: request.userId }
+            connect: { id: request.companyId }
           },
           type: request.type,
           amount: new Decimal(request.amount),
@@ -496,7 +519,7 @@ export class BillingService {
 
       LoggerUtil.info('billing-service', 'Transaction created successfully', {
         transactionId: transaction.id,
-        userId: request.userId,
+        companyId: request.companyId,
         amount: request.amount
       });
 
@@ -504,7 +527,7 @@ export class BillingService {
       try {
         await this.rabbitmq.publishCriticalMessage('analytics.events', {
           eventType: 'transaction_created',
-          userId: request.userId,
+          companyId: request.companyId,
           transactionId: transaction.id,
           amount: request.amount,
           type: request.type,
@@ -525,7 +548,7 @@ export class BillingService {
         transaction: transaction as any
       };
     } catch (error) {
-      LoggerUtil.error('billing-service', 'Failed to create transaction', error as Error, { userId: request.userId });
+      LoggerUtil.error('billing-service', 'Failed to create transaction', error as Error, { companyId: request.companyId });
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error'
@@ -539,14 +562,14 @@ export class BillingService {
   async processPayment(request: ProcessPaymentRequest): Promise<ProcessPaymentResponse> {
     try {
       LoggerUtil.debug('billing-service', 'Processing payment', {
-        userId: request.userId,
+        companyId: request.companyId,
         amount: request.amount,
         paymentMethodId: request.paymentMethodId
       });
 
       // Create transaction
       const transactionResult = await this.createTransaction({
-        userId: request.userId,
+        companyId: request.companyId,
         type: TransactionType.CREDIT,
         amount: request.amount,
         currency: request.currency,
@@ -561,7 +584,7 @@ export class BillingService {
 
       // Update balance
       const balanceResult = await this.updateBalance({
-        userId: request.userId,
+        companyId: request.companyId,
         amount: request.amount,
         operation: 'add',
         description: 'Payment received',
@@ -583,7 +606,7 @@ export class BillingService {
 
       LoggerUtil.info('billing-service', 'Payment processed successfully', {
         transactionId: transactionResult.transaction.id,
-        userId: request.userId,
+        companyId: request.companyId,
         amount: request.amount
       });
 
@@ -592,7 +615,7 @@ export class BillingService {
         transaction: transactionResult.transaction
       };
     } catch (error) {
-      LoggerUtil.error('billing-service', 'Failed to process payment', error as Error, { userId: request.userId });
+      LoggerUtil.error('billing-service', 'Failed to process payment', error as Error, { companyId: request.companyId });
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error'
@@ -641,7 +664,7 @@ export class BillingService {
       };
 
       return {
-        userId: companyId, // для обратной совместимости
+        companyId: companyId, // для обратной совместимости
         period: { start: startDate, end: endDate },
         totalUsage,
         totalCost,
@@ -923,7 +946,7 @@ export class BillingService {
       });
 
       if (!company) {
-        throw new UserNotFoundException(`Company not found: ${initiatorCompanyId}`);
+        throw new CompanyNotFoundException(`Company not found: ${initiatorCompanyId}`);
       }
 
       // Если режим PARENT_PAID и есть родитель - платит родитель
@@ -1092,6 +1115,71 @@ export class BillingService {
       };
     } catch (error) {
       LoggerUtil.error('billing-service', 'Failed to get company child companies statistics', error as Error, { companyId });
+      throw error;
+    }
+  }
+
+  /**
+   * Process referral bonus for a transaction
+   */
+  private async processReferralBonus(
+    companyId: string,
+    transactionId: string,
+    inputTokens: number,
+    outputTokens: number,
+    inputTokenPrice?: Decimal,
+    outputTokenPrice?: Decimal
+  ): Promise<void> {
+    try {
+      // Получаем информацию о компании
+      const company = await this.prisma.company.findUnique({
+        where: { id: companyId },
+        select: { referredBy: true },
+      });
+
+      if (!company?.referredBy) {
+        // Компания не является рефералом, пропускаем
+        return;
+      }
+
+      // Если цены токенов не переданы, используем стандартные значения
+      const defaultInputPrice = new Decimal('0.00003'); // $0.03 за 1K токенов
+      const defaultOutputPrice = new Decimal('0.00006'); // $0.06 за 1K токенов
+
+      const inputPrice = inputTokenPrice || defaultInputPrice;
+      const outputPrice = outputTokenPrice || defaultOutputPrice;
+
+      // Создаем реферальную транзакцию
+      await this.referralService.createReferralTransaction({
+        referralOwnerId: company.referredBy,
+        originalTransactionId: transactionId,
+        inputTokens,
+        outputTokens,
+        inputTokenPrice: inputPrice,
+        outputTokenPrice: outputPrice,
+        description: `Referral bonus for AI request (${inputTokens} input + ${outputTokens} output tokens)`,
+        metadata: {
+          transactionId,
+          companyId,
+          inputTokens,
+          outputTokens,
+        },
+      });
+
+      LoggerUtil.info('billing-service', 'Referral bonus processed', {
+        companyId,
+        referrerId: company.referredBy,
+        transactionId,
+        inputTokens,
+        outputTokens,
+      });
+    } catch (error) {
+      LoggerUtil.error('billing-service', 'Failed to process referral bonus', error as Error, {
+        companyId,
+        transactionId,
+        inputTokens,
+        outputTokens,
+      });
       throw error;
     }
   }

@@ -16,14 +16,15 @@ export class AuthService {
     this.authServiceUrl = this.configService.get('AUTH_SERVICE_URL', 'http://auth-service:3001');
   }
 
-  async register(registerDto: RegisterDto): Promise<AuthResponseDto> {
+  async register(registerDto: RegisterDto, referralCode?: string): Promise<AuthResponseDto> {
     try {
       // Map RegisterDto to company registration format
       const companyData = {
         name: `${registerDto.firstName} ${registerDto.lastName}`.trim() || 'Default Company',
         email: registerDto.email,
         password: registerDto.password,
-        description: `Company for ${registerDto.firstName} ${registerDto.lastName}`.trim()
+        description: `Company for ${registerDto.firstName} ${registerDto.lastName}`.trim(),
+        referralCode: referralCode
       };
 
       const response: AxiosResponse = await firstValueFrom(

@@ -44,7 +44,7 @@ export * from './interfaces/config.interface';
 
 // Re-export commonly used types for convenience
 export type {
-  User,
+  Company,
   ApiKey,
   JwtPayload,
   UserRole,
@@ -103,7 +103,7 @@ export type {
   ServiceConfig,
 } from './interfaces/config.interface';
 
-export {
+export type {
   AICategory,
   AICertificationLevel,
   AICertificationStatus,
@@ -123,7 +123,7 @@ export {
   SafetyIncident,
 } from './types/ai-certification';
 
-export {
+export type {
   RequestHistory,
   RequestType,
   RequestStatus,

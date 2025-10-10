@@ -25,12 +25,12 @@ export * from './clients';
 export * from './services/thread-pool.service';
 export * from './constants';
 export * from './interfaces/config.interface';
-export type { User, ApiKey, JwtPayload, UserRole, Permission, AuthContext, AuthResult, } from './types/auth';
+export type { Company, ApiKey, JwtPayload, UserRole, Permission, AuthContext, AuthResult, } from './types/auth';
 export type { BillingRecord, UserBalance, BillingTransaction, CostCalculation, UsageStats, } from './types/billing';
 export type { ProviderRequest, ProviderResponse, ChatMessage, TokenUsage, ProviderConfig, ProviderModel, } from './types/providers';
 export type { BaseEntity, PaginationParams, PaginatedResponse, ServiceResponse, ErrorResponse, RequestContext, HealthCheck, Metrics, } from './types/common';
 export type { BaseEvent, Event, EventHandler, EventPublisher, EventSubscriber, } from './types/events';
 export type { MicroserviceConfig, DatabaseConfig, RedisConfig, RabbitMQConfig, JwtConfig, ProvidersConfig, BillingConfig, RateLimitConfig, MonitoringConfig, SecurityConfig, ServiceConfig, } from './interfaces/config.interface';
-export { AICategory, AICertificationLevel, AICertificationStatus, AISafetyLevel, AICapability, TestResult, AICertification, ComplianceInfo, AIClassification, AIClassificationRequest, AIClassificationResponse, CertificationAudit, AuditFinding, AIPerformanceMetrics, AISafetyAssessment, RiskFactor, SafetyIncident, } from './types/ai-certification';
-export { RequestHistory, RequestType, RequestStatus, CreateRequestHistoryDto, UpdateRequestHistoryDto, RequestHistoryQueryDto, RequestHistoryResponse, SessionHistory, CreateSessionHistoryDto, UpdateSessionHistoryDto, SessionHistoryQueryDto, SessionHistoryResponse, } from './types/request-history';
+export type { AICategory, AICertificationLevel, AICertificationStatus, AISafetyLevel, AICapability, TestResult, AICertification, ComplianceInfo, AIClassification, AIClassificationRequest, AIClassificationResponse, CertificationAudit, AuditFinding, AIPerformanceMetrics, AISafetyAssessment, RiskFactor, SafetyIncident, } from './types/ai-certification';
+export type { RequestHistory, RequestType, RequestStatus, CreateRequestHistoryDto, UpdateRequestHistoryDto, RequestHistoryQueryDto, RequestHistoryResponse, SessionHistory, CreateSessionHistoryDto, UpdateSessionHistoryDto, SessionHistoryQueryDto, SessionHistoryResponse, } from './types/request-history';
 //# sourceMappingURL=index.d.ts.map

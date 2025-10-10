@@ -62,7 +62,7 @@ export class CriticalOperationsService {
    * Критическое списание средств с баланса
    */
   async publishDebitBalance(data: {
-    userId: string;
+    companyId: string;
     amount: number;
     currency: string;
     reason: string;
@@ -70,7 +70,7 @@ export class CriticalOperationsService {
   }): Promise<boolean> {
     try {
       LoggerUtil.info('billing-service', 'Publishing debit balance request', { 
-        userId: data.userId, 
+        companyId: data.companyId, 
         amount: data.amount 
       });
 
@@ -89,7 +89,7 @@ export class CriticalOperationsService {
       );
     } catch (error) {
       LoggerUtil.error('billing-service', 'Failed to publish debit balance', error as Error, { 
-        userId: data.userId 
+        companyId: data.companyId 
       });
       return false;
     }
@@ -99,7 +99,7 @@ export class CriticalOperationsService {
    * Критическое создание транзакции
    */
   async publishCreateTransaction(data: {
-    userId: string;
+    companyId: string;
     type: 'DEBIT' | 'CREDIT';
     amount: number;
     currency: string;
@@ -109,7 +109,7 @@ export class CriticalOperationsService {
   }): Promise<boolean> {
     try {
       LoggerUtil.info('billing-service', 'Publishing create transaction request', { 
-        userId: data.userId, 
+        companyId: data.companyId, 
         type: data.type,
         amount: data.amount 
       });
@@ -129,7 +129,7 @@ export class CriticalOperationsService {
       );
     } catch (error) {
       LoggerUtil.error('billing-service', 'Failed to publish create transaction', error as Error, { 
-        userId: data.userId 
+        companyId: data.companyId 
       });
       return false;
     }
@@ -139,7 +139,7 @@ export class CriticalOperationsService {
    * Критическая обработка платежа
    */
   async publishProcessPayment(data: {
-    userId: string;
+    companyId: string;
     paymentMethod: string;
     amount: number;
     currency: string;
@@ -148,7 +148,7 @@ export class CriticalOperationsService {
   }): Promise<boolean> {
     try {
       LoggerUtil.info('billing-service', 'Publishing process payment request', { 
-        userId: data.userId, 
+        companyId: data.companyId, 
         paymentId: data.paymentId,
         amount: data.amount 
       });
@@ -168,7 +168,7 @@ export class CriticalOperationsService {
       );
     } catch (error) {
       LoggerUtil.error('billing-service', 'Failed to publish process payment', error as Error, { 
-        userId: data.userId 
+        companyId: data.companyId 
       });
       return false;
     }
@@ -181,18 +181,18 @@ export class CriticalOperationsService {
     try {
       LoggerUtil.info('billing-service', 'Processing debit balance', { 
         messageId: message.messageId,
-        userId: message.userId,
+        companyId: message.companyId,
         amount: message.amount
       });
 
       // Находим компанию
       const company = await this.prisma.company.findUnique({
-        where: { id: message.userId }, // userId фактически companyId
+        where: { id: message.companyId }, // companyId
         include: { balance: true }
       });
 
       if (!company || !company.balance) {
-        LoggerUtil.error('billing-service', 'Company balance not found', null, { companyId: message.userId });
+        LoggerUtil.error('billing-service', 'Company balance not found', null, { companyId: message.companyId });
         return false;
       }
 
@@ -200,7 +200,7 @@ export class CriticalOperationsService {
 
       if (balance.balance < message.amount) {
         LoggerUtil.error('billing-service', 'Insufficient balance', null, { 
-          userId: message.userId,
+          companyId: message.companyId,
           currentBalance: balance.balance,
           requestedAmount: message.amount
         });
@@ -229,7 +229,7 @@ export class CriticalOperationsService {
 
       LoggerUtil.info('billing-service', 'Debit balance processed successfully', { 
         messageId: message.messageId,
-        userId: message.userId,
+        companyId: message.companyId,
         newBalance: updatedBalance.balance
       });
 
@@ -237,7 +237,7 @@ export class CriticalOperationsService {
     } catch (error) {
       LoggerUtil.error('billing-service', 'Failed to process debit balance', error as Error, { 
         messageId: message.messageId,
-        userId: message.userId
+        companyId: message.companyId
       });
       return false;
     }
@@ -250,13 +250,13 @@ export class CriticalOperationsService {
     try {
       LoggerUtil.info('billing-service', 'Processing create transaction', { 
         messageId: message.messageId,
-        userId: message.userId,
+        companyId: message.companyId,
         type: message.type,
         amount: message.amount
       });
 
-      // userId фактически является companyId
-      const companyId = message.userId;
+      // companyId
+      const companyId = message.companyId;
 
       // Создаем транзакцию
       const transaction = await this.prisma.transaction.create({
@@ -273,14 +273,14 @@ export class CriticalOperationsService {
       LoggerUtil.info('billing-service', 'Transaction created successfully', { 
         messageId: message.messageId,
         transactionId: transaction.id,
-        userId: message.userId
+        companyId: message.companyId
       });
 
       return true;
     } catch (error) {
       LoggerUtil.error('billing-service', 'Failed to create transaction', error as Error, { 
         messageId: message.messageId,
-        userId: message.userId
+        companyId: message.companyId
       });
       return false;
     }
@@ -293,7 +293,7 @@ export class CriticalOperationsService {
     try {
       LoggerUtil.info('billing-service', 'Processing payment', { 
         messageId: message.messageId,
-        userId: message.userId,
+        companyId: message.companyId,
         paymentId: message.paymentId,
         amount: message.amount
       });
@@ -318,13 +318,13 @@ export class CriticalOperationsService {
 
       // Находим компанию
       const company = await this.prisma.company.findUnique({
-        where: { id: message.userId }, // userId фактически companyId
+        where: { id: message.companyId }, // companyId
         include: { balance: true }
       });
 
       if (!company || !company.balance) {
         LoggerUtil.error('billing-service', 'Company balance not found for payment', null, { 
-          companyId: message.userId 
+          companyId: message.companyId 
         });
         return false;
       }
@@ -356,7 +356,7 @@ export class CriticalOperationsService {
 
       LoggerUtil.info('billing-service', 'Payment processed successfully', { 
         messageId: message.messageId,
-        userId: message.userId,
+        companyId: message.companyId,
         newBalance: updatedBalance.balance
       });
 
@@ -364,7 +364,7 @@ export class CriticalOperationsService {
     } catch (error) {
       LoggerUtil.error('billing-service', 'Failed to process payment', error as Error, { 
         messageId: message.messageId,
-        userId: message.userId
+        companyId: message.companyId
       });
       return false;
     }

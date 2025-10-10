@@ -2,12 +2,13 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { PrismaModule } from './common/prisma/prisma.module';
 import { AuthModule } from './modules/auth/auth.module';
-import { ApiKeyModule } from './modules/api-key/api-key.module';
-import { UserModule } from './modules/user/user.module';
+import { ApiKeysModule } from './modules/api-keys/api-keys.module';
+import { ProviderPreferencesModule } from './modules/provider-preferences/provider-preferences.module';
 import { SecurityModule } from './modules/security/security.module';
 import { AuthHttpModule } from './http/http.module';
 import { HttpModule } from '@nestjs/axios';
 import { HealthModule } from './health/health.module';
+import { ReferralModule } from './modules/referral/referral.module';
 import { configuration } from './config/configuration';
 import { validationSchema } from './config/validation.schema';
 
@@ -25,13 +26,14 @@ import { validationSchema } from './config/validation.schema';
       timeout: 10000,
       maxRedirects: 3,
     }),
-    PrismaModule,
-    AuthModule,
-    ApiKeyModule,
-    UserModule,
-    SecurityModule,
-    AuthHttpModule,
-    HealthModule,
+        PrismaModule,
+        AuthModule,
+        ReferralModule,
+        ApiKeysModule,
+        ProviderPreferencesModule,
+        SecurityModule,
+        AuthHttpModule,
+        HealthModule,
   ],
 })
 export class AppModule {}

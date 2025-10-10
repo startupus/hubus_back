@@ -11,6 +11,8 @@ interface SyncCompanyDto {
   billingMode?: 'SELF_PAID' | 'PARENT_PAID';
   position?: string;
   department?: string;
+  referredBy?: string;
+  referralCodeId?: string;
 }
 
 @ApiTags('sync')
@@ -42,6 +44,8 @@ export class SyncController {
             billingMode: dto.billingMode || 'SELF_PAID',
             position: dto.position,
             department: dto.department,
+            referredBy: dto.referredBy,
+            referralCodeId: dto.referralCodeId,
             updatedAt: new Date()
           }
         });
@@ -65,6 +69,8 @@ export class SyncController {
           billingMode: dto.billingMode || 'SELF_PAID',
           position: dto.position,
           department: dto.department,
+          referredBy: dto.referredBy,
+          referralCodeId: dto.referralCodeId,
           isActive: true
         }
       });

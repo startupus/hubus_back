@@ -32,7 +32,7 @@ export class PricingService {
     service: string,
     resource: string,
     quantity: number,
-    userId?: string,
+    companyId?: string,
     metadata?: {
       provider?: string;
       model?: string;
@@ -44,7 +44,7 @@ export class PricingService {
       [key: string]: any;
     }
   ): Promise<number> {
-    const result = await this.calculateUsageCost(service, resource, quantity, userId, metadata);
+    const result = await this.calculateUsageCost(service, resource, quantity, companyId, metadata);
     return result.cost || 0;
   }
 
@@ -55,7 +55,7 @@ export class PricingService {
     service: string,
     resource: string,
     quantity: number,
-    userId?: string,
+    companyId?: string,
     metadata?: {
       provider?: string;
       model?: string;
@@ -86,7 +86,7 @@ export class PricingService {
         provider,
         model,
         tokens,
-        userId
+        companyId
       });
 
       // Классифицируем провайдера
@@ -129,7 +129,7 @@ export class PricingService {
       }
 
       // Применяем скидки
-      const discounts = await this.getApplicableDiscounts(userId, baseCost, quantity, providerType);
+      const discounts = await this.getApplicableDiscounts(companyId, baseCost, quantity, providerType);
       let discountAmount = 0;
       
       for (const discount of discounts) {
@@ -164,7 +164,7 @@ export class PricingService {
         model,
         providerType,
         tokens,
-        userId,
+        companyId,
         cost: totalCost,
         currency,
         breakdown
@@ -182,7 +182,7 @@ export class PricingService {
         service,
         resource,
         quantity,
-        userId,
+        companyId,
         provider: metadata?.provider
       });
       return {
@@ -254,7 +254,7 @@ export class PricingService {
    * Get applicable discounts
    */
   async getApplicableDiscounts(
-    userId?: string,
+    companyId?: string,
     amount?: number,
     quantity?: number,
     providerType?: ProviderType
@@ -320,7 +320,7 @@ export class PricingService {
         }));
     } catch (error) {
       LoggerUtil.error('billing-service', 'Failed to get applicable discounts', error as Error, {
-        userId,
+        companyId,
         amount,
         quantity
       });

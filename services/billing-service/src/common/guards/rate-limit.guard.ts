@@ -44,7 +44,7 @@ export class RateLimitGuard implements CanActivate {
         key,
         limit: rateLimit,
         ip: request.ip,
-        userId: request.user?.id || 'anonymous'
+        companyId: request.user?.id || 'anonymous'
       });
 
       throw new HttpException(
@@ -61,13 +61,13 @@ export class RateLimitGuard implements CanActivate {
    */
   private getRateLimitKey(request: any, operation: string): string {
     const ip = request.ip || 'unknown';
-    const userId = request.user?.id || request.body?.userId || 'anonymous';
+    const companyId = request.user?.id || request.body?.companyId || 'anonymous';
     
     // Для критических операций используем комбинированный ключ
     const criticalOperations = ['updateBalance', 'processPayment', 'createTransaction'];
     
     if (criticalOperations.includes(operation)) {
-      return `${operation}:${userId}:${ip}`;
+      return `${operation}:${companyId}:${ip}`;
     }
     
     // Для остальных операций используем только IP

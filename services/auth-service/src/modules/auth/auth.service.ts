@@ -2,7 +2,7 @@ import { Injectable, UnauthorizedException, ConflictException, BadRequestExcepti
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../common/prisma/prisma.service';
-import { LoggerUtil, User, AuthResult, JwtPayload } from '@ai-aggregator/shared';
+import { LoggerUtil, Company, AuthResult, JwtPayload } from '@ai-aggregator/shared';
 import { CryptoUtil } from '../../common/utils/crypto.util';
 import { RegisterDto, LoginDto, ChangePasswordDto, ResetPasswordRequestDto, ResetPasswordDto, VerifyEmailDto } from '@ai-aggregator/shared';
 
@@ -54,7 +54,7 @@ export class AuthService {
 
       return {
         success: true,
-        user: this.mapCompanyToDto(company),
+        company: this.mapCompanyToDto(company),
         token: tokens.accessToken,
         refreshToken: tokens.refreshToken,
       };
@@ -117,7 +117,7 @@ export class AuthService {
 
       return {
         success: true,
-        user: this.mapCompanyToDto(company),
+        company: this.mapCompanyToDto(company),
         token: tokens.accessToken,
         refreshToken: tokens.refreshToken,
       };
@@ -377,11 +377,11 @@ export class AuthService {
   /**
    * Generate access and refresh tokens
    */
-  private async generateTokens(user: User): Promise<{ accessToken: string; refreshToken: string }> {
+  private async generateTokens(company: Company): Promise<{ accessToken: string; refreshToken: string }> {
     const payload: JwtPayload = {
-      sub: user.id,
-      email: user.email,
-      role: user.role,
+      sub: company.id,
+      email: company.email,
+      role: company.role,
       iat: Math.floor(Date.now() / 1000),
     };
 
@@ -391,7 +391,7 @@ export class AuthService {
     // Save refresh token
     await this.prisma.refreshToken.create({
       data: {
-        companyId: user.id,
+        companyId: company.id,
         token: refreshToken,
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
       },
@@ -403,9 +403,10 @@ export class AuthService {
   /**
    * Map Prisma company to DTO
    */
-  private mapCompanyToDto(company: any): User {
+  private mapCompanyToDto(company: any): Company {
     return {
       id: company.id,
+      name: company.name,
       email: company.email,
       passwordHash: company.passwordHash,
       isActive: company.isActive,

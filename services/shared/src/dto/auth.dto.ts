@@ -7,13 +7,13 @@ import { ApiProperty } from '@nestjs/swagger';
 export class RegisterDto {
   @ApiProperty({ example: 'user@example.com', description: 'User email address' })
   @IsEmail({}, { message: 'Invalid email format' })
-  email: string;
+  email!: string;
 
   @ApiProperty({ example: 'password123', description: 'User password', minLength: 8, maxLength: 128 })
   @IsString({ message: 'Password must be a string' })
   @MinLength(8, { message: 'Password must be at least 8 characters long' })
   @MaxLength(128, { message: 'Password must not exceed 128 characters' })
-  password: string;
+  password!: string;
 
   @ApiProperty({ example: 'John', description: 'User first name', required: false })
   @IsOptional()
@@ -31,37 +31,37 @@ export class RegisterDto {
 export class LoginDto {
   @ApiProperty({ example: 'user@example.com', description: 'User email address' })
   @IsEmail({}, { message: 'Invalid email format' })
-  email: string;
+  email!: string;
 
   @ApiProperty({ example: 'password123', description: 'User password' })
   @IsString({ message: 'Password must be a string' })
-  password: string;
+  password!: string;
 }
 
 export class RefreshTokenDto {
-  refreshToken: string;
+  refreshToken!: string;
 }
 
 export class ChangePasswordDto {
-  currentPassword: string;
-  newPassword: string;
+  currentPassword!: string;
+  newPassword!: string;
 }
 
 export class ResetPasswordRequestDto {
-  email: string;
+  email!: string;
 }
 
 export class ResetPasswordDto {
-  token: string;
-  newPassword: string;
+  token!: string;
+  newPassword!: string;
 }
 
 export class VerifyEmailDto {
-  token: string;
+  token!: string;
 }
 
 export class CreateApiKeyDto {
-  name: string;
+  name!: string;
   description?: string;
   permissions?: string[];
   expiresAt?: string;
@@ -75,10 +75,10 @@ export class UpdateApiKeyDto {
 }
 
 export class AuthResponseDto {
-  accessToken: string;
-  refreshToken: string;
+  accessToken!: string;
+  refreshToken!: string;
   tokenType: string = 'Bearer';
-  expiresIn: number;
+  expiresIn!: number;
   user?: {
     id: string;
     email: string;
@@ -88,24 +88,24 @@ export class AuthResponseDto {
 }
 
 export class ApiKeyResponseDto {
-  id: string;
-  key: string;
-  name: string;
+  id!: string;
+  key!: string;
+  name!: string;
   description?: string;
-  isActive: boolean;
-  permissions: string[];
-  createdAt: string;
+  isActive!: boolean;
+  permissions!: string[];
+  createdAt!: string;
   lastUsedAt?: string;
   expiresAt?: string;
 }
 
 export class UserProfileDto {
-  id: string;
-  email: string;
-  role: string;
-  isActive: boolean;
-  isVerified: boolean;
-  createdAt: string;
-  updatedAt: string;
+  id!: string;
+  email!: string;
+  role!: string;
+  isActive!: boolean;
+  isVerified!: boolean;
+  createdAt!: string;
+  updatedAt!: string;
   lastLoginAt?: string;
 }

@@ -21,6 +21,9 @@ async function bootstrap() {
     credentials: true,
   });
 
+  // Global prefix
+  app.setGlobalPrefix('v1');
+
   // Global validation pipe - временно отключена для отладки
   // app.useGlobalPipes(
   //   new ValidationPipe({

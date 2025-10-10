@@ -104,7 +104,7 @@ export class SecurityService {
   private mapSecurityEventToDto(event: any): SecurityEvent {
     return {
       id: event.id,
-      userId: event.userId,
+      companyId: event.companyId,
       type: event.type,
       severity: event.severity,
       description: event.description,

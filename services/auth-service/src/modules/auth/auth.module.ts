@@ -10,11 +10,13 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { LocalStrategy } from './strategies/local.strategy';
 import { PassportModule } from '@nestjs/passport';
 import { PrismaModule } from '../../common/prisma/prisma.module';
+import { ReferralModule } from '../referral/referral.module';
 
 @Module({
   imports: [
     PassportModule,
     PrismaModule,
+    ReferralModule,
     HttpModule.register({
       timeout: 10000,
       maxRedirects: 3,

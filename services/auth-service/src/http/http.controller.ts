@@ -3,7 +3,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { AuthService } from '../modules/auth/auth.service';
 import { ApiKeyService } from '../modules/api-key/api-key.service';
-import { UserService } from '../modules/user/user.service';
+import { CompanyService } from '../modules/auth/company.service';
 import { LoggerUtil } from '@ai-aggregator/shared';
 import { RegisterDto, LoginDto } from '@ai-aggregator/shared';
 
@@ -13,7 +13,7 @@ export class HttpController {
   constructor(
     private readonly authService: AuthService,
     private readonly apiKeyService: ApiKeyService,
-    private readonly userService: UserService,
+    private readonly companyService: CompanyService,
   ) {}
 
   @Post('register')
@@ -47,16 +47,16 @@ export class HttpController {
 
       return {
         success: result.success,
-        user: result.user ? {
-          id: result.user.id,
-          email: result.user.email,
-          isActive: result.user.isActive,
-          isVerified: result.user.isVerified,
-          role: result.user.role,
+        company: result.company ? {
+          id: result.company.id,
+          email: result.company.email,
+          isActive: result.company.isActive,
+          isVerified: result.company.isVerified,
+          role: result.company.role,
           firstName: data.firstName,
           lastName: data.lastName,
-          createdAt: result.user.createdAt.toISOString(),
-          updatedAt: result.user.updatedAt.toISOString(),
+          createdAt: result.company.createdAt.toISOString(),
+          updatedAt: result.company.updatedAt.toISOString(),
         } : undefined,
         error: result.error,
       };
@@ -79,9 +79,9 @@ export class HttpController {
       
       let user;
       if (id) {
-        user = await this.userService.getUserById(id);
+        user = await this.companyService.getCompanyById(id);
       } else if (email) {
-        user = await this.userService.getUserByEmail(email);
+        user = await this.companyService.getCompanyByEmail(email);
       } else {
         return {
           success: false,
@@ -143,17 +143,17 @@ export class HttpController {
         success: result.success,
         accessToken: result.token,
         refreshToken: result.refreshToken,
-        user: result.user ? {
-          id: result.user.id,
-          email: result.user.email,
-          isActive: result.user.isActive,
-          isVerified: result.user.isVerified,
-          role: result.user.role,
-          firstName: (result.user as any).firstName || '',
-          lastName: (result.user as any).lastName || '',
-          createdAt: result.user.createdAt.toISOString(),
-          updatedAt: result.user.updatedAt.toISOString(),
-          lastLoginAt: result.user.lastLoginAt?.toISOString(),
+        company: result.company ? {
+          id: result.company.id,
+          email: result.company.email,
+          isActive: result.company.isActive,
+          isVerified: result.company.isVerified,
+          role: result.company.role,
+          firstName: (result.company as any).firstName || '',
+          lastName: (result.company as any).lastName || '',
+          createdAt: result.company.createdAt.toISOString(),
+          updatedAt: result.company.updatedAt.toISOString(),
+          lastLoginAt: result.company.lastLoginAt?.toISOString(),
         } : undefined,
         error: result.error,
         requiresVerification: result.requiresVerification,
@@ -190,7 +190,7 @@ export class HttpController {
         return {
           success: validation.isValid,
           authContext: validation.isValid ? {
-            userId: validation.userId,
+            companyId: validation.companyId,
             email: '', // Will be filled by the caller
             role: '', // Will be filled by the caller
             permissions: validation.permissions || [],
@@ -203,7 +203,7 @@ export class HttpController {
         return {
           success: !!payload,
           authContext: payload ? {
-            userId: payload.sub,
+            companyId: payload.sub,
             email: payload.email,
             role: payload.role,
             permissions: [], // Will be filled by the caller
@@ -240,10 +240,10 @@ export class HttpController {
   async createApiKey(@Body() data: any, @Req() req: any) {
     try {
       LoggerUtil.debug('auth-service', 'HTTP CreateApiKey called - req.user', { reqUser: req.user, name: data.name });
-      const userId = req.user?.sub;
-      LoggerUtil.debug('auth-service', 'HTTP CreateApiKey called - extracted userId', { userId, name: data.name });
-      
-      const apiKey = await this.apiKeyService.createApiKey(userId, {
+      const companyId = req.user?.sub;
+      LoggerUtil.debug('auth-service', 'HTTP CreateApiKey called - extracted companyId', { companyId, name: data.name });
+
+      const apiKey = await this.apiKeyService.createApiKey(companyId, {
         name: data.name,
         description: data.description,
         permissions: data.permissions || [],
@@ -255,7 +255,7 @@ export class HttpController {
         apiKey: {
           id: apiKey.id,
           key: apiKey.key,
-          userId: apiKey.userId,
+          companyId: apiKey.companyId,
           name: apiKey.name,
           description: apiKey.description,
           isActive: apiKey.isActive,
@@ -295,7 +295,7 @@ export class HttpController {
       return {
         success: validation.isValid,
         authContext: validation.isValid ? {
-          userId: validation.userId,
+          companyId: validation.companyId,
           email: '', // Will be filled by the caller
           role: '', // Will be filled by the caller
           permissions: validation.permissions || [],

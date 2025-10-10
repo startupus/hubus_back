@@ -54,6 +54,24 @@ services:
       timeout: 5s
       retries: 5
 
+  payment-db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: payment_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5439:5432"
+    volumes:
+      - payment_db_data:/var/lib/postgresql/data
+    networks:
+      - ai-aggregator
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   api-gateway-db:
     image: postgres:15-alpine
     environment:
@@ -438,6 +456,35 @@ services:
       - ai-aggregator
     restart: unless-stopped
 
+  payment-service:
+    build:
+      context: .
+      dockerfile: ./services/payment-service/Dockerfile
+    ports:
+      - "3006:3006"
+    environment:
+      - NODE_ENV=development
+      - HOST=0.0.0.0
+      - PORT=3006
+      - PAYMENT_DATABASE_URL=postgresql://postgres:password@payment-db:5432/payment_db?schema=public
+      - JWT_SECRET=your-super-secret-jwt-key-here
+      - YOOKASSA_SHOP_ID=your_shop_id
+      - YOOKASSA_SECRET_KEY=your_secret_key
+      - CBR_API_URL=https://www.cbr-xml-daily.ru/daily_json.js
+      - FRONTEND_URL=http://localhost:3000
+      - LOG_LEVEL=debug
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3006/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    depends_on:
+      payment-db:
+        condition: service_healthy
+    networks:
+      - ai-aggregator
+    restart: unless-stopped
+
 volumes:
   auth_db_data:
   billing_db_data:
@@ -449,6 +496,7 @@ volumes:
   certification_logs:
   anonymization_db_data:
   anonymization_logs:
+  payment_db_data:
   redis_data:
   rabbitmq_data:
 

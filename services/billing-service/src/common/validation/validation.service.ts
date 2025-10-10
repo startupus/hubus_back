@@ -4,7 +4,7 @@ import {
   InsufficientBalanceException, 
   InvalidAmountException, 
   InvalidCurrencyException,
-  UserNotFoundException,
+  CompanyNotFoundException,
   PaymentMethodNotFoundException
 } from '../../exceptions/billing.exceptions';
 import { Decimal } from '@prisma/client/runtime/library';
@@ -62,7 +62,7 @@ export class ValidationService {
    */
   async validateCompany(companyId: string, prisma: any): Promise<void> {
     if (!companyId || typeof companyId !== 'string') {
-      throw new UserNotFoundException(companyId);
+      throw new CompanyNotFoundException(companyId);
     }
 
     try {
@@ -72,18 +72,18 @@ export class ValidationService {
       });
 
       if (!company) {
-        throw new UserNotFoundException(companyId);
+        throw new CompanyNotFoundException(companyId);
       }
 
       if (!company.isActive) {
-        throw new UserNotFoundException(companyId);
+        throw new CompanyNotFoundException(companyId);
       }
     } catch (error) {
-      if (error instanceof UserNotFoundException) {
+      if (error instanceof CompanyNotFoundException) {
         throw error;
       }
       LoggerUtil.error('billing-service', 'Company validation error', error as Error, { companyId });
-      throw new UserNotFoundException(companyId);
+      throw new CompanyNotFoundException(companyId);
     }
   }
 

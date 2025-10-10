@@ -37,8 +37,8 @@ export class ConcurrentBillingService {
     metadata?: any;
   }>();
   
-  // Потокобезопасная карта для блокировок пользователей
-  private readonly userLocks = new ConcurrentMap<string, Int32Array>();
+  // Потокобезопасная карта для блокировок компаний
+  private readonly companyLocks = new ConcurrentMap<string, Int32Array>();
   
   // Пул потоков для параллельной обработки
   // private readonly threadPool: ThreadPoolService; // Temporarily disabled
@@ -64,8 +64,8 @@ export class ConcurrentBillingService {
       }
 
       // Получаем блокировку для пользователя
-      const userLock = this.getUserLock(companyId);
-      await this.acquireLock(userLock);
+      const companyLock = this.getCompanyLock(companyId);
+      await this.acquireLock(companyLock);
 
       try {
         // Получаем баланс из БД
@@ -108,7 +108,7 @@ export class ConcurrentBillingService {
 
         return { balance: balance.balance, currency: balance.currency };
       } finally {
-        this.releaseLock(userLock);
+        this.releaseLock(companyLock);
       }
     } catch (error) {
       LoggerUtil.error('billing-service', 'Failed to get balance', error as Error, { companyId });
@@ -128,8 +128,8 @@ export class ConcurrentBillingService {
   ): Promise<{ success: boolean; newBalance: Decimal; transactionId?: string }> {
     try {
       // Получаем блокировку для пользователя
-      const userLock = this.getUserLock(companyId);
-      await this.acquireLock(userLock);
+      const companyLock = this.getCompanyLock(companyId);
+      await this.acquireLock(companyLock);
 
       try {
       // Получаем текущий баланс
@@ -197,7 +197,7 @@ export class ConcurrentBillingService {
           transactionId: transaction.id
         };
       } finally {
-        this.releaseLock(userLock);
+        this.releaseLock(companyLock);
       }
     } catch (error) {
       LoggerUtil.error('billing-service', 'Failed to update balance', error as Error, { companyId });
@@ -246,7 +246,7 @@ export class ConcurrentBillingService {
    */
   async processBatchTransactions(
     transactions: Array<{
-      userId: string;
+      companyId: string;
       amount: Decimal;
       type: 'DEBIT' | 'CREDIT';
       description: string;
@@ -257,7 +257,7 @@ export class ConcurrentBillingService {
       // Создаем задачи для пула потоков
       const tasks = transactions.map(transaction => 
         () => this.updateBalance(
-          transaction.userId,
+          transaction.companyId,
           transaction.amount,
           transaction.type,
           transaction.description,
@@ -435,13 +435,13 @@ export class ConcurrentBillingService {
   }
 
   /**
-   * Получение блокировки для пользователя
+   * Получение блокировки для компании
    */
-  private getUserLock(userId: string): Int32Array {
-    if (!this.userLocks.has(userId)) {
-      this.userLocks.set(userId, new Int32Array(new SharedArrayBuffer(4)));
+  private getCompanyLock(companyId: string): Int32Array {
+    if (!this.companyLocks.has(companyId)) {
+      this.companyLocks.set(companyId, new Int32Array(new SharedArrayBuffer(4)));
     }
-    return this.userLocks.get(userId)!;
+    return this.companyLocks.get(companyId)!;
   }
 
   /**

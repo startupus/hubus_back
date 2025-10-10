@@ -21,10 +21,10 @@ export enum ChatRole {
 
 export class ChatMessage {
   @ApiProperty({ description: 'Роль отправителя сообщения' })
-  role: string;
+  role!: string;
 
   @ApiProperty({ description: 'Содержимое сообщения' })
-  content: string;
+  content!: string;
 
   @ApiProperty({ description: 'Имя отправителя (опционально)', required: false })
   @IsOptional()
@@ -33,10 +33,10 @@ export class ChatMessage {
 
 export class ChatCompletionRequest {
   @ApiProperty({ description: 'Модель для использования' })
-  model: string;
+  model!: string;
 
   @ApiProperty({ description: 'Массив сообщений', type: [ChatMessage] })
-  messages: ChatMessage[];
+  messages!: ChatMessage[];
 
   @ApiProperty({ description: 'Максимальное количество токенов в ответе', required: false })
   @IsOptional()
@@ -65,85 +65,85 @@ export class ChatCompletionRequest {
 
 export class ChatCompletionChoice {
   @ApiProperty({ description: 'Индекс выбора' })
-  index: number;
+  index!: number;
 
   @ApiProperty({ description: 'Сообщение ответа', type: ChatMessage })
   @ValidateNested()
   @Type(() => ChatMessage)
-  message: ChatMessage;
+  message!: ChatMessage;
 
   @ApiProperty({ description: 'Причина завершения' })
-  finish_reason: string;
+  finish_reason!: string;
 }
 
 export class ChatCompletionUsage {
   @ApiProperty({ description: 'Количество токенов в промпте' })
-  prompt_tokens: number;
+  prompt_tokens!: number;
 
   @ApiProperty({ description: 'Количество токенов в ответе' })
-  completion_tokens: number;
+  completion_tokens!: number;
 
   @ApiProperty({ description: 'Общее количество токенов' })
-  total_tokens: number;
+  total_tokens!: number;
 }
 
 export class ChatCompletionResponse {
   @ApiProperty({ description: 'ID ответа' })
-  id: string;
+  id!: string;
 
   @ApiProperty({ description: 'Объект ответа' })
-  object: string;
+  object!: string;
 
   @ApiProperty({ description: 'Время создания' })
-  created: number;
+  created!: number;
 
   @ApiProperty({ description: 'Модель' })
-  model: string;
+  model!: string;
 
   @ApiProperty({ description: 'Массив выборов', type: [ChatCompletionChoice] })
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => ChatCompletionChoice)
-  choices: ChatCompletionChoice[];
+  choices!: ChatCompletionChoice[];
 
   @ApiProperty({ description: 'Использование токенов', type: ChatCompletionUsage })
   @ValidateNested()
   @Type(() => ChatCompletionUsage)
-  usage: ChatCompletionUsage;
+  usage!: ChatCompletionUsage;
 
   @ApiProperty({ description: 'Провайдер, который обработал запрос' })
-  provider: string;
+  provider!: string;
 
   @ApiProperty({ description: 'Время обработки в миллисекундах' })
-  processing_time_ms: number;
+  processing_time_ms!: number;
 }
 
 export class AnonymizedChatRequest {
   @ApiProperty({ description: 'Обезличенный запрос' })
   @ValidateNested()
   @Type(() => ChatCompletionRequest)
-  request: ChatCompletionRequest;
+  request!: ChatCompletionRequest;
 
   @ApiProperty({ description: 'Маппинг обезличивания' })
   @IsObject()
-  anonymization_mapping: Record<string, string>;
+  anonymization_mapping!: Record<string, string>;
 
   @ApiProperty({ description: 'Хеш данных для отслеживания' })
   @IsString()
-  data_hash: string;
+  data_hash!: string;
 }
 
 export class AnonymizedChatResponse {
   @ApiProperty({ description: 'Обезличенный ответ' })
   @ValidateNested()
   @Type(() => ChatCompletionResponse)
-  response: ChatCompletionResponse;
+  response!: ChatCompletionResponse;
 
   @ApiProperty({ description: 'Маппинг обезличивания' })
   @IsObject()
-  anonymization_mapping: Record<string, string>;
+  anonymization_mapping!: Record<string, string>;
 
   @ApiProperty({ description: 'Хеш данных для отслеживания' })
   @IsString()
-  data_hash: string;
+  data_hash!: string;
 }

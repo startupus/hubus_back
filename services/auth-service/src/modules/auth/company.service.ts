@@ -6,6 +6,7 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import { LoggerUtil } from '@ai-aggregator/shared';
 import * as bcrypt from 'bcrypt';
 import { firstValueFrom } from 'rxjs';
+import { randomBytes } from 'crypto';
 
 @Injectable()
 export class CompanyService {
@@ -28,6 +29,8 @@ export class CompanyService {
     email: string;
     password: string;
     description?: string;
+    referralCode?: string;
+    referralLink?: string;
   }) {
     try {
       // Check if company already exists
@@ -39,10 +42,44 @@ export class CompanyService {
         throw new ConflictException('Company with this email already exists');
       }
 
+      // Process referral link or code if provided
+      let referrerCompanyId: string | undefined;
+      let referralCodeId: string | undefined;
+
+      if (companyData.referralLink || companyData.referralCode) {
+        const referralIdentifier = companyData.referralLink || companyData.referralCode;
+        LoggerUtil.info('auth-service', 'Processing referral link/code', { 
+          referralIdentifier 
+        });
+        
+        const referralResult = referralIdentifier ? await this.validateReferralLink(referralIdentifier) : null;
+        if (referralResult && referralResult.isValid) {
+          referrerCompanyId = referralResult.referrerCompanyId;
+          referralCodeId = referralResult.referralCodeId;
+          
+          LoggerUtil.info('auth-service', 'Referral link/code validated successfully', { 
+            referrerCompanyId,
+            referralCodeId
+          });
+        } else {
+          LoggerUtil.warn('auth-service', 'Invalid referral link/code', { 
+            referralIdentifier,
+            message: referralResult?.message
+          });
+          throw new ConflictException(referralResult?.message || 'Invalid referral link/code');
+        }
+      }
+
       // Hash password
       const passwordHash = await bcrypt.hash(companyData.password, 10);
 
       // Create company
+      LoggerUtil.info('auth-service', 'Creating company with referral data', { 
+        email: companyData.email,
+        referrerCompanyId,
+        referralCodeId
+      });
+      
       const company = await this.prisma.company.create({
         data: {
           name: companyData.name,
@@ -52,7 +89,15 @@ export class CompanyService {
           isActive: true,
           isVerified: true, // Auto-verify companies
           role: 'company',
+          referredBy: referrerCompanyId,
+          referralCodeId: referralCodeId,
         },
+      });
+      
+      LoggerUtil.info('auth-service', 'Company created successfully', { 
+        companyId: company.id,
+        referredBy: company.referredBy,
+        referralCodeId: company.referralCodeId
       });
 
       // Generate JWT tokens
@@ -85,9 +130,15 @@ export class CompanyService {
             billingMode: company.billingMode,
             position: company.position,
             department: company.department,
+          referredBy: company.referredBy,
+          referralCodeId: company.referralCodeId,
           })
         );
-        LoggerUtil.info('auth-service', 'Company synced to billing-service', { companyId: company.id });
+        LoggerUtil.info('auth-service', 'Company synced to billing-service', { 
+          companyId: company.id,
+          referredBy: company.referredBy,
+          referralCodeId: company.referralCodeId
+        });
       } catch (syncError) {
         LoggerUtil.warn('auth-service', 'Failed to sync company to billing-service', { 
           companyId: company.id, 
@@ -105,6 +156,7 @@ export class CompanyService {
           isActive: company.isActive,
           isVerified: company.isVerified,
           createdAt: company.createdAt,
+          // referredBy: company.referredBy, // TODO: Fix Prisma client generation
         },
         accessToken,
         refreshToken,
@@ -218,69 +270,6 @@ export class CompanyService {
     }
   }
 
-  /**
-   * Create a child company (employee company)
-   */
-  async createChildCompany(parentCompanyId: string, companyData: {
-    name: string;
-    email: string;
-    password: string;
-    billingMode?: 'SELF_PAID' | 'PARENT_PAID';
-    position?: string;
-    department?: string;
-    description?: string;
-  }) {
-    try {
-      // Check if parent company exists
-      const parentCompany = await this.prisma.company.findUnique({
-        where: { id: parentCompanyId },
-      });
-
-      if (!parentCompany) {
-        throw new NotFoundException('Parent company not found');
-      }
-
-      // Check if company with this email already exists
-      const existingCompany = await this.prisma.company.findUnique({
-        where: { email: companyData.email },
-      });
-
-      if (existingCompany) {
-        throw new ConflictException('Company with this email already exists');
-      }
-
-      // Hash password
-      const passwordHash = await bcrypt.hash(companyData.password, 10);
-
-      // Create child company
-      const childCompany = await this.prisma.company.create({
-        data: {
-          name: companyData.name,
-          email: companyData.email,
-          passwordHash,
-          description: companyData.description,
-          parentCompanyId: parentCompanyId,
-          billingMode: companyData.billingMode || 'PARENT_PAID',
-          position: companyData.position,
-          department: companyData.department,
-          isActive: true,
-          isVerified: true,
-          role: 'company',
-        },
-      });
-
-      LoggerUtil.info('auth-service', 'Child company created successfully', { 
-        childCompanyId: childCompany.id, 
-        parentCompanyId,
-        email: childCompany.email 
-      });
-
-      return childCompany;
-    } catch (error) {
-      LoggerUtil.error('auth-service', 'Failed to create child company', error as Error);
-      throw error;
-    }
-  }
 
   /**
    * Get company by ID
@@ -305,132 +294,8 @@ export class CompanyService {
     }
   }
 
-  /**
-   * Update company
-   */
-  async updateCompany(companyId: string, updateData: {
-    name?: string;
-    description?: string;
-    isActive?: boolean;
-  }) {
-    try {
-      const company = await this.prisma.company.findUnique({
-        where: { id: companyId },
-      });
 
-      if (!company) {
-        throw new NotFoundException('Company not found');
-      }
 
-      const updatedCompany = await this.prisma.company.update({
-        where: { id: companyId },
-        data: updateData,
-      });
-
-      LoggerUtil.info('auth-service', 'Company updated successfully', { 
-        companyId: updatedCompany.id 
-      });
-
-      return updatedCompany;
-    } catch (error) {
-      LoggerUtil.error('auth-service', 'Failed to update company', error as Error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get child companies (employees)
-   */
-  async getChildCompanies(parentCompanyId: string) {
-    try {
-      const parentCompany = await this.prisma.company.findUnique({
-        where: { id: parentCompanyId },
-      });
-
-      if (!parentCompany) {
-        throw new NotFoundException('Parent company not found');
-      }
-
-      const childCompanies = await this.prisma.company.findMany({
-        where: { parentCompanyId },
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          position: true,
-          department: true,
-          billingMode: true,
-          isActive: true,
-          isVerified: true,
-          createdAt: true,
-        },
-      });
-
-      return childCompanies;
-    } catch (error) {
-      LoggerUtil.error('auth-service', 'Failed to get child companies', error as Error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get company hierarchy (tree structure)
-   */
-  async getCompanyHierarchy(companyId: string, depth: number = 3): Promise<any> {
-    try {
-      const company = await this.prisma.company.findUnique({
-        where: { id: companyId },
-      });
-
-      if (!company) {
-        throw new NotFoundException('Company not found');
-      }
-
-      return await this.buildHierarchyTree(companyId, depth);
-    } catch (error) {
-      LoggerUtil.error('auth-service', 'Failed to get company hierarchy', error as Error);
-      throw error;
-    }
-  }
-
-  private async buildHierarchyTree(companyId: string, maxDepth: number, currentDepth: number = 0): Promise<any> {
-    if (currentDepth >= maxDepth) {
-      return null;
-    }
-
-    const company = await this.prisma.company.findUnique({
-      where: { id: companyId },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        position: true,
-        department: true,
-        billingMode: true,
-        isActive: true,
-      },
-    });
-
-    if (!company) {
-      return null;
-    }
-
-    const childCompanies = await this.prisma.company.findMany({
-      where: { parentCompanyId: companyId },
-      select: { id: true },
-    });
-
-    const children = await Promise.all(
-      childCompanies.map((child) =>
-        this.buildHierarchyTree(child.id, maxDepth, currentDepth + 1)
-      )
-    );
-
-    return {
-      ...company,
-      childCompanies: children.filter((c) => c !== null),
-    };
-  }
 
 
   /**
@@ -573,5 +438,209 @@ export class CompanyService {
       LoggerUtil.error('auth-service', 'Failed to update billing mode', error as Error);
       throw error;
     }
+  }
+
+  /**
+   * Generate unique referral code
+   */
+  private generateReferralCode(): string {
+    return randomBytes(8).toString('hex').toUpperCase();
+  }
+
+  /**
+   * Validate referral link or code
+   */
+  private async validateReferralLink(identifier: string): Promise<{ 
+    isValid: boolean; 
+    referrerCompanyId?: string; 
+    referralCodeId?: string;
+    message?: string;
+  }> {
+    try {
+      // Extract code from referral link if it's a full URL
+      let code = identifier;
+      if (identifier.includes('?ref=')) {
+        const url = new URL(identifier);
+        code = url.searchParams.get('ref') || identifier;
+      }
+
+      const referralCode = await this.prisma.referralCode.findUnique({
+        where: { code },
+        include: { owner: true },
+      });
+
+      if (!referralCode) {
+        return { isValid: false, message: 'Invalid referral link' };
+      }
+
+      if (!referralCode.isActive) {
+        return { isValid: false, message: 'Referral link is not active' };
+      }
+
+      if (referralCode.expiresAt && referralCode.expiresAt < new Date()) {
+        return { isValid: false, message: 'Referral link has expired' };
+      }
+
+      // Check maxUses only if it's set (null means unlimited)
+      if (referralCode.maxUses !== null && referralCode.maxUses !== undefined && referralCode.usedCount >= referralCode.maxUses) {
+        return { isValid: false, message: 'Referral link has reached maximum uses' };
+      }
+
+      // Update used count
+      await this.prisma.referralCode.update({
+        where: { id: referralCode.id },
+        data: { usedCount: referralCode.usedCount + 1 },
+      });
+
+      return {
+        isValid: true,
+        referrerCompanyId: referralCode.companyId,
+        referralCodeId: referralCode.id,
+      };
+    } catch (error) {
+      LoggerUtil.error('auth-service', 'Failed to validate referral link', error as Error, { identifier });
+      return { isValid: false, message: 'Failed to validate referral link' };
+    }
+  }
+
+  /**
+   * Validate referral code (legacy method for backward compatibility)
+   */
+  private async validateReferralCode(code: string): Promise<{ 
+    isValid: boolean; 
+    referrerCompanyId?: string; 
+    referralCodeId?: string;
+    message?: string;
+  }> {
+    return this.validateReferralLink(code);
+  }
+
+  /**
+   * Get company by ID (replaces getUserById)
+   */
+  async getCompanyById(companyId: string) {
+    try {
+      const company = await this.prisma.company.findUnique({
+        where: { id: companyId },
+      });
+
+      if (!company) {
+        throw new NotFoundException('Company not found');
+      }
+
+      return this.mapCompanyToDto(company);
+    } catch (error) {
+      LoggerUtil.error('auth-service', 'Failed to get company by ID', error as Error, { companyId });
+      throw error;
+    }
+  }
+
+  /**
+   * Get company by email (replaces getUserByEmail)
+   */
+  async getCompanyByEmail(email: string) {
+    try {
+      const company = await this.prisma.company.findUnique({
+        where: { email },
+      });
+
+      if (!company) {
+        throw new NotFoundException('Company not found');
+      }
+
+      return this.mapCompanyToDto(company);
+    } catch (error) {
+      LoggerUtil.error('auth-service', 'Failed to get company by email', error as Error, { email });
+      throw error;
+    }
+  }
+
+  /**
+   * Update company profile (replaces updateUser)
+   */
+  async updateCompany(companyId: string, updateData: Partial<{
+    name: string;
+    description: string;
+    website: string;
+    phone: string;
+    address: Record<string, unknown>;
+    settings: Record<string, unknown>;
+    metadata: Record<string, unknown>;
+  }>) {
+    try {
+      const company = await this.prisma.company.update({
+        where: { id: companyId },
+        data: {
+          name: updateData.name,
+          description: updateData.description,
+          website: updateData.website,
+          phone: updateData.phone,
+          address: updateData.address as any,
+          settings: updateData.settings as any,
+          metadata: updateData.metadata as any,
+        },
+      });
+
+      LoggerUtil.info('auth-service', 'Company updated', { companyId });
+
+      return this.mapCompanyToDto(company);
+    } catch (error) {
+      LoggerUtil.error('auth-service', 'Failed to update company', error as Error, { companyId });
+      throw error;
+    }
+  }
+
+  /**
+   * Deactivate company account (replaces deactivateUser)
+   */
+  async deactivateCompany(companyId: string): Promise<void> {
+    try {
+      await this.prisma.company.update({
+        where: { id: companyId },
+        data: { isActive: false },
+      });
+
+      // Revoke all API keys
+      await this.prisma.apiKey.updateMany({
+        where: { companyId: companyId },
+        data: { isActive: false },
+      });
+
+      // Revoke all refresh tokens
+      await this.prisma.refreshToken.updateMany({
+        where: { companyId: companyId },
+        data: { isRevoked: true },
+      });
+
+      LoggerUtil.info('auth-service', 'Company deactivated', { companyId });
+    } catch (error) {
+      LoggerUtil.error('auth-service', 'Failed to deactivate company', error as Error, { companyId });
+      throw error;
+    }
+  }
+
+
+  /**
+   * Map Prisma company to DTO (replaces mapCompanyToDto from UserService)
+   */
+  private mapCompanyToDto(company: any) {
+    return {
+      id: company.id,
+      name: company.name,
+      email: company.email,
+      passwordHash: company.passwordHash,
+      isActive: company.isActive,
+      isVerified: company.isVerified,
+      role: company.role,
+      description: company.description,
+      website: company.website,
+      phone: company.phone,
+      address: company.address,
+      settings: company.settings,
+      createdAt: company.createdAt,
+      updatedAt: company.updatedAt,
+      lastLoginAt: company.lastLoginAt,
+      metadata: company.metadata,
+    };
   }
 }

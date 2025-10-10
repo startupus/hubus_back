@@ -2,13 +2,19 @@
  * Authentication and authorization types
  */
 
-export interface User {
+export interface Company {
   id: string;
+  name: string;
   email: string;
   passwordHash: string;
   isActive: boolean;
   isVerified: boolean;
   role: UserRole;
+  description?: string;
+  website?: string;
+  phone?: string;
+  address?: Record<string, unknown>;
+  settings?: Record<string, unknown>;
   createdAt: Date;
   updatedAt: Date;
   lastLoginAt?: Date;
@@ -18,7 +24,7 @@ export interface User {
 export interface ApiKey {
   id: string;
   key: string;
-  userId: string;
+  companyId: string;
   name: string;
   description?: string;
   isActive: boolean;
@@ -30,7 +36,7 @@ export interface ApiKey {
 }
 
 export interface JwtPayload {
-  sub: string; // userId
+  sub: string; // companyId
   email: string;
   role: UserRole;
   iat: number;
@@ -40,7 +46,7 @@ export interface JwtPayload {
 
 export interface RefreshToken {
   id: string;
-  userId: string;
+  companyId: string;
   token: string;
   expiresAt: Date;
   isRevoked: boolean;
@@ -60,7 +66,7 @@ export interface LoginAttempt {
   timestamp: Date;
 }
 
-export type UserRole = 'admin' | 'user' | 'service';
+export type UserRole = 'admin' | 'company' | 'service' | 'fsb';
 
 export type Permission = 
   | 'read:profile'
@@ -76,7 +82,7 @@ export type Permission =
   | 'api:usage';
 
 export interface AuthContext {
-  userId: string;
+  companyId: string;
   email: string;
   role: UserRole;
   permissions: Permission[];
@@ -86,7 +92,7 @@ export interface AuthContext {
 
 export interface AuthResult {
   success: boolean;
-  user?: User;
+  company?: Company;
   token?: string;
   refreshToken?: string;
   error?: string;
@@ -96,7 +102,7 @@ export interface AuthResult {
 
 export interface PasswordResetToken {
   id: string;
-  userId: string;
+  companyId: string;
   token: string;
   expiresAt: Date;
   isUsed: boolean;
@@ -105,7 +111,7 @@ export interface PasswordResetToken {
 
 export interface EmailVerificationToken {
   id: string;
-  userId: string;
+  companyId: string;
   token: string;
   expiresAt: Date;
   isUsed: boolean;
@@ -114,7 +120,7 @@ export interface EmailVerificationToken {
 
 export interface SecurityEvent {
   id: string;
-  userId?: string;
+  companyId?: string;
   type: 'login' | 'logout' | 'password_change' | 'api_key_created' | 'api_key_revoked' | 'suspicious_activity';
   severity: 'low' | 'medium' | 'high' | 'critical';
   description: string;

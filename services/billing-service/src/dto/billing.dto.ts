@@ -7,24 +7,23 @@ import { TransactionType, TransactionStatus } from '../types/billing.types';
  * DTO для получения баланса пользователя
  */
 export class GetBalanceDto {
-  @ApiProperty({ description: 'ID пользователя', example: 'user123' })
+  @ApiProperty({ description: 'ID компании', example: 'company123' })
   @IsString()
   @IsNotEmpty()
-  userId: string;
+  companyId: string;
 }
 
 /**
  * DTO для обновления баланса
  */
 export class UpdateBalanceDto {
-  @ApiProperty({ description: 'ID пользователя', example: 'user123' })
+  @ApiProperty({ description: 'ID компании', example: 'company123' })
   @IsString()
   @IsNotEmpty()
-  userId: string;
+  companyId: string;
 
   @ApiProperty({ description: 'Сумма для изменения', example: 100.50 })
   @IsNumber()
-  @IsPositive()
   @Min(0.01)
   @Max(1000000)
   @Transform(({ value }) => parseFloat(value))
@@ -47,16 +46,26 @@ export class UpdateBalanceDto {
   @IsOptional()
   @IsString()
   reference?: string;
+
+  @ApiPropertyOptional({ description: 'Валюта', example: 'USD', default: 'USD' })
+  @IsOptional()
+  @IsString()
+  currency?: string;
+
+  @ApiPropertyOptional({ description: 'Метаданные', example: { source: 'api' } })
+  @IsOptional()
+  @IsObject()
+  metadata?: Record<string, any>;
 }
 
 /**
  * DTO для создания транзакции
  */
 export class CreateTransactionDto {
-  @ApiProperty({ description: 'ID пользователя', example: 'user123' })
+  @ApiProperty({ description: 'ID компании', example: 'company123' })
   @IsString()
   @IsNotEmpty()
-  userId: string;
+  companyId: string;
 
   @ApiProperty({ 
     description: 'Тип транзакции', 
@@ -104,10 +113,10 @@ export class CreateTransactionDto {
  * DTO для отслеживания использования
  */
 export class TrackUsageDto {
-  @ApiProperty({ description: 'ID пользователя', example: 'user123' })
+  @ApiProperty({ description: 'ID компании', example: 'company123' })
   @IsString()
   @IsNotEmpty()
-  userId: string;
+  companyId: string;
 
   @ApiProperty({ description: 'Сервис', example: 'ai-chat' })
   @IsString()
@@ -143,10 +152,10 @@ export class TrackUsageDto {
  * DTO для расчета стоимости
  */
 export class CalculateCostDto {
-  @ApiProperty({ description: 'ID пользователя', example: 'user123' })
+  @ApiProperty({ description: 'ID компании', example: 'company123' })
   @IsString()
   @IsNotEmpty()
-  userId: string;
+  companyId: string;
 
   @ApiProperty({ description: 'Сервис', example: 'ai-chat' })
   @IsString()
@@ -176,10 +185,10 @@ export class CalculateCostDto {
  * DTO для обработки платежа
  */
 export class ProcessPaymentDto {
-  @ApiProperty({ description: 'ID пользователя', example: 'user123' })
+  @ApiProperty({ description: 'ID компании', example: 'company123' })
   @IsString()
   @IsNotEmpty()
-  userId: string;
+  companyId: string;
 
   @ApiProperty({ description: 'Сумма платежа', example: 100.50 })
   @IsNumber()
@@ -214,10 +223,10 @@ export class ProcessPaymentDto {
  * DTO для получения отчета по биллингу
  */
 export class BillingReportDto {
-  @ApiProperty({ description: 'ID пользователя', example: 'user123' })
+  @ApiProperty({ description: 'ID компании', example: 'company123' })
   @IsString()
   @IsNotEmpty()
-  userId: string;
+  companyId: string;
 
   @ApiProperty({ description: 'Дата начала периода', example: '2024-01-01' })
   @IsString()

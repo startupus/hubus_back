@@ -36,14 +36,14 @@ export class HttpController {
     private readonly paymentGatewayService: PaymentGatewayService
   ) {}
 
-  @Get('balance/:userId')
-  @ApiOperation({ summary: 'Get user balance' })
+  @Get('balance/:companyId')
+  @ApiOperation({ summary: 'Get company balance' })
   @ApiResponse({ status: 200, description: 'Balance retrieved successfully' })
   async getBalance(@Param() params: GetBalanceDto) {
     try {
-      LoggerUtil.debug('billing-service', 'HTTP GetBalance called', { company_id: params.userId });
+      LoggerUtil.debug('billing-service', 'HTTP GetBalance called', { company_id: params.companyId });
       
-      const result = await this.billingService.getBalance({ userId: params.userId });
+      const result = await this.billingService.getBalance({ companyId: params.companyId });
       
       if (!result.success) {
         return {
@@ -75,7 +75,7 @@ export class HttpController {
   async updateBalance(@Body() data: UpdateBalanceDto) {
     try {
       LoggerUtil.debug('billing-service', 'HTTP UpdateBalance called', { 
-        company_id: data.userId, 
+        company_id: data.companyId, 
         amount: data.amount,
         operation: data.operation 
       });
@@ -112,7 +112,7 @@ export class HttpController {
     schema: {
       type: 'object',
       properties: {
-        userId: { type: 'string' },
+        companyId: { type: 'string' },
         type: { type: 'string', enum: ['CREDIT', 'DEBIT', 'REFUND', 'CHARGEBACK'] },
         amount: { type: 'number' },
         currency: { type: 'string' },
@@ -121,15 +121,15 @@ export class HttpController {
         metadata: { type: 'object' },
         paymentMethodId: { type: 'string' }
       },
-      required: ['userId', 'type', 'amount']
+      required: ['companyId', 'type', 'amount']
     }
   })
   @ApiResponse({ status: 201, description: 'Transaction created successfully' })
   async createTransaction(@Body() data: any) {
     try {
-      // Map user_id to userId and convert type to TransactionType
+      // Map user_id to companyId and convert type to TransactionType
       const request: CreateTransactionRequest = {
-        userId: data.user_id || data.userId,
+        companyId: data.user_id || data.companyId,
         type: data.type === 'credit' ? TransactionType.CREDIT : 
               data.type === 'debit' ? TransactionType.DEBIT :
               data.type === 'refund' ? TransactionType.REFUND :
@@ -144,7 +144,7 @@ export class HttpController {
       };
 
       LoggerUtil.debug('billing-service', 'HTTP CreateTransaction called', { 
-        company_id: request.userId, 
+        company_id: request.companyId, 
         type: request.type,
         amount: request.amount 
       });
@@ -174,17 +174,17 @@ export class HttpController {
     }
   }
 
-  @Get('transactions/:userId')
-  @ApiOperation({ summary: 'Get transaction history' })
+  @Get('transactions/:companyId')
+  @ApiOperation({ summary: 'Get company transaction history' })
   @ApiResponse({ status: 200, description: 'Transaction history retrieved successfully' })
   async getTransactionHistory(
-    @Param('userId') userId: string,
+    @Param('companyId') companyId: string,
     @Query('page') page: number = 1,
     @Query('limit') limit: number = 10
   ) {
     try {
       LoggerUtil.debug('billing-service', 'HTTP GetTransactionHistory called', { 
-        company_id: userId,
+        company_id: companyId,
         page: page,
         limit: limit 
       });
@@ -218,20 +218,20 @@ export class HttpController {
     schema: {
       type: 'object',
       properties: {
-        userId: { type: 'string' },
+        companyId: { type: 'string' },
         service: { type: 'string' },
         resource: { type: 'string' },
         quantity: { type: 'number' },
         metadata: { type: 'object' }
       },
-      required: ['userId', 'service', 'resource', 'quantity']
+      required: ['companyId', 'service', 'resource', 'quantity']
     }
   })
   @ApiResponse({ status: 200, description: 'Cost calculated successfully' })
   async calculateCost(@Body() data: CalculateCostRequest) {
     try {
       LoggerUtil.debug('billing-service', 'HTTP CalculateCost called', { 
-        company_id: data.userId,
+        company_id: data.companyId,
         service: data.service,
         resource: data.resource,
         quantity: data.quantity 
@@ -275,21 +275,21 @@ export class HttpController {
     schema: {
       type: 'object',
       properties: {
-        userId: { type: 'string' },
+        companyId: { type: 'string' },
         amount: { type: 'number' },
         currency: { type: 'string' },
         paymentMethodId: { type: 'string' },
         description: { type: 'string' },
         metadata: { type: 'object' }
       },
-      required: ['userId', 'amount']
+      required: ['companyId', 'amount']
     }
   })
   @ApiResponse({ status: 200, description: 'Payment processed successfully' })
   async processPayment(@Body() data: ProcessPaymentRequest) {
     try {
       LoggerUtil.debug('billing-service', 'HTTP ProcessPayment called', { 
-        company_id: data.userId,
+        company_id: data.companyId,
         amount: data.amount,
         payment_method_id: data.paymentMethodId 
       });
@@ -326,21 +326,21 @@ export class HttpController {
     schema: {
       type: 'object',
       properties: {
-        userId: { type: 'string' },
+        companyId: { type: 'string' },
         service: { type: 'string' },
         resource: { type: 'string' },
         quantity: { type: 'number' },
         unit: { type: 'string' },
         metadata: { type: 'object' }
       },
-      required: ['userId', 'service', 'resource']
+      required: ['companyId', 'service', 'resource']
     }
   })
   @ApiResponse({ status: 200, description: 'Usage tracked successfully' })
   async trackUsage(@Body() data: TrackUsageDto) {
     try {
       LoggerUtil.debug('billing-service', 'HTTP TrackUsage called', { 
-        company_id: data.userId,
+        company_id: data.companyId,
         service: data.service,
         resource: data.resource,
         quantity: data.quantity 
@@ -372,17 +372,17 @@ export class HttpController {
     }
   }
 
-  @Get('report/:userId')
-  @ApiOperation({ summary: 'Get billing report' })
+  @Get('report/:companyId')
+  @ApiOperation({ summary: 'Get company billing report' })
   @ApiResponse({ status: 200, description: 'Billing report generated successfully' })
   async getBillingReport(
-    @Param('userId') userId: string,
+    @Param('companyId') companyId: string,
     @Query('startDate') startDate: string,
     @Query('endDate') endDate: string
   ) {
     try {
       LoggerUtil.debug('billing-service', 'HTTP GetBillingReport called', { 
-        company_id: userId,
+        company_id: companyId,
         start_date: startDate,
         end_date: endDate
       });
@@ -391,7 +391,7 @@ export class HttpController {
       const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000); // 30 дней назад
       const end = endDate ? new Date(endDate) : new Date(); // сейчас
       
-      const report = await this.billingService.getBillingReport(userId, start, end);
+      const report = await this.billingService.getBillingReport(companyId, start, end);
       
       return {
         success: true,
@@ -415,7 +415,7 @@ export class HttpController {
     try {
       LoggerUtil.debug('billing-service', 'HTTP GetCompanyBalance called', { company_id: companyId });
       
-      const result = await this.billingService.getBalance({ userId: companyId });
+      const result = await this.billingService.getBalance({ companyId: companyId });
       
       if (!result.success) {
         return {

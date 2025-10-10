@@ -3,14 +3,14 @@
  */
 
 export class ChatMessageDto {
-  role: 'user' | 'assistant' | 'system';
-  content: string;
+  role!: 'user' | 'assistant' | 'system';
+  content!: string;
   name?: string;
 }
 
 export class ProviderRequestDto {
-  model: string;
-  messages: ChatMessageDto[];
+  model!: string;
+  messages!: ChatMessageDto[];
   max_tokens?: number;
   temperature?: number;
   top_p?: number;
@@ -22,16 +22,16 @@ export class ProviderRequestDto {
 }
 
 export class ProviderResponseDto {
-  id: string;
-  object: string;
-  created: number;
-  model: string;
-  choices: Array<{
+  id!: string;
+  object!: string;
+  created!: number;
+  model!: string;
+  choices!: Array<{
     index: number;
     message: ChatMessageDto;
     finish_reason: 'stop' | 'length' | 'content_filter' | 'null';
   }>;
-  usage: {
+  usage!: {
     prompt_tokens: number;
     completion_tokens: number;
     total_tokens: number;
@@ -39,31 +39,31 @@ export class ProviderResponseDto {
 }
 
 export class ModelInfoDto {
-  id: string;
-  name: string;
+  id!: string;
+  name!: string;
   description?: string;
-  contextLength: number;
-  inputCostPerToken: number;
-  outputCostPerToken: number;
-  supportedFeatures: string[];
-  provider: string;
+  contextLength!: number;
+  inputCostPerToken!: number;
+  outputCostPerToken!: number;
+  supportedFeatures!: string[];
+  provider!: string;
 }
 
 export class ProviderConfigDto {
-  apiKey: string;
-  baseUrl: string;
+  apiKey!: string;
+  baseUrl!: string;
   timeout?: number;
   maxRetries?: number;
   retryDelay?: number;
 }
 
 export class CostCalculationDto {
-  provider: string;
-  model: string;
-  inputTokens: number;
-  outputTokens: number;
-  inputCost: number;
-  outputCost: number;
-  totalCost: number;
-  currency: string;
+  provider!: string;
+  model!: string;
+  inputTokens!: number;
+  outputTokens!: number;
+  inputCost!: number;
+  outputCost!: number;
+  totalCost!: number;
+  currency!: string;
 }

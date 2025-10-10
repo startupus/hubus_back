@@ -28,9 +28,18 @@ model Company {
   position          String?
   department        String?
   
+  // Referral fields
+  referralCode      String?   @unique @map("referral_code") // Уникальный реферальный код компании
+  referredBy        String?   @map("referred_by") // ID компании, которая пригласила
+  referralCodeId    String?   @map("referral_code_id") // ID реферального кода, по которому зарегистрировались
+  
   // Relations
   parentCompany     Company?  @relation("CompanyHierarchy", fields: [parentCompanyId], references: [id], onDelete: SetNull)
   childCompanies    Company[] @relation("CompanyHierarchy")
+  
+  // Referral relations
+  referredCompanies Company[] @relation("ReferredBy")
+  referrerCompany   Company?  @relation("ReferredBy", fields: [referredBy], references: [id], onDelete: SetNull)
   
   // Billing relations
   balance           CompanyBalance?
@@ -43,9 +52,15 @@ model Company {
   paymentMethods    PaymentMethod[]
   discountRules     DiscountRule[]
   
+  // Referral billing relations
+  referralTransactions ReferralTransaction[] @relation("ReferralOwner")
+  earnedReferralTransactions ReferralTransaction[] @relation("ReferralEarner")
+  
   @@map("companies")
   @@index([parentCompanyId])
   @@index([email])
+  @@index([referralCode])
+  @@index([referredBy])
 }
 
 
@@ -169,15 +184,24 @@ model Subscription {
   currentPeriodEnd   DateTime         @map("current_period_end")
   price             Decimal           @db.Decimal(10, 2)
   currency          String            @default("USD")
+  
+  // Token usage tracking
+  inputTokensUsed   Int               @default(0) @map("input_tokens_used") // Использовано входных токенов
+  outputTokensUsed  Int               @default(0) @map("output_tokens_used") // Использовано выходных токенов
+  inputTokensLimit  Int?              @map("input_tokens_limit") // Лимит входных токенов
+  outputTokensLimit Int?              @map("output_tokens_limit") // Лимит выходных токенов
+  
   createdAt         DateTime          @default(now()) @map("created_at")
   updatedAt         DateTime          @updatedAt @map("updated_at")
   
   // Relations
   company           Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  plan              PricingPlan       @relation(fields: [planId], references: [id], onDelete: Cascade)
   
   @@map("subscriptions")
   @@index([companyId])
   @@index([status])
+  @@index([currentPeriodEnd])
 }
 
 model PaymentMethod {
@@ -211,11 +235,23 @@ model PricingPlan {
   isActive          Boolean           @default(true) @map("is_active")
   limits            Json?
   features          Json?
+  
+  // Token-based plan fields
+  inputTokens       Int?              @map("input_tokens") // Количество включенных входных токенов
+  outputTokens      Int?              @map("output_tokens") // Количество включенных выходных токенов
+  inputTokenPrice   Decimal?          @map("input_token_price") @db.Decimal(10, 6) // Цена за входной токен
+  outputTokenPrice  Decimal?          @map("output_token_price") @db.Decimal(10, 6) // Цена за выходной токен
+  discountPercent   Decimal?          @map("discount_percent") @db.Decimal(5, 2) // Скидка в процентах (10%)
+  
   createdAt         DateTime          @default(now()) @map("created_at")
   updatedAt         DateTime          @updatedAt @map("updated_at")
   
+  // Relations
+  subscriptions     Subscription[]
+  
   @@map("pricing_plans")
   @@index([isActive])
+  @@index([type])
 }
 
 model PricingRule {
@@ -339,6 +375,7 @@ enum PricingType {
   USAGE_BASED
   ONE_TIME
   FREEMIUM
+  TOKEN_BASED
 }
 
 enum BillingCycle {
@@ -372,4 +409,42 @@ enum ProviderType {
 enum BillingMode {
   SELF_PAID     // Компания оплачивает сама
   PARENT_PAID   // Оплачивает родительская компания
+}
+
+model ReferralTransaction {
+  id                String    @id @default(uuid())
+  referralOwnerId   String    @map("referral_owner_id") // Компания, которая получила реферала
+  referralEarnerId  String    @map("referral_earner_id") // Компания, которая заработала на реферале
+  originalTransactionId String @map("original_transaction_id") // ID оригинальной транзакции
+  amount            Decimal   @db.Decimal(10, 4) // Сумма реферального бонуса
+  currency          String    @default("USD")
+  inputTokens       Int       @map("input_tokens") // Количество входных токенов
+  outputTokens      Int       @map("output_tokens") // Количество выходных токенов
+  inputTokenRate    Decimal   @map("input_token_rate") @db.Decimal(10, 6) // Ставка за входные токены (10%)
+  outputTokenRate   Decimal   @map("output_token_rate") @db.Decimal(10, 6) // Ставка за выходные токены (5%)
+  status            ReferralTransactionStatus @default(PENDING)
+  description       String?   // Описание транзакции
+  metadata          Json?     // Дополнительные данные
+  processedAt       DateTime? @map("processed_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  
+  // Relations
+  referralOwner     Company   @relation("ReferralOwner", fields: [referralOwnerId], references: [id], onDelete: Cascade)
+  referralEarner    Company   @relation("ReferralEarner", fields: [referralEarnerId], references: [id], onDelete: Cascade)
+  
+  @@map("referral_transactions")
+  @@index([referralOwnerId])
+  @@index([referralEarnerId])
+  @@index([originalTransactionId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+enum ReferralTransactionStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
 }

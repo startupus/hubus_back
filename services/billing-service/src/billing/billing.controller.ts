@@ -7,18 +7,18 @@ import { LoggerUtil } from '@ai-aggregator/shared';
 export class BillingController {
   constructor() {}
 
-  @Get('balance/:userId')
-  @ApiOperation({ summary: 'Get user balance' })
+  @Get('balance/:companyId')
+  @ApiOperation({ summary: 'Get company balance' })
   @ApiResponse({ status: 200, description: 'Balance retrieved successfully' })
-  async getBalance(@Param('userId') userId: string) {
+  async getBalance(@Param('companyId') companyId: string) {
     try {
-      LoggerUtil.debug('billing-service', 'HTTP GetBalance called', { userId });
+      LoggerUtil.debug('billing-service', 'HTTP GetBalance called', { companyId });
       
       return {
         success: true,
         message: 'Balance retrieved successfully',
         balance: {
-          user_id: userId,
+          company_id: companyId,
           balance: 100.0,
           currency: 'USD',
           updated_at: new Date().toISOString(),
@@ -34,16 +34,16 @@ export class BillingController {
     }
   }
 
-  @Post('balance/:userId/update')
-  @ApiOperation({ summary: 'Update user balance' })
+  @Post('balance/:companyId/update')
+  @ApiOperation({ summary: 'Update company balance' })
   @ApiResponse({ status: 200, description: 'Balance updated successfully' })
   async updateBalance(
-    @Param('userId') userId: string,
+    @Param('companyId') companyId: string,
     @Body() body: { amount: number; operation: string; description?: string }
   ) {
     try {
       LoggerUtil.debug('billing-service', 'HTTP UpdateBalance called', { 
-        userId, 
+        companyId, 
         amount: body.amount,
         operation: body.operation 
       });
@@ -52,7 +52,7 @@ export class BillingController {
         success: true,
         message: 'Balance updated successfully',
         balance: {
-          user_id: userId,
+          company_id: companyId,
           balance: 100.0 + (body.operation === 'add' ? body.amount : -body.amount),
           currency: 'USD',
           updated_at: new Date().toISOString(),
@@ -110,17 +110,17 @@ export class BillingController {
     }
   }
 
-  @Get('transactions/:userId')
-  @ApiOperation({ summary: 'Get transaction history' })
+  @Get('transactions/:companyId')
+  @ApiOperation({ summary: 'Get company transaction history' })
   @ApiResponse({ status: 200, description: 'Transaction history retrieved successfully' })
   async getTransactionHistory(
-    @Param('userId') userId: string,
+    @Param('companyId') companyId: string,
     @Query('page') page: number = 1,
     @Query('limit') limit: number = 10
   ) {
     try {
       LoggerUtil.debug('billing-service', 'HTTP GetTransactionHistory called', { 
-        userId,
+        companyId,
         page,
         limit 
       });

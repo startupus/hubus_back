@@ -1,631 +1,547 @@
 # Deployment Guide
 
-## 🎯 Обзор
+## 🚀 Quick Start
 
-Это руководство описывает процесс развертывания AI Aggregator в различных средах: development, staging и production.
+### Prerequisites
 
-## 🏗️ Архитектура развертывания
+- **Docker**: 20.10+ and Docker Compose 2.0+
+- **Node.js**: 18+ (for development)
+- **PostgreSQL**: 14+ (if not using Docker)
+- **RabbitMQ**: 3.8+ (if not using Docker)
 
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Load Balancer │────│   API Gateway   │────│  Microservices  │
-│   (Nginx)       │    │   (Port: 3000)  │    │   (Ports: 3001-3005) │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-         │                       │                       │
-         │              ┌─────────────────┐               │
-         └──────────────│   Database      │───────────────┘
-                        │   (PostgreSQL)  │
-                        └─────────────────┘
-                                 │
-                        ┌─────────────────┐
-                        │   Cache         │
-                        │   (Redis)       │
-                        └─────────────────┘
-                                 │
-                        ┌─────────────────┐
-                        │   Message Queue │
-                        │   (RabbitMQ)    │
-                        └─────────────────┘
-```
+### Environment Setup
 
-## 🚀 Development
-
-### Предварительные требования
-- Docker & Docker Compose
-- Node.js 18+
-- Git
-
-### Быстрый старт
+1. **Clone the repository**
 ```bash
-# Клонирование репозитория
-git clone https://github.com/teramisuslik/MVP.git
-cd MVP
+git clone <repository-url>
+cd ai-aggregator-platform
+```
 
-# Запуск всех сервисов
+2. **Copy environment configuration**
+```bash
+cp env.example .env
+```
+
+3. **Configure environment variables**
+Edit `.env` file with your settings:
+
+```env
+# Database Configuration
+AUTH_DATABASE_URL=postgresql://user:password@auth-db:5432/auth
+BILLING_DATABASE_URL=postgresql://user:password@billing-db:5432/billing
+
+# JWT Configuration
+JWT_SECRET=your-super-secret-jwt-key-here
+JWT_EXPIRES_IN=1h
+
+# RabbitMQ Configuration
+RABBITMQ_URL=amqp://user:password@rabbitmq:5672
+
+# Service URLs
+AUTH_SERVICE_URL=http://auth-service:3001
+BILLING_SERVICE_URL=http://billing-service:3004
+PROVIDER_ORCHESTRATOR_URL=http://provider-orchestrator:3002
+
+# AI Provider API Keys
+OPENAI_API_KEY=your-openai-api-key
+OPENROUTER_API_KEY=your-openrouter-api-key
+```
+
+## 🐳 Docker Deployment
+
+### Development Environment
+
+1. **Start all services**
+```bash
 docker-compose up -d
+```
 
-# Проверка статуса
+2. **Check service status**
+```bash
 docker-compose ps
 ```
 
+3. **View logs**
+```bash
+# All services
+docker-compose logs -f
+
+# Specific service
+docker-compose logs -f api-gateway
+```
+
+4. **Stop services**
+```bash
+docker-compose down
+```
+
+### Production Environment
+
+1. **Use production Docker Compose**
+```bash
+docker-compose -f docker-compose.prod.yml up -d
+```
+
+2. **Scale services as needed**
+```bash
+docker-compose up -d --scale api-gateway=3
+docker-compose up -d --scale proxy-service=5
+```
+
+## 🏗️ Manual Deployment
+
+### 1. Database Setup
+
+#### PostgreSQL Installation
+```bash
+# Ubuntu/Debian
+sudo apt update
+sudo apt install postgresql postgresql-contrib
+
+# macOS
+brew install postgresql
+brew services start postgresql
+
+# Windows
+# Download from https://www.postgresql.org/download/windows/
+```
+
+#### Create Databases
+```sql
+-- Connect to PostgreSQL
+psql -U postgres
+
+-- Create databases
+CREATE DATABASE auth_service;
+CREATE DATABASE billing_service;
+
+-- Create users
+CREATE USER auth_user WITH PASSWORD 'auth_password';
+CREATE USER billing_user WITH PASSWORD 'billing_password';
+
+-- Grant permissions
+GRANT ALL PRIVILEGES ON DATABASE auth_service TO auth_user;
+GRANT ALL PRIVILEGES ON DATABASE billing_service TO billing_user;
+```
+
+### 2. RabbitMQ Setup
+
+#### Installation
+```bash
+# Ubuntu/Debian
+sudo apt install rabbitmq-server
+
+# macOS
+brew install rabbitmq
+brew services start rabbitmq
+
+# Windows
+# Download from https://www.rabbitmq.com/download.html
+```
+
+#### Configuration
+```bash
+# Enable management plugin
+sudo rabbitmq-plugins enable rabbitmq_management
+
+# Create user
+sudo rabbitmqctl add_user admin password
+sudo rabbitmqctl set_user_tags admin administrator
+sudo rabbitmqctl set_permissions -p / admin ".*" ".*" ".*"
+```
+
+### 3. Service Deployment
+
+#### Install Dependencies
+```bash
+# Install root dependencies
+npm install
+
+# Install service dependencies
+cd services/auth-service && npm install
+cd services/billing-service && npm install
+cd services/api-gateway && npm install
+```
+
+#### Build Services
+```bash
+# Build all services
+npm run build
+
+# Build specific service
+cd services/auth-service && npm run build
+```
+
+#### Run Database Migrations
+```bash
+# Auth service migrations
+cd services/auth-service && npm run migrate
+
+# Billing service migrations
+cd services/billing-service && npm run migrate
+```
+
+#### Start Services
+```bash
+# Start in development mode
+npm run dev
+
+# Start in production mode
+npm run start:prod
+```
+
+## 🔧 Configuration
+
 ### Environment Variables
+
+#### API Gateway
 ```env
-# .env.development
-NODE_ENV=development
-LOG_LEVEL=debug
+PORT=3000
+NODE_ENV=production
+AUTH_SERVICE_URL=http://localhost:3001
+BILLING_SERVICE_URL=http://localhost:3004
+PROVIDER_ORCHESTRATOR_URL=http://localhost:3002
+RATE_LIMIT_WINDOW_MS=900000
+RATE_LIMIT_MAX_REQUESTS=100
+```
 
-# Database
-AUTH_DATABASE_URL=postgresql://user:password@auth-db:5432/auth_db
-BILLING_DATABASE_URL=postgresql://user:password@billing-db:5432/billing_db
-ORCHESTRATOR_DATABASE_URL=postgresql://user:password@orchestrator-db:5432/orchestrator_db
-ANALYTICS_DATABASE_URL=postgresql://user:password@analytics-db:5432/analytics_db
-
-# Redis
-REDIS_URL=redis://redis:6379
-
-# RabbitMQ
-RABBITMQ_URL=amqp://user:password@rabbitmq:5672
-
-# API Keys
-OPENAI_API_KEY=your-openai-key
-OPENROUTER_API_KEY=your-openrouter-key
-YANDEX_API_KEY=your-yandex-key
-
-# JWT
-JWT_SECRET=your-jwt-secret
+#### Auth Service
+```env
+PORT=3001
+NODE_ENV=production
+DATABASE_URL=postgresql://auth_user:auth_password@localhost:5432/auth_service
+JWT_SECRET=your-super-secret-jwt-key
 JWT_EXPIRES_IN=1h
+BCRYPT_ROUNDS=12
 ```
 
-### Локальная разработка
-```bash
-# Запуск только базы данных
-docker-compose up -d auth-db billing-db orchestrator-db analytics-db redis rabbitmq
-
-# Запуск сервисов локально
-cd services/api-gateway
-npm install
-npm run start:dev
-
-# В другом терминале
-cd services/auth-service
-npm install
-npm run start:dev
+#### Billing Service
+```env
+PORT=3004
+NODE_ENV=production
+DATABASE_URL=postgresql://billing_user:billing_password@localhost:5432/billing_service
+RABBITMQ_URL=amqp://admin:password@localhost:5672
+BILLING_CURRENCY=USD
+DEFAULT_BALANCE=100.0
 ```
 
-## 🏭 Staging
+### Security Configuration
 
-### Предварительные требования
-- Kubernetes cluster
-- Helm 3+
-- kubectl
-- Docker registry
+#### JWT Configuration
+```env
+# Use a strong, random secret
+JWT_SECRET=your-super-secret-jwt-key-minimum-32-characters
 
-### Kubernetes манифесты
-```yaml
-# k8s/api-gateway.yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: api-gateway
-spec:
-  replicas: 3
-  selector:
-    matchLabels:
-      app: api-gateway
-  template:
-    metadata:
-      labels:
-        app: api-gateway
-    spec:
-      containers:
-      - name: api-gateway
-        image: ai-aggregator/api-gateway:latest
-        ports:
-        - containerPort: 3000
-        env:
-        - name: NODE_ENV
-          value: "staging"
-        - name: AUTH_SERVICE_URL
-          value: "http://auth-service:3001"
-        resources:
-          requests:
-            memory: "256Mi"
-            cpu: "250m"
-          limits:
-            memory: "512Mi"
-            cpu: "500m"
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: api-gateway
-spec:
-  selector:
-    app: api-gateway
-  ports:
-  - port: 3000
-    targetPort: 3000
-  type: LoadBalancer
+# Set appropriate expiration time
+JWT_EXPIRES_IN=1h
+
+# For production, consider shorter expiration
+JWT_REFRESH_EXPIRES_IN=7d
 ```
 
-### Helm Chart
-```yaml
-# helm/ai-aggregator/values.yaml
-global:
-  imageRegistry: "your-registry.com"
-  imageTag: "latest"
-  environment: "staging"
+#### Database Security
+```env
+# Use strong passwords
+DATABASE_PASSWORD=strong-random-password
 
-apiGateway:
-  replicaCount: 3
-  image:
-    repository: "ai-aggregator/api-gateway"
-    tag: "latest"
-  service:
-    type: LoadBalancer
-    port: 3000
-  resources:
-    requests:
-      memory: "256Mi"
-      cpu: "250m"
-    limits:
-      memory: "512Mi"
-      cpu: "500m"
-
-authService:
-  replicaCount: 2
-  image:
-    repository: "ai-aggregator/auth-service"
-    tag: "latest"
-  service:
-    port: 3001
-  resources:
-    requests:
-      memory: "256Mi"
-      cpu: "250m"
-    limits:
-      memory: "512Mi"
-      cpu: "500m"
+# Enable SSL in production
+DATABASE_SSL=true
+DATABASE_SSL_REJECT_UNAUTHORIZED=true
 ```
 
-### Развертывание
-```bash
-# Установка Helm chart
-helm install ai-aggregator ./helm/ai-aggregator \
-  --namespace ai-aggregator \
-  --create-namespace \
-  --values ./helm/ai-aggregator/values-staging.yaml
+#### API Security
+```env
+# Enable CORS for your domain
+CORS_ORIGIN=https://yourdomain.com
 
-# Проверка статуса
-kubectl get pods -n ai-aggregator
-kubectl get services -n ai-aggregator
+# Set up rate limiting
+RATE_LIMIT_WINDOW_MS=900000
+RATE_LIMIT_MAX_REQUESTS=100
+
+# Enable request logging
+LOG_LEVEL=info
 ```
 
-## 🏢 Production
+## 📊 Monitoring & Health Checks
 
-### Предварительные требования
-- Kubernetes cluster (production-ready)
-- Helm 3+
-- kubectl
-- Docker registry
-- SSL certificates
-- Monitoring stack (Prometheus, Grafana)
-- Logging stack (ELK)
+### Health Check Endpoints
 
-### Production конфигурация
-```yaml
-# helm/ai-aggregator/values-production.yaml
-global:
-  imageRegistry: "your-registry.com"
-  imageTag: "v1.0.0"
-  environment: "production"
+- **API Gateway**: `http://localhost:3000/health`
+- **Auth Service**: `http://localhost:3001/health`
+- **Billing Service**: `http://localhost:3004/health`
 
-apiGateway:
-  replicaCount: 5
-  image:
-    repository: "ai-aggregator/api-gateway"
-    tag: "v1.0.0"
-  service:
-    type: LoadBalancer
-    port: 3000
-    annotations:
-      service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
-  resources:
-    requests:
-      memory: "512Mi"
-      cpu: "500m"
-    limits:
-      memory: "1Gi"
-      cpu: "1000m"
-  autoscaling:
-    enabled: true
-    minReplicas: 3
-    maxReplicas: 10
-    targetCPUUtilizationPercentage: 70
-
-authService:
-  replicaCount: 3
-  image:
-    repository: "ai-aggregator/auth-service"
-    tag: "v1.0.0"
-  service:
-    port: 3001
-  resources:
-    requests:
-      memory: "512Mi"
-      cpu: "500m"
-    limits:
-      memory: "1Gi"
-      cpu: "1000m"
-  autoscaling:
-    enabled: true
-    minReplicas: 2
-    maxReplicas: 8
-    targetCPUUtilizationPercentage: 70
-```
-
-### SSL/TLS конфигурация
-```yaml
-# k8s/ingress.yaml
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: ai-aggregator-ingress
-  annotations:
-    kubernetes.io/ingress.class: "nginx"
-    cert-manager.io/cluster-issuer: "letsencrypt-prod"
-    nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
-spec:
-  tls:
-  - hosts:
-    - api.ai-aggregator.com
-    secretName: ai-aggregator-tls
-  rules:
-  - host: api.ai-aggregator.com
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: api-gateway
-            port:
-              number: 3000
-```
-
-### Мониторинг
-```yaml
-# k8s/monitoring.yaml
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: prometheus-config
-data:
-  prometheus.yml: |
-    global:
-      scrape_interval: 15s
-    scrape_configs:
-    - job_name: 'ai-aggregator'
-      static_configs:
-      - targets: ['api-gateway:3000', 'auth-service:3001', 'billing-service:3004']
-      metrics_path: '/metrics'
-      scrape_interval: 5s
-```
-
-### Развертывание
-```bash
-# Создание namespace
-kubectl create namespace ai-aggregator
-
-# Установка cert-manager
-kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.13.0/cert-manager.yaml
-
-# Установка мониторинга
-kubectl apply -f k8s/monitoring.yaml
-
-# Установка приложения
-helm install ai-aggregator ./helm/ai-aggregator \
-  --namespace ai-aggregator \
-  --values ./helm/ai-aggregator/values-production.yaml
-
-# Проверка статуса
-kubectl get pods -n ai-aggregator
-kubectl get services -n ai-aggregator
-kubectl get ingress -n ai-aggregator
-```
-
-## 🔧 CI/CD Pipeline
-
-### GitHub Actions
-```yaml
-# .github/workflows/deploy.yml
-name: Deploy to Production
-
-on:
-  push:
-    branches: [main]
-    tags: ['v*']
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v3
-    
-    - name: Build Docker images
-      run: |
-        docker build -t ai-aggregator/api-gateway:${{ github.sha }} ./services/api-gateway
-        docker build -t ai-aggregator/auth-service:${{ github.sha }} ./services/auth-service
-        docker build -t ai-aggregator/billing-service:${{ github.sha }} ./services/billing-service
-        docker build -t ai-aggregator/provider-orchestrator:${{ github.sha }} ./services/provider-orchestrator
-        docker build -t ai-aggregator/proxy-service:${{ github.sha }} ./services/proxy-service
-        docker build -t ai-aggregator/analytics-service:${{ github.sha }} ./services/analytics-service
-    
-    - name: Push to registry
-      run: |
-        echo ${{ secrets.DOCKER_PASSWORD }} | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
-        docker push ai-aggregator/api-gateway:${{ github.sha }}
-        docker push ai-aggregator/auth-service:${{ github.sha }}
-        docker push ai-aggregator/billing-service:${{ github.sha }}
-        docker push ai-aggregator/provider-orchestrator:${{ github.sha }}
-        docker push ai-aggregator/proxy-service:${{ github.sha }}
-        docker push ai-aggregator/analytics-service:${{ github.sha }}
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v3
-    
-    - name: Deploy to Kubernetes
-      run: |
-        echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > kubeconfig
-        export KUBECONFIG=kubeconfig
-        
-        helm upgrade --install ai-aggregator ./helm/ai-aggregator \
-          --namespace ai-aggregator \
-          --values ./helm/ai-aggregator/values-production.yaml \
-          --set global.imageTag=${{ github.sha }}
-```
-
-## 📊 Мониторинг и логирование
-
-### Prometheus метрики
-```yaml
-# k8s/prometheus.yaml
-apiVersion: v1
-kind: Service
-metadata:
-  name: prometheus
-spec:
-  selector:
-    app: prometheus
-  ports:
-  - port: 9090
-    targetPort: 9090
-  type: LoadBalancer
-```
-
-### Grafana дашборды
+### Health Check Response
 ```json
 {
-  "dashboard": {
-    "title": "AI Aggregator Overview",
-    "panels": [
-      {
-        "title": "Request Rate",
-        "type": "graph",
-        "targets": [
-          {
-            "expr": "rate(http_requests_total[5m])",
-            "legendFormat": "{{service}}"
-          }
-        ]
-      },
-      {
-        "title": "Response Time",
-        "type": "graph",
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))",
-            "legendFormat": "95th percentile"
-          }
-        ]
-      }
-    ]
+  "service": "api-gateway",
+  "status": "healthy",
+  "timestamp": "2024-12-01T00:00:00.000Z",
+  "uptime": 3600,
+  "version": "1.0.0",
+  "dependencies": {
+    "auth-service": "healthy",
+    "billing-service": "healthy",
+    "database": "connected"
   }
 }
 ```
 
-### ELK Stack
+### Monitoring Setup
+
+#### Prometheus Metrics
 ```yaml
-# k8s/elk.yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: elasticsearch
-spec:
-  replicas: 3
-  selector:
-    matchLabels:
-      app: elasticsearch
-  template:
-    metadata:
-      labels:
-        app: elasticsearch
-    spec:
-      containers:
-      - name: elasticsearch
-        image: docker.elastic.co/elasticsearch/elasticsearch:8.8.0
-        env:
-        - name: discovery.type
-          value: "single-node"
-        - name: xpack.security.enabled
-          value: "false"
-        resources:
-          requests:
-            memory: "2Gi"
-            cpu: "1000m"
-          limits:
-            memory: "4Gi"
-            cpu: "2000m"
+# prometheus.yml
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'ai-aggregator'
+    static_configs:
+      - targets: ['localhost:3000', 'localhost:3001', 'localhost:3004']
 ```
 
-## 🔒 Безопасность
+#### Grafana Dashboard
+Import the provided Grafana dashboard configuration for comprehensive monitoring.
 
-### Secrets management
-```yaml
-# k8s/secrets.yaml
-apiVersion: v1
-kind: Secret
-metadata:
-  name: ai-aggregator-secrets
-type: Opaque
-data:
-  jwt-secret: <base64-encoded-secret>
-  openai-api-key: <base64-encoded-key>
-  openrouter-api-key: <base64-encoded-key>
-  yandex-api-key: <base64-encoded-key>
-  database-url: <base64-encoded-url>
+## 🔒 SSL/TLS Configuration
+
+### Using Let's Encrypt
+```bash
+# Install certbot
+sudo apt install certbot
+
+# Get certificate
+sudo certbot certonly --standalone -d yourdomain.com
+
+# Configure nginx
+server {
+    listen 443 ssl;
+    server_name yourdomain.com;
+    
+    ssl_certificate /etc/letsencrypt/live/yourdomain.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/yourdomain.com/privkey.pem;
+    
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
 ```
 
-### Network policies
-```yaml
-# k8s/network-policies.yaml
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: ai-aggregator-network-policy
-spec:
-  podSelector:
-    matchLabels:
-      app: ai-aggregator
-  policyTypes:
-  - Ingress
-  - Egress
-  ingress:
-  - from:
-    - podSelector:
-        matchLabels:
-          app: api-gateway
-  egress:
-  - to:
-    - podSelector:
-        matchLabels:
-          app: database
+### Using Self-Signed Certificates
+```bash
+# Generate private key
+openssl genrsa -out private.key 2048
+
+# Generate certificate
+openssl req -new -x509 -key private.key -out certificate.crt -days 365
 ```
 
-## 📈 Масштабирование
+## 🚀 Production Deployment
 
-### Horizontal Pod Autoscaler
-```yaml
-# k8s/hpa.yaml
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: api-gateway-hpa
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: api-gateway
-  minReplicas: 3
-  maxReplicas: 10
-  metrics:
-  - type: Resource
-    resource:
-      name: cpu
-      target:
-        type: Utilization
-        averageUtilization: 70
-  - type: Resource
-    resource:
-      name: memory
-      target:
-        type: Utilization
-        averageUtilization: 80
+### Using Docker Swarm
+
+1. **Initialize Swarm**
+```bash
+docker swarm init
 ```
 
-### Database scaling
-```yaml
-# k8s/database.yaml
-apiVersion: apps/v1
-kind: StatefulSet
-metadata:
-  name: postgresql
-spec:
-  serviceName: postgresql
-  replicas: 3
-  selector:
-    matchLabels:
-      app: postgresql
-  template:
-    metadata:
-      labels:
-        app: postgresql
-    spec:
-      containers:
-      - name: postgresql
-        image: postgres:14
-        env:
-        - name: POSTGRES_DB
-          value: "ai_aggregator"
-        - name: POSTGRES_USER
-          value: "user"
-        - name: POSTGRES_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: postgresql-secret
-              key: password
-        volumeMounts:
-        - name: postgresql-storage
-          mountPath: /var/lib/postgresql/data
-  volumeClaimTemplates:
-  - metadata:
-      name: postgresql-storage
-    spec:
-      accessModes: ["ReadWriteOnce"]
-      resources:
-        requests:
-          storage: 100Gi
+2. **Deploy Stack**
+```bash
+docker stack deploy -c docker-compose.swarm.yml ai-aggregator
+```
+
+3. **Scale Services**
+```bash
+docker service scale ai-aggregator_api-gateway=3
+docker service scale ai-aggregator_proxy-service=5
+```
+
+### Using Kubernetes
+
+1. **Create Namespace**
+```bash
+kubectl create namespace ai-aggregator
+```
+
+2. **Apply Configurations**
+```bash
+kubectl apply -f k8s/namespace.yaml
+kubectl apply -f k8s/configmap.yaml
+kubectl apply -f k8s/secrets.yaml
+kubectl apply -f k8s/deployments.yaml
+kubectl apply -f k8s/services.yaml
+kubectl apply -f k8s/ingress.yaml
+```
+
+3. **Check Status**
+```bash
+kubectl get pods -n ai-aggregator
+kubectl get services -n ai-aggregator
+```
+
+## 🔄 Backup & Recovery
+
+### Database Backup
+
+#### PostgreSQL Backup
+```bash
+# Backup auth database
+pg_dump -h localhost -U auth_user auth_service > auth_backup.sql
+
+# Backup billing database
+pg_dump -h localhost -U billing_user billing_service > billing_backup.sql
+
+# Restore from backup
+psql -h localhost -U auth_user auth_service < auth_backup.sql
+psql -h localhost -U billing_user billing_service < billing_backup.sql
+```
+
+#### Automated Backup Script
+```bash
+#!/bin/bash
+# backup.sh
+
+DATE=$(date +%Y%m%d_%H%M%S)
+BACKUP_DIR="/backups"
+
+# Create backup directory
+mkdir -p $BACKUP_DIR
+
+# Backup databases
+pg_dump -h localhost -U auth_user auth_service > $BACKUP_DIR/auth_$DATE.sql
+pg_dump -h localhost -U billing_user billing_service > $BACKUP_DIR/billing_$DATE.sql
+
+# Compress backups
+gzip $BACKUP_DIR/auth_$DATE.sql
+gzip $BACKUP_DIR/billing_$DATE.sql
+
+# Remove old backups (keep last 7 days)
+find $BACKUP_DIR -name "*.sql.gz" -mtime +7 -delete
+```
+
+### Application Backup
+
+#### Docker Volumes Backup
+```bash
+# Backup volumes
+docker run --rm -v ai-aggregator_auth_data:/data -v $(pwd):/backup alpine tar czf /backup/auth_data.tar.gz -C /data .
+docker run --rm -v ai-aggregator_billing_data:/data -v $(pwd):/backup alpine tar czf /backup/billing_data.tar.gz -C /data .
 ```
 
 ## 🚨 Troubleshooting
 
-### Общие проблемы
+### Common Issues
+
+#### Service Won't Start
 ```bash
-# Проверка статуса подов
-kubectl get pods -n ai-aggregator
+# Check logs
+docker-compose logs service-name
 
-# Просмотр логов
-kubectl logs -f deployment/api-gateway -n ai-aggregator
+# Check port conflicts
+netstat -tulpn | grep :3000
 
-# Проверка событий
-kubectl get events -n ai-aggregator
-
-# Проверка ресурсов
-kubectl top pods -n ai-aggregator
-kubectl top nodes
+# Check disk space
+df -h
 ```
 
-### Отладка
+#### Database Connection Issues
 ```bash
-# Подключение к поду
-kubectl exec -it deployment/api-gateway -n ai-aggregator -- /bin/bash
+# Test database connection
+psql -h localhost -U auth_user -d auth_service -c "SELECT 1;"
 
-# Проверка конфигурации
-kubectl describe deployment api-gateway -n ai-aggregator
-
-# Проверка сервисов
-kubectl get services -n ai-aggregator
-kubectl describe service api-gateway -n ai-aggregator
+# Check database status
+sudo systemctl status postgresql
 ```
 
-## 📚 Дополнительные ресурсы
+#### RabbitMQ Issues
+```bash
+# Check RabbitMQ status
+sudo systemctl status rabbitmq-server
 
-- [Kubernetes Documentation](https://kubernetes.io/docs/)
-- [Helm Documentation](https://helm.sh/docs/)
-- [Prometheus Documentation](https://prometheus.io/docs/)
-- [Grafana Documentation](https://grafana.com/docs/)
-- [ELK Stack Documentation](https://www.elastic.co/guide/)
+# Check queues
+sudo rabbitmqctl list_queues
+```
+
+### Performance Issues
+
+#### High Memory Usage
+```bash
+# Check memory usage
+docker stats
+
+# Restart services
+docker-compose restart
+```
+
+#### Slow Database Queries
+```sql
+-- Check slow queries
+SELECT query, mean_time, calls 
+FROM pg_stat_statements 
+ORDER BY mean_time DESC 
+LIMIT 10;
+```
+
+## 📈 Scaling
+
+### Horizontal Scaling
+
+#### Load Balancer Configuration
+```nginx
+upstream api_gateway {
+    server api-gateway-1:3000;
+    server api-gateway-2:3000;
+    server api-gateway-3:3000;
+}
+
+server {
+    listen 80;
+    location / {
+        proxy_pass http://api_gateway;
+    }
+}
+```
+
+#### Database Scaling
+- **Read Replicas**: Set up read replicas for read-heavy operations
+- **Connection Pooling**: Use PgBouncer for connection pooling
+- **Partitioning**: Partition large tables by date or user
+
+### Vertical Scaling
+
+#### Resource Limits
+```yaml
+# docker-compose.yml
+services:
+  api-gateway:
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
+```
+
+## 🔐 Security Checklist
+
+- [ ] Change default passwords
+- [ ] Enable SSL/TLS
+- [ ] Configure firewall rules
+- [ ] Set up rate limiting
+- [ ] Enable request logging
+- [ ] Configure CORS properly
+- [ ] Use strong JWT secrets
+- [ ] Enable database SSL
+- [ ] Set up monitoring and alerting
+- [ ] Regular security updates
+- [ ] Backup encryption
+- [ ] Access control and permissions
+
+---
+
+**Last Updated**: December 2024
+**Deployment Version**: 1.0.0

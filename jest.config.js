@@ -1,5 +1,4 @@
 module.exports = {
-  // Упрощенная конфигурация для монорепозитория
   preset: 'ts-jest',
   testEnvironment: 'node',
   roots: ['<rootDir>/services', '<rootDir>/tests'],
@@ -10,33 +9,56 @@ module.exports = {
   transform: {
     '^.+\\.ts$': ['ts-jest', {
       tsconfig: {
+        target: 'es2020',
+        module: 'commonjs',
+        lib: ['es2020'],
+        allowJs: true,
+        outDir: './dist',
+        rootDir: './',
+        strict: true,
+        noImplicitAny: true,
+        strictNullChecks: true,
+        strictFunctionTypes: true,
+        noImplicitThis: true,
+        noImplicitReturns: true,
+        noFallthroughCasesInSwitch: true,
+        moduleResolution: 'node',
+        baseUrl: './',
+        paths: {
+          '@ai-aggregator/shared': ['services/shared/src'],
+          '@ai-aggregator/*': ['services/*/src']
+        },
+        allowSyntheticDefaultImports: true,
+        esModuleInterop: true,
         experimentalDecorators: true,
         emitDecoratorMetadata: true,
-        target: 'ES2020',
-        module: 'commonjs',
-        strict: false,
         skipLibCheck: true,
-        esModuleInterop: true,
-        allowSyntheticDefaultImports: true,
-        useDefineForClassFields: false,
-        isolatedModules: false
+        forceConsistentCasingInFileNames: true
       }
-    }],
+    }]
   },
-  moduleNameMapper: {
-    '^@ai-aggregator/shared$': '<rootDir>/services/shared/src',
+  collectCoverageFrom: [
+    'services/**/*.ts',
+    '!services/**/*.d.ts',
+    '!services/**/node_modules/**',
+    '!services/**/dist/**',
+    '!services/**/test/**'
+  ],
+  coverageDirectory: 'coverage',
+  coverageReporters: ['text', 'lcov', 'html'],
+  coverageThreshold: {
+    global: {
+      branches: 80,
+      functions: 80,
+      lines: 80,
+      statements: 80
+    }
   },
   setupFilesAfterEnv: ['<rootDir>/tests/setup.ts'],
-  collectCoverage: false,
   testTimeout: 30000,
-  verbose: true,
-  // Игнорировать проблемные файлы и тесты
-  testPathIgnorePatterns: [
-    '/node_modules/',
-    '/dist/',
-    '/build/',
-    '/coverage/',
-    '.*concurrent-orchestrator.service.spec.ts',
-    '.*complex-integration.spec.ts'
-  ]
+  maxWorkers: 4,
+  moduleNameMapper: {
+    '^@ai-aggregator/shared$': '<rootDir>/services/shared/src',
+    '^@ai-aggregator/(.*)$': '<rootDir>/services/$1/src'
+  }
 };

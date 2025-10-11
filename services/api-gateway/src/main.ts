@@ -21,8 +21,10 @@ async function bootstrap() {
     credentials: true,
   });
 
-  // Global prefix
-  app.setGlobalPrefix('v1');
+  // Global prefix (exclude health endpoints)
+  app.setGlobalPrefix('v1', {
+    exclude: ['health', 'health/ready', 'health/live']
+  });
 
   // Global validation pipe - временно отключена для отладки
   // app.useGlobalPipes(

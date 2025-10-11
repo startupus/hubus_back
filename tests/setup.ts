@@ -1,67 +1,30 @@
-import { TestUtils } from './shared/test-utils';
+import 'reflect-metadata';
 
-// Global test setup
-beforeAll(async () => {
-  // Mock console methods to reduce noise in tests
-  jest.spyOn(console, 'log').mockImplementation(() => {});
-  jest.spyOn(console, 'warn').mockImplementation(() => {});
-  jest.spyOn(console, 'error').mockImplementation(() => {});
-  
-  // Mock LoggerUtil globally
-  TestUtils.mockLoggerUtil();
-});
-
-afterAll(async () => {
-  // Restore all mocks
-  jest.restoreAllMocks();
-  TestUtils.restoreLoggerUtil();
-});
-
-// Global test utilities
-global.testUtils = TestUtils;
-
-// Extend Jest matchers
-expect.extend({
-  toBeValidEmail(received: string) {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    const pass = emailRegex.test(received);
-    
-    return {
-      message: () => `expected ${received} ${pass ? 'not ' : ''}to be a valid email`,
-      pass,
-    };
+// Настройка глобальных моков
+jest.mock('@ai-aggregator/shared', () => ({
+  LoggerUtil: {
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+    debug: jest.fn(),
   },
-  
-  toBeValidUuid(received: string) {
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-    const pass = uuidRegex.test(received);
-    
-    return {
-      message: () => `expected ${received} ${pass ? 'not ' : ''}to be a valid UUID`,
-      pass,
-    };
-  },
-  
-  toBeValidApiKey(received: string) {
-    const apiKeyRegex = /^ak_[a-f0-9]{32}$/;
-    const pass = apiKeyRegex.test(received);
-    
-    return {
-      message: () => `expected ${received} ${pass ? 'not ' : ''}to be a valid API key`,
-      pass,
-    };
-  }
-});
+}));
 
-// Declare global types
-declare global {
-  namespace jest {
-    interface Matchers<R> {
-      toBeValidEmail(): R;
-      toBeValidUuid(): R;
-      toBeValidApiKey(): R;
-    }
-  }
-  
-  var testUtils: typeof TestUtils;
-}
+// Настройка переменных окружения для тестов
+process.env.NODE_ENV = 'test';
+process.env.JWT_SECRET = 'test-jwt-secret';
+process.env.DATABASE_URL = 'postgresql://test:test@localhost:5432/test_db';
+
+// Увеличиваем таймаут для тестов
+jest.setTimeout(10000);
+
+// Глобальные утилиты для тестов
+global.console = {
+  ...console,
+  // Отключаем логи в тестах для чистоты вывода
+  log: jest.fn(),
+  debug: jest.fn(),
+  info: jest.fn(),
+  warn: jest.fn(),
+  error: jest.fn(),
+};

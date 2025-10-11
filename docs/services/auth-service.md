@@ -1,277 +1,97 @@
 # Auth Service
 
-## 🚀 Overview
+## Описание
 
-The Auth Service handles user authentication, authorization, API key management, and referral system functionality. It provides secure user management with JWT tokens and API keys for external integrations.
+Auth Service отвечает за аутентификацию, управление пользователями (компаниями), создание и управление API ключами, а также систему рефералов.
 
-## 🔧 Configuration
+## Основные функции
 
-### Environment Variables
-```env
+- **Аутентификация компаний** через email и пароль
+- **Управление JWT токенами** (создание, валидация, обновление)
+- **Создание и управление API ключами** для программного доступа
+- **Система рефералов** с уникальными ссылками и комиссиями
+- **Управление ролями и правами доступа**
+- **Аудит безопасности** и логирование событий
+
+## Архитектура
+
+```mermaid
+graph TB
+    Client[Клиент] --> Gateway[API Gateway]
+    Gateway --> Auth[Auth Service]
+    
+    Auth --> AuthDB[(Auth Database)]
+    Auth --> Redis[(Redis Cache)]
+    Auth --> Billing[Billing Service]
+    
+    Auth --> JWT[JWT Tokens]
+    Auth --> APIKeys[API Keys]
+    Auth --> Referrals[Referral System]
+```
+
+## Конфигурация
+
+### Переменные окружения
+
+```bash
+# Основные настройки
+NODE_ENV=development
+HOST=0.0.0.0
 PORT=3001
-NODE_ENV=production
-DATABASE_URL=postgresql://auth_user:auth_password@localhost:5432/auth_service
-JWT_SECRET=your-super-secret-jwt-key
+
+# База данных
+DATABASE_URL=postgresql://postgres:password@auth-db:5432/auth_db
+
+# JWT
+JWT_SECRET=your-super-secret-jwt-key-here
 JWT_EXPIRES_IN=1h
-BCRYPT_ROUNDS=12
-AUTH_SERVICE_URL=http://auth-service:3001
+REFRESH_TOKEN_EXPIRES_IN=7d
+
+# Redis
+REDIS_URL=redis://redis:6379
+
+# Внешние сервисы
+BILLING_SERVICE_URL=http://billing-service:3004
+
+# Реферальная система
+REFERRAL_COMMISSION_RATE=0.1
+REFERRAL_BASE_URL=https://ai-aggregator.com/ref
 ```
 
-### Dependencies
-- **PostgreSQL**: User data storage
-- **Billing Service**: User synchronization
-- **JWT**: Token generation and validation
+### Docker конфигурация
 
-## 📋 API Endpoints
-
-### Company Management
-
-#### Register Company
-```http
-POST /v1/auth/register
-Content-Type: application/json
-
-{
-  "name": "Company Name",
-  "email": "company@example.com",
-  "password": "securepassword",
-  "description": "Company description",
-  "website": "https://company.com",
-  "phone": "+1234567890",
-  "address": {
-    "city": "New York",
-    "country": "USA"
-  },
-  "referralLink": "https://example.com/ref/ABC123"
-}
+```yaml
+auth-service:
+  build:
+    context: .
+    dockerfile: ./services/auth-service/Dockerfile
+  ports:
+    - "3001:3001"
+  environment:
+    - NODE_ENV=development
+    - HOST=0.0.0.0
+    - PORT=3001
+    - DATABASE_URL=postgresql://postgres:password@auth-db:5432/auth_db
+    - JWT_SECRET=your-super-secret-jwt-key-here
+    - REDIS_URL=redis://redis:6379
+    - BILLING_SERVICE_URL=http://billing-service:3004
+  depends_on:
+    - auth-db
+    - redis
+  networks:
+    - ai-aggregator
 ```
 
-**Response:**
-```json
-{
-  "success": true,
-  "message": "Company registered successfully",
-  "company": {
-    "id": "company-id",
-    "name": "Company Name",
-    "email": "company@example.com",
-    "isActive": true,
-    "isVerified": true,
-    "role": "company",
-    "createdAt": "2024-12-01T00:00:00.000Z"
-  },
-  "accessToken": "jwt-token"
-}
-```
+## База данных
 
-#### Login Company
-```http
-POST /v1/auth/login
-Content-Type: application/json
+### Схема
 
-{
-  "email": "company@example.com",
-  "password": "securepassword"
-}
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "message": "Login successful",
-  "accessToken": "jwt-token",
-  "company": {
-    "id": "company-id",
-    "name": "Company Name",
-    "email": "company@example.com",
-    "isActive": true,
-    "isVerified": true,
-    "role": "company"
-  }
-}
-```
-
-### API Key Management
-
-#### Create API Key
-```http
-POST /v1/auth/api-keys
-Authorization: Bearer <jwt-token>
-Content-Type: application/json
-
-{
-  "name": "My API Key",
-  "description": "API key for external integration",
-  "expiresAt": "2025-12-01T00:00:00.000Z"
-}
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "apiKey": {
-    "id": "api-key-id",
-    "name": "My API Key",
-    "key": "ak_xxxxxxxxxxxxxxxx",
-    "isActive": true,
-    "expiresAt": "2025-12-01T00:00:00.000Z",
-    "createdAt": "2024-12-01T00:00:00.000Z"
-  }
-}
-```
-
-#### List API Keys
-```http
-GET /v1/auth/api-keys
-Authorization: Bearer <jwt-token>
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "apiKeys": [
-    {
-      "id": "api-key-id",
-      "name": "My API Key",
-      "key": "ak_xxxxxxxxxxxxxxxx",
-      "isActive": true,
-      "expiresAt": "2025-12-01T00:00:00.000Z",
-      "createdAt": "2024-12-01T00:00:00.000Z"
-    }
-  ]
-}
-```
-
-#### Update API Key
-```http
-PUT /v1/auth/api-keys/:id
-Authorization: Bearer <jwt-token>
-Content-Type: application/json
-
-{
-  "name": "Updated API Key Name",
-  "description": "Updated description",
-  "isActive": true
-}
-```
-
-#### Delete API Key
-```http
-DELETE /v1/auth/api-keys/:id
-Authorization: Bearer <jwt-token>
-```
-
-### Referral System
-
-#### Get Referral Stats
-```http
-GET /v1/referrals/stats
-Authorization: Bearer <jwt-token>
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "stats": {
-    "totalReferrals": 10,
-    "activeReferrals": 8,
-    "totalCommission": 150.0,
-    "referralCode": "ABC123",
-    "referralLink": "https://example.com/ref/ABC123"
-  }
-}
-```
-
-#### Get Referral History
-```http
-GET /v1/referrals/history
-Authorization: Bearer <jwt-token>
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "referrals": [
-    {
-      "id": "referral-id",
-      "referredCompany": {
-        "id": "company-id",
-        "name": "Referred Company",
-        "email": "referred@example.com"
-      },
-      "commissionAmount": 15.0,
-      "status": "ACTIVE",
-      "createdAt": "2024-12-01T00:00:00.000Z"
-    }
-  ]
-}
-```
-
-### Provider Preferences
-
-#### Set Provider Preference
-```http
-POST /v1/provider-preferences
-Authorization: Bearer <jwt-token>
-Content-Type: application/json
-
-{
-  "model": "gpt-4",
-  "provider": "openai",
-  "priority": 1
-}
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "preference": {
-    "id": "preference-id",
-    "companyId": "company-id",
-    "model": "gpt-4",
-    "provider": "openai",
-    "priority": 1,
-    "createdAt": "2024-12-01T00:00:00.000Z"
-  }
-}
-```
-
-#### Get Provider Preferences
-```http
-GET /v1/provider-preferences
-Authorization: Bearer <jwt-token>
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "preferences": [
-    {
-      "id": "preference-id",
-      "model": "gpt-4",
-      "provider": "openai",
-      "priority": 1,
-      "createdAt": "2024-12-01T00:00:00.000Z"
-    }
-  ]
-}
-```
-
-## 🗄️ Database Schema
-
-### Companies Table
 ```sql
+-- Компании/пользователи
 CREATE TABLE companies (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name VARCHAR(255) NOT NULL,
   email VARCHAR(255) UNIQUE NOT NULL,
+  name VARCHAR(255) NOT NULL,
   password_hash VARCHAR(255) NOT NULL,
   is_active BOOLEAN DEFAULT true,
   is_verified BOOLEAN DEFAULT false,
@@ -279,398 +99,702 @@ CREATE TABLE companies (
   description TEXT,
   website VARCHAR(255),
   phone VARCHAR(50),
-  address JSONB,
-  city VARCHAR(100),
-  country VARCHAR(100),
-  industry VARCHAR(100),
-  department VARCHAR(100),
-  position VARCHAR(100),
+  address TEXT,
+  settings JSONB DEFAULT '{}',
   metadata JSONB DEFAULT '{}',
-  parent_company_id UUID REFERENCES companies(id),
-  billing_mode VARCHAR(20) DEFAULT 'SELF_PAID',
-  referral_code VARCHAR(50) UNIQUE,
-  referred_by UUID REFERENCES companies(id),
-  referral_code_id UUID REFERENCES referral_codes(id),
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW(),
-  last_login_at TIMESTAMP
+  last_login_at TIMESTAMP,
+  
+  -- Реферальная система
+  referred_by UUID REFERENCES companies(id),
+  referral_code_id UUID REFERENCES referral_codes(id)
 );
-```
 
-### API Keys Table
-```sql
+-- API ключи
 CREATE TABLE api_keys (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
-  name VARCHAR(255) NOT NULL,
   key VARCHAR(255) UNIQUE NOT NULL,
-  description TEXT,
+  name VARCHAR(255) NOT NULL,
+  company_id UUID NOT NULL REFERENCES companies(id),
   is_active BOOLEAN DEFAULT true,
-  expires_at TIMESTAMP,
-  last_used_at TIMESTAMP,
+  permissions TEXT[] DEFAULT '{}',
   created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW()
+  expires_at TIMESTAMP,
+  last_used_at TIMESTAMP
 );
-```
 
-### Referral Codes Table
-```sql
+-- Реферальные коды
 CREATE TABLE referral_codes (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
   code VARCHAR(50) UNIQUE NOT NULL,
-  max_uses INTEGER,
-  current_uses INTEGER DEFAULT 0,
+  company_id UUID NOT NULL REFERENCES companies(id),
   is_active BOOLEAN DEFAULT true,
+  used_count INTEGER DEFAULT 0,
+  max_uses INTEGER,
   created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW()
+  expires_at TIMESTAMP
 );
-```
 
-### Provider Preferences Table
-```sql
-CREATE TABLE company_provider_preferences (
+-- События безопасности
+CREATE TABLE security_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
-  model VARCHAR(100) NOT NULL,
-  provider VARCHAR(100) NOT NULL,
-  priority INTEGER DEFAULT 1,
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW(),
-  UNIQUE(company_id, model)
+  company_id UUID REFERENCES companies(id),
+  event_type VARCHAR(100) NOT NULL,
+  description TEXT,
+  ip_address INET,
+  user_agent TEXT,
+  metadata JSONB DEFAULT '{}',
+  created_at TIMESTAMP DEFAULT NOW()
 );
 ```
 
-## 🔒 Security Features
+## API Endpoints
 
-### Password Security
-```typescript
-// Password hashing with bcrypt
-const saltRounds = 12;
-const hashedPassword = await bcrypt.hash(password, saltRounds);
+### Аутентификация
 
-// Password validation
-const isValidPassword = await bcrypt.compare(password, hashedPassword);
-```
+#### POST /api/v1/auth/register
+Регистрация новой компании.
 
-### JWT Token Management
-```typescript
-// Token generation
-const payload = {
-  companyId: company.id,
-  email: company.email,
-  role: company.role,
-  iat: Math.floor(Date.now() / 1000),
-  exp: Math.floor(Date.now() / 1000) + (60 * 60) // 1 hour
-};
-
-const token = jwt.sign(payload, process.env.JWT_SECRET);
-
-// Token validation
-const decoded = jwt.verify(token, process.env.JWT_SECRET);
-```
-
-### API Key Security
-```typescript
-// API key generation
-const generateApiKey = (): string => {
-  const prefix = 'ak_';
-  const randomBytes = crypto.randomBytes(32);
-  const key = randomBytes.toString('hex');
-  return prefix + key;
-};
-
-// API key validation
-const validateApiKey = async (key: string): Promise<boolean> => {
-  const apiKey = await prisma.apiKey.findUnique({
-    where: { key },
-    include: { company: true }
-  });
-  
-  if (!apiKey || !apiKey.isActive) {
-    return false;
-  }
-  
-  if (apiKey.expiresAt && apiKey.expiresAt < new Date()) {
-    return false;
-  }
-  
-  return true;
-};
-```
-
-## 🔄 Business Logic
-
-### Company Registration Flow
-1. **Validate Input**: Check email format, password strength
-2. **Check Duplicates**: Ensure email doesn't exist
-3. **Hash Password**: Secure password storage
-4. **Create Company**: Save to database
-5. **Generate Referral Code**: Create unique referral code
-6. **Sync with Billing**: Create billing account
-7. **Generate JWT**: Return access token
-
-### Login Flow
-1. **Validate Credentials**: Check email and password
-2. **Verify Account**: Ensure account is active
-3. **Update Last Login**: Track login time
-4. **Generate JWT**: Return access token
-5. **Log Activity**: Record login attempt
-
-### API Key Management Flow
-1. **Validate Request**: Check permissions
-2. **Generate Key**: Create unique API key
-3. **Store Key**: Save to database
-4. **Return Key**: Provide key to user
-5. **Track Usage**: Monitor key usage
-
-### Referral System Flow
-1. **Generate Referral Code**: Create unique code
-2. **Track Referrals**: Monitor referral usage
-3. **Calculate Commissions**: Process referral bonuses
-4. **Update Statistics**: Maintain referral stats
-
-## 📊 Monitoring
-
-### Metrics
-- **User Registrations**: New user signups
-- **Login Attempts**: Authentication attempts
-- **API Key Usage**: API key activity
-- **Referral Activity**: Referral system usage
-
-### Logging
-```typescript
-// Authentication logging
-logger.info('User login attempt', {
-  email: loginData.email,
-  ip: req.ip,
-  userAgent: req.get('User-Agent'),
-  timestamp: new Date().toISOString()
-});
-
-// API key usage logging
-logger.info('API key used', {
-  keyId: apiKey.id,
-  companyId: apiKey.companyId,
-  endpoint: req.path,
-  timestamp: new Date().toISOString()
-});
-```
-
-### Health Checks
-```typescript
-@Get('health')
-async getHealth() {
-  const dbStatus = await this.checkDatabaseConnection();
-  const billingStatus = await this.checkBillingService();
-  
-  return {
-    service: 'auth-service',
-    status: dbStatus && billingStatus ? 'healthy' : 'unhealthy',
-    timestamp: new Date().toISOString(),
-    dependencies: {
-      database: dbStatus ? 'connected' : 'disconnected',
-      billingService: billingStatus ? 'available' : 'unavailable'
-    }
-  };
+**Тело запроса:**
+```json
+{
+  "email": "admin@company.com",
+  "password": "securepassword123",
+  "name": "My Company",
+  "description": "AI-powered company",
+  "website": "https://mycompany.com",
+  "phone": "+1234567890",
+  "referralCode": "REF123456"
 }
 ```
 
-## 🧪 Testing
+**Ответ:**
+```json
+{
+  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "tokenType": "Bearer",
+  "expiresIn": 3600,
+  "company": {
+    "id": "company-uuid",
+    "email": "admin@company.com",
+    "name": "My Company",
+    "role": "company",
+    "isVerified": false,
+    "referralCode": "REF789012"
+  }
+}
+```
 
-### Unit Tests
+#### POST /api/v1/auth/login
+Вход в систему.
+
+**Тело запроса:**
+```json
+{
+  "email": "admin@company.com",
+  "password": "securepassword123"
+}
+```
+
+**Ответ:**
+```json
+{
+  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "tokenType": "Bearer",
+  "expiresIn": 3600,
+  "company": {
+    "id": "company-uuid",
+    "email": "admin@company.com",
+    "name": "My Company",
+    "role": "company",
+    "isVerified": true
+  }
+}
+```
+
+#### POST /api/v1/auth/refresh
+Обновление токена.
+
+**Тело запроса:**
+```json
+{
+  "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+}
+```
+
+#### POST /api/v1/auth/logout
+Выход из системы.
+
+**Заголовки:**
+```http
+Authorization: Bearer <jwt-token>
+```
+
+### Управление компаниями
+
+#### GET /api/v1/auth/profile
+Получение профиля текущей компании.
+
+**Заголовки:**
+```http
+Authorization: Bearer <jwt-token>
+```
+
+**Ответ:**
+```json
+{
+  "id": "company-uuid",
+  "email": "admin@company.com",
+  "name": "My Company",
+  "description": "AI-powered company",
+  "website": "https://mycompany.com",
+  "phone": "+1234567890",
+  "role": "company",
+  "isActive": true,
+  "isVerified": true,
+  "referralCode": "REF789012",
+  "createdAt": "2023-12-01T12:00:00.000Z",
+  "lastLoginAt": "2023-12-01T12:00:00.000Z"
+}
+```
+
+#### PUT /api/v1/auth/profile
+Обновление профиля компании.
+
+**Заголовки:**
+```http
+Authorization: Bearer <jwt-token>
+```
+
+**Тело запроса:**
+```json
+{
+  "name": "Updated Company Name",
+  "description": "Updated description",
+  "website": "https://updated-website.com",
+  "phone": "+0987654321"
+}
+```
+
+#### DELETE /api/v1/auth/profile
+Деактивация компании.
+
+**Заголовки:**
+```http
+Authorization: Bearer <jwt-token>
+```
+
+### API ключи
+
+#### GET /api/v1/auth/api-keys
+Получение списка API ключей.
+
+**Заголовки:**
+```http
+Authorization: Bearer <jwt-token>
+```
+
+**Ответ:**
+```json
+{
+  "data": [
+    {
+      "id": "api-key-uuid",
+      "name": "Production API Key",
+      "key": "ak_live_1234567890abcdef",
+      "isActive": true,
+      "permissions": ["chat", "billing", "analytics"],
+      "createdAt": "2023-12-01T12:00:00.000Z",
+      "expiresAt": "2024-12-01T12:00:00.000Z",
+      "lastUsedAt": "2023-12-01T15:30:00.000Z"
+    }
+  ]
+}
+```
+
+#### POST /api/v1/auth/api-keys
+Создание нового API ключа.
+
+**Заголовки:**
+```http
+Authorization: Bearer <jwt-token>
+```
+
+**Тело запроса:**
+```json
+{
+  "name": "Development API Key",
+  "permissions": ["chat", "billing"],
+  "expiresAt": "2024-06-01T12:00:00.000Z"
+}
+```
+
+**Ответ:**
+```json
+{
+  "id": "api-key-uuid",
+  "name": "Development API Key",
+  "key": "ak_live_abcdef1234567890",
+  "isActive": true,
+  "permissions": ["chat", "billing"],
+  "createdAt": "2023-12-01T12:00:00.000Z",
+  "expiresAt": "2024-06-01T12:00:00.000Z"
+}
+```
+
+#### PUT /api/v1/auth/api-keys/{id}
+Обновление API ключа.
+
+**Заголовки:**
+```http
+Authorization: Bearer <jwt-token>
+```
+
+**Тело запроса:**
+```json
+{
+  "name": "Updated API Key Name",
+  "permissions": ["chat", "billing", "analytics"]
+}
+```
+
+#### DELETE /api/v1/auth/api-keys/{id}
+Удаление API ключа.
+
+**Заголовки:**
+```http
+Authorization: Bearer <jwt-token>
+```
+
+#### POST /api/v1/auth/api-keys/{id}/regenerate
+Перегенерация API ключа.
+
+**Заголовки:**
+```http
+Authorization: Bearer <jwt-token>
+```
+
+**Ответ:**
+```json
+{
+  "id": "api-key-uuid",
+  "name": "Production API Key",
+  "key": "ak_live_newkey1234567890",
+  "isActive": true,
+  "permissions": ["chat", "billing", "analytics"],
+  "createdAt": "2023-12-01T12:00:00.000Z",
+  "expiresAt": "2024-12-01T12:00:00.000Z"
+}
+```
+
+### Реферальная система
+
+#### GET /api/v1/auth/referral/info
+Получение информации о реферальной программе.
+
+**Заголовки:**
+```http
+Authorization: Bearer <jwt-token>
+```
+
+**Ответ:**
+```json
+{
+  "referralCode": "REF789012",
+  "referralLink": "https://ai-aggregator.com/ref/REF789012",
+  "totalReferrals": 5,
+  "totalEarnings": 25.50,
+  "commissionRate": 0.1,
+  "isActive": true
+}
+```
+
+#### GET /api/v1/auth/referral/stats
+Получение статистики рефералов.
+
+**Заголовки:**
+```http
+Authorization: Bearer <jwt-token>
+```
+
+**Ответ:**
+```json
+{
+  "totalReferrals": 5,
+  "activeReferrals": 3,
+  "totalEarnings": 25.50,
+  "thisMonthEarnings": 5.25,
+  "referrals": [
+    {
+      "id": "referral-uuid",
+      "email": "referral@company.com",
+      "name": "Referral Company",
+      "joinedAt": "2023-12-01T12:00:00.000Z",
+      "totalSpent": 255.00,
+      "commissionEarned": 25.50,
+      "isActive": true
+    }
+  ]
+}
+```
+
+#### POST /api/v1/auth/referral/validate
+Валидация реферального кода.
+
+**Тело запроса:**
+```json
+{
+  "referralCode": "REF123456"
+}
+```
+
+**Ответ:**
+```json
+{
+  "isValid": true,
+  "referrerName": "Referrer Company",
+  "commissionRate": 0.1
+}
+```
+
+## Бизнес-логика
+
+### Аутентификация
+
 ```typescript
-describe('CompanyService', () => {
-  let service: CompanyService;
-  let prismaService: PrismaService;
-
-  beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        CompanyService,
-        {
-          provide: PrismaService,
-          useValue: mockPrismaService
-        }
-      ],
-    }).compile();
-
-    service = module.get<CompanyService>(CompanyService);
-    prismaService = module.get<PrismaService>(PrismaService);
-  });
-
-  it('should register a company', async () => {
-    const companyData = {
-      name: 'Test Company',
-      email: 'test@example.com',
-      password: 'password123'
+@Injectable()
+export class AuthService {
+  async loginCompany(credentials: LoginDto): Promise<AuthResult> {
+    // 1. Поиск компании по email
+    const company = await this.prisma.company.findUnique({
+      where: { email: credentials.email }
+    });
+    
+    if (!company) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+    
+    // 2. Проверка пароля
+    const isValidPassword = await bcrypt.compare(
+      credentials.password, 
+      company.passwordHash
+    );
+    
+    if (!isValidPassword) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+    
+    // 3. Генерация токенов
+    const tokens = await this.generateTokens(company);
+    
+    // 4. Обновление времени последнего входа
+    await this.prisma.company.update({
+      where: { id: company.id },
+      data: { lastLoginAt: new Date() }
+    });
+    
+    // 5. Логирование события
+    await this.logSecurityEvent(company.id, 'LOGIN_SUCCESS');
+    
+    return {
+      company: this.mapCompanyToDto(company),
+      ...tokens
     };
-
-    const mockCompany = {
-      id: 'company-id',
-      ...companyData,
-      passwordHash: 'hashed-password'
-    };
-
-    jest.spyOn(prismaService.company, 'create').mockResolvedValue(mockCompany);
-
-    const result = await service.registerCompany(companyData);
-
-    expect(result).toBeDefined();
-    expect(result.company.name).toBe(companyData.name);
-  });
-});
+  }
+}
 ```
 
-### Integration Tests
+### Управление API ключами
+
 ```typescript
-describe('Auth Integration', () => {
-  let app: INestApplication;
-
-  beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({
-      imports: [AppModule],
-    })
-    .overrideProvider(PrismaService)
-    .useValue(mockPrismaService)
-    .compile();
-
-    app = moduleRef.createNestApplication();
-    await app.init();
-  });
-
-  afterAll(async () => {
-    await app.close();
-  });
-
-  it('should handle complete auth flow', async () => {
-    // Register
-    const registerResponse = await request(app.getHttpServer())
-      .post('/v1/auth/register')
-      .send({
-        name: 'Test Company',
-        email: 'test@example.com',
-        password: 'password123'
-      })
-      .expect(201);
-
-    const { accessToken } = registerResponse.body;
-
-    // Login
-    const loginResponse = await request(app.getHttpServer())
-      .post('/v1/auth/login')
-      .send({
-        email: 'test@example.com',
-        password: 'password123'
-      })
-      .expect(200);
-
-    expect(loginResponse.body.accessToken).toBeDefined();
-  });
-});
+@Injectable()
+export class ApiKeyService {
+  async createApiKey(
+    companyId: string, 
+    createApiKeyDto: CreateApiKeyDto
+  ): Promise<ApiKey> {
+    // 1. Генерация уникального ключа
+    const key = this.generateApiKey();
+    
+    // 2. Создание записи в БД
+    const apiKey = await this.prisma.apiKey.create({
+      data: {
+        key,
+        name: createApiKeyDto.name,
+        companyId,
+        permissions: createApiKeyDto.permissions,
+        expiresAt: createApiKeyDto.expiresAt
+      }
+    });
+    
+    // 3. Логирование события
+    await this.logSecurityEvent(companyId, 'API_KEY_CREATED', {
+      apiKeyId: apiKey.id,
+      apiKeyName: apiKey.name
+    });
+    
+    return apiKey;
+  }
+  
+  private generateApiKey(): string {
+    const prefix = 'ak_live_';
+    const randomBytes = crypto.randomBytes(16);
+    const key = randomBytes.toString('hex');
+    return prefix + key;
+  }
+}
 ```
 
-## 🚀 Deployment
+### Реферальная система
 
-### Docker Configuration
-```dockerfile
-FROM node:18-alpine
-
-WORKDIR /app
-
-COPY package*.json ./
-RUN npm ci --only=production
-
-COPY dist/ ./dist/
-
-EXPOSE 3001
-
-CMD ["node", "dist/main.js"]
+```typescript
+@Injectable()
+export class ReferralService {
+  async createReferralCode(companyId: string): Promise<ReferralCode> {
+    // 1. Генерация уникального кода
+    const code = this.generateReferralCode();
+    
+    // 2. Создание реферального кода
+    const referralCode = await this.prisma.referralCode.create({
+      data: {
+        code,
+        companyId,
+        isActive: true
+      }
+    });
+    
+    return referralCode;
+  }
+  
+  async processReferral(
+    referralCode: string, 
+    newCompanyId: string
+  ): Promise<void> {
+    // 1. Поиск реферального кода
+    const referral = await this.prisma.referralCode.findUnique({
+      where: { code: referralCode },
+      include: { company: true }
+    });
+    
+    if (!referral || !referral.isActive) {
+      throw new BadRequestException('Invalid referral code');
+    }
+    
+    // 2. Обновление компании
+    await this.prisma.company.update({
+      where: { id: newCompanyId },
+      data: {
+        referredBy: referral.companyId,
+        referralCodeId: referral.id
+      }
+    });
+    
+    // 3. Уведомление реферера
+    await this.notifyReferrer(referral.companyId, newCompanyId);
+  }
+  
+  private generateReferralCode(): string {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let result = '';
+    for (let i = 0; i < 8; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+  }
+}
 ```
 
-### Docker Compose
-```yaml
-auth-service:
-  build: ./services/auth-service
-  ports:
-    - "3001:3001"
-  environment:
-    - PORT=3001
-    - DATABASE_URL=postgresql://auth_user:auth_password@auth-db:5432/auth_service
-    - JWT_SECRET=your-jwt-secret
-    - JWT_EXPIRES_IN=1h
-  depends_on:
-    - auth-db
-    - billing-service
+## Безопасность
 
-auth-db:
-  image: postgres:14
-  environment:
-    - POSTGRES_DB=auth_service
-    - POSTGRES_USER=auth_user
-    - POSTGRES_PASSWORD=auth_password
-  volumes:
-    - auth_data:/var/lib/postgresql/data
+### Хеширование паролей
+
+```typescript
+@Injectable()
+export class PasswordService {
+  async hashPassword(password: string): Promise<string> {
+    const saltRounds = 12;
+    return await bcrypt.hash(password, saltRounds);
+  }
+  
+  async verifyPassword(password: string, hash: string): Promise<boolean> {
+    return await bcrypt.compare(password, hash);
+  }
+}
 ```
 
-## 🔧 Troubleshooting
+### JWT токены
 
-### Common Issues
+```typescript
+@Injectable()
+export class JwtService {
+  generateAccessToken(payload: JwtPayload): string {
+    return this.jwtService.sign(payload, {
+      secret: this.configService.get('JWT_SECRET'),
+      expiresIn: '1h'
+    });
+  }
+  
+  generateRefreshToken(payload: JwtPayload): string {
+    return this.jwtService.sign(payload, {
+      secret: this.configService.get('JWT_SECRET'),
+      expiresIn: '7d'
+    });
+  }
+  
+  verifyToken(token: string): JwtPayload {
+    try {
+      return this.jwtService.verify(token, {
+        secret: this.configService.get('JWT_SECRET')
+      });
+    } catch (error) {
+      throw new UnauthorizedException('Invalid token');
+    }
+  }
+}
+```
 
-#### Database Connection Issues
+### Аудит безопасности
+
+```typescript
+@Injectable()
+export class SecurityService {
+  async logSecurityEvent(
+    companyId: string,
+    eventType: string,
+    metadata: any = {}
+  ): Promise<void> {
+    await this.prisma.securityEvent.create({
+      data: {
+        companyId,
+        eventType,
+        description: this.getEventDescription(eventType),
+        metadata,
+        ipAddress: this.getClientIp(),
+        userAgent: this.getUserAgent()
+      }
+    });
+  }
+  
+  private getEventDescription(eventType: string): string {
+    const descriptions = {
+      'LOGIN_SUCCESS': 'Successful login',
+      'LOGIN_FAILED': 'Failed login attempt',
+      'API_KEY_CREATED': 'API key created',
+      'API_KEY_DELETED': 'API key deleted',
+      'PASSWORD_CHANGED': 'Password changed',
+      'PROFILE_UPDATED': 'Profile updated'
+    };
+    
+    return descriptions[eventType] || 'Unknown event';
+  }
+}
+```
+
+## Мониторинг
+
+### Health Check
+
+```typescript
+@Controller('health')
+export class HealthController {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly redis: RedisService
+  ) {}
+  
+  @Get()
+  async checkHealth() {
+    const checks = await Promise.allSettled([
+      this.checkDatabase(),
+      this.checkRedis()
+    ]);
+    
+    const isHealthy = checks.every(check => 
+      check.status === 'fulfilled'
+    );
+    
+    return {
+      status: isHealthy ? 'healthy' : 'unhealthy',
+      timestamp: new Date().toISOString(),
+      services: {
+        database: checks[0].status === 'fulfilled' ? 'up' : 'down',
+        redis: checks[1].status === 'fulfilled' ? 'up' : 'down'
+      }
+    };
+  }
+  
+  private async checkDatabase(): Promise<boolean> {
+    try {
+      await this.prisma.$queryRaw`SELECT 1`;
+      return true;
+    } catch (error) {
+      return false;
+    }
+  }
+  
+  private async checkRedis(): Promise<boolean> {
+    try {
+      await this.redis.ping();
+      return true;
+    } catch (error) {
+      return false;
+    }
+  }
+}
+```
+
+## Troubleshooting
+
+### Частые проблемы
+
+#### 1. Ошибки аутентификации
+
 ```bash
-# Check database status
-docker-compose logs auth-db
-
-# Test database connection
-psql -h localhost -U auth_user -d auth_service -c "SELECT 1;"
-```
-
-#### JWT Token Issues
-```bash
-# Verify JWT secret
+# Проверка JWT секрета
 echo $JWT_SECRET
 
-# Check token expiration
-echo "your-jwt-token" | base64 -d
+# Проверка токена
+jwt decode <your-token>
+
+# Проверка логов
+docker-compose logs auth-service | grep "LOGIN_FAILED"
 ```
 
-#### API Key Issues
+#### 2. Проблемы с API ключами
+
 ```bash
-# Check API key format
-echo "ak_xxxxxxxxxxxxxxxx" | grep -E "^ak_[a-f0-9]{64}$"
+# Проверка API ключа в БД
+docker-compose exec auth-db psql -U postgres -d auth_db -c "SELECT * FROM api_keys WHERE key = 'your-api-key';"
 
-# Verify API key in database
-psql -h localhost -U auth_user -d auth_service -c "SELECT * FROM api_keys WHERE key = 'your-api-key';"
+# Проверка прав доступа
+docker-compose exec auth-db psql -U postgres -d auth_db -c "SELECT permissions FROM api_keys WHERE key = 'your-api-key';"
 ```
 
-### Performance Issues
+#### 3. Проблемы с реферальной системой
 
-#### Slow Database Queries
-```sql
--- Check slow queries
-SELECT query, mean_time, calls 
-FROM pg_stat_statements 
-ORDER BY mean_time DESC 
-LIMIT 10;
-
--- Check table sizes
-SELECT schemaname, tablename, pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename)) as size
-FROM pg_tables 
-WHERE schemaname = 'public'
-ORDER BY pg_total_relation_size(schemaname||'.'||tablename) DESC;
-```
-
-#### Memory Issues
 ```bash
-# Check memory usage
-docker stats auth-service
+# Проверка реферальных кодов
+docker-compose exec auth-db psql -U postgres -d auth_db -c "SELECT * FROM referral_codes WHERE code = 'REF123456';"
 
-# Check for memory leaks
-docker-compose logs auth-service | grep -i memory
+# Проверка рефералов компании
+docker-compose exec auth-db psql -U postgres -d auth_db -c "SELECT * FROM companies WHERE referred_by = 'company-uuid';"
 ```
 
----
+### Полезные команды
 
-**Last Updated**: December 2024
-**Service Version**: 1.0.0
+```bash
+# Перезапуск сервиса
+docker-compose restart auth-service
+
+# Просмотр логов
+docker-compose logs -f auth-service
+
+# Выполнение команд в контейнере
+docker-compose exec auth-service bash
+
+# Проверка подключения к БД
+docker-compose exec auth-service npx prisma db pull
+```

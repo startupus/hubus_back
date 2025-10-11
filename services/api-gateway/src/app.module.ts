@@ -13,6 +13,7 @@ import { HistoryModule } from './history/history.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { FsbModule } from './fsb/fsb.module';
 import { AnonymizationModule } from './anonymization/anonymization.module';
+import { ModelsModule } from './models/models.module';
 import { configuration } from './config/configuration';
 import { validationSchema } from './config/validation.schema';
 
@@ -42,6 +43,7 @@ import { validationSchema } from './config/validation.schema';
     PrismaModule,
     FsbModule,
     AnonymizationModule,
+    ModelsModule,
   ],
 })
 export class AppModule {}

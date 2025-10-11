@@ -36,6 +36,10 @@ export * from './clients';
 // Services
 export * from './services/thread-pool.service';
 
+// Performance monitoring
+export * from './monitoring/performance-monitor.service';
+export * from './decorators/performance.decorator';
+
 // Constants
 export * from './constants';
 
@@ -125,8 +129,6 @@ export type {
 
 export type {
   RequestHistory,
-  RequestType,
-  RequestStatus,
   CreateRequestHistoryDto,
   UpdateRequestHistoryDto,
   RequestHistoryQueryDto,
@@ -136,4 +138,9 @@ export type {
   UpdateSessionHistoryDto,
   SessionHistoryQueryDto,
   SessionHistoryResponse,
+} from './types/request-history';
+
+export {
+  RequestType,
+  RequestStatus,
 } from './types/request-history';

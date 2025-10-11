@@ -1,437 +1,803 @@
 # Analytics Service
 
-## 🎯 Назначение
+## Описание
 
-Analytics Service собирает, обрабатывает и анализирует данные о использовании системы. Обеспечивает мониторинг производительности, пользовательскую аналитику и бизнес-метрики.
+Analytics Service отвечает за сбор, обработку и анализ метрик использования ИИ-сервисов, генерацию отчетов и интеграцию с системами мониторинга.
 
-## 🏗️ Архитектура
+## Основные функции
 
+- **Сбор метрик** использования ИИ-провайдеров
+- **Анализ производительности** и качества ответов
+- **Генерация отчетов** по использованию и расходам
+- **Интеграция с Prometheus** для мониторинга
+- **Анализ трендов** и паттернов использования
+- **Алерты и уведомления** о критических событиях
+- **Дашборды** для визуализации данных
+
+## Архитектура
+
+```mermaid
+graph TB
+    Client[Клиент] --> Gateway[API Gateway]
+    Gateway --> Analytics[Analytics Service]
+    
+    Analytics --> AnalyticsDB[(Analytics Database)]
+    Analytics --> Prometheus[Prometheus]
+    Analytics --> Grafana[Grafana]
+    
+    Analytics --> RabbitMQ[RabbitMQ]
+    Analytics --> Redis[(Redis Cache)]
+    
+    Billing[Billing Service] --> RabbitMQ
+    Proxy[Proxy Service] --> RabbitMQ
+    Auth[Auth Service] --> RabbitMQ
 ```
-Events → Analytics Service → Processing → Storage
-   ↓           ↓                ↓           ↓
-Collect    Aggregate        Analyze     Report
-Data       Metrics          Trends      Dashboard
-```
 
-## 🚀 Запуск
+## Конфигурация
+
+### Переменные окружения
 
 ```bash
-# Запуск сервиса
-docker-compose up -d analytics-service
+# Основные настройки
+NODE_ENV=development
+HOST=0.0.0.0
+PORT=3005
 
-# Проверка статуса
-curl http://localhost:3005/health
+# База данных
+DATABASE_URL=postgresql://postgres:password@analytics-db:5432/analytics_db
+
+# Redis
+REDIS_URL=redis://redis:6379
+
+# RabbitMQ
+RABBITMQ_URL=amqp://user:password@rabbitmq:5672
+
+# Prometheus
+PROMETHEUS_ENDPOINT=http://prometheus:9090
+PROMETHEUS_METRICS_PATH=/metrics
+
+# Grafana
+GRAFANA_URL=http://grafana:3000
+GRAFANA_API_KEY=your_grafana_api_key
+
+# Алерты
+ALERT_WEBHOOK_URL=https://hooks.slack.com/your-webhook
+ALERT_EMAIL_SMTP_HOST=smtp.gmail.com
+ALERT_EMAIL_SMTP_PORT=587
 ```
 
-## 📡 API Endpoints
+### Docker конфигурация
 
-### События
-- `POST /analytics/events/track` - Отправка события
-- `POST /analytics/events/batch` - Массовая отправка событий
-- `GET /analytics/events/:userId` - События пользователя
+```yaml
+analytics-service:
+  build:
+    context: .
+    dockerfile: ./services/analytics-service/Dockerfile
+  ports:
+    - "3005:3005"
+    - "9091:9091"  # Prometheus metrics
+  environment:
+    - NODE_ENV=development
+    - HOST=0.0.0.0
+    - PORT=3005
+    - DATABASE_URL=postgresql://postgres:password@analytics-db:5432/analytics_db
+    - REDIS_URL=redis://redis:6379
+    - RABBITMQ_URL=amqp://user:password@rabbitmq:5672
+    - PROMETHEUS_ENDPOINT=http://prometheus:9090
+  depends_on:
+    - analytics-db
+    - redis
+    - rabbitmq
+  networks:
+    - ai-aggregator
+```
+
+## База данных
+
+### Схема
+
+```sql
+-- Метрики использования
+CREATE TABLE usage_metrics (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id UUID NOT NULL,
+  service_name VARCHAR(100) NOT NULL,
+  provider VARCHAR(100) NOT NULL,
+  model VARCHAR(100) NOT NULL,
+  request_id VARCHAR(255),
+  tokens_used INTEGER NOT NULL,
+  cost DECIMAL(15,6) NOT NULL,
+  response_time_ms INTEGER NOT NULL,
+  success BOOLEAN NOT NULL,
+  error_message TEXT,
+  metadata JSONB DEFAULT '{}',
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Агрегированные метрики
+CREATE TABLE aggregated_metrics (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id UUID,
+  service_name VARCHAR(100) NOT NULL,
+  provider VARCHAR(100) NOT NULL,
+  model VARCHAR(100) NOT NULL,
+  period VARCHAR(20) NOT NULL, -- hour, day, week, month
+  period_start TIMESTAMP NOT NULL,
+  period_end TIMESTAMP NOT NULL,
+  total_requests INTEGER DEFAULT 0,
+  successful_requests INTEGER DEFAULT 0,
+  failed_requests INTEGER DEFAULT 0,
+  total_tokens INTEGER DEFAULT 0,
+  total_cost DECIMAL(15,6) DEFAULT 0,
+  avg_response_time_ms DECIMAL(10,2) DEFAULT 0,
+  p95_response_time_ms DECIMAL(10,2) DEFAULT 0,
+  p99_response_time_ms DECIMAL(10,2) DEFAULT 0,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- События системы
+CREATE TABLE system_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  event_type VARCHAR(100) NOT NULL,
+  severity VARCHAR(20) NOT NULL, -- info, warning, error, critical
+  message TEXT NOT NULL,
+  metadata JSONB DEFAULT '{}',
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Алерты
+CREATE TABLE alerts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name VARCHAR(255) NOT NULL,
+  description TEXT,
+  condition JSONB NOT NULL,
+  threshold DECIMAL(15,6),
+  is_active BOOLEAN DEFAULT true,
+  last_triggered TIMESTAMP,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Уведомления
+CREATE TABLE notifications (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  alert_id UUID REFERENCES alerts(id),
+  company_id UUID,
+  type VARCHAR(50) NOT NULL, -- email, webhook, slack
+  recipient VARCHAR(255) NOT NULL,
+  message TEXT NOT NULL,
+  sent_at TIMESTAMP,
+  status VARCHAR(20) DEFAULT 'pending', -- pending, sent, failed
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Индексы
+CREATE INDEX idx_usage_metrics_company_id ON usage_metrics(company_id);
+CREATE INDEX idx_usage_metrics_created_at ON usage_metrics(created_at);
+CREATE INDEX idx_usage_metrics_service ON usage_metrics(service_name, provider, model);
+CREATE INDEX idx_aggregated_metrics_period ON aggregated_metrics(period, period_start);
+CREATE INDEX idx_system_events_created_at ON system_events(created_at);
+CREATE INDEX idx_alerts_is_active ON alerts(is_active);
+```
+
+## API Endpoints
 
 ### Метрики
-- `GET /analytics/metrics/usage` - Метрики использования
-- `GET /analytics/metrics/performance` - Метрики производительности
-- `GET /analytics/metrics/billing` - Метрики биллинга
 
-### Дашборд
-- `GET /analytics/dashboard` - Основной дашборд
-- `GET /analytics/dashboard/:userId` - Дашборд пользователя
-- `GET /analytics/dashboard/admin` - Админ дашборд
+#### GET /api/v1/analytics/metrics
+Получение метрик использования.
 
-### Отчеты
-- `GET /analytics/reports/usage` - Отчет по использованию
-- `GET /analytics/reports/revenue` - Отчет по доходам
-- `GET /analytics/reports/performance` - Отчет по производительности
+**Параметры запроса:**
+- `companyId` (string): ID компании (опционально)
+- `startDate` (string): Дата начала (ISO 8601)
+- `endDate` (string): Дата окончания (ISO 8601)
+- `service` (string): Название сервиса
+- `provider` (string): Провайдер
+- `model` (string): Модель
+- `groupBy` (string): Группировка (hour, day, week, month)
 
-## 🔧 Конфигурация
-
-### Environment Variables
-```env
-PORT=3005
-DATABASE_URL=postgresql://user:password@analytics-db:5432/analytics_db
-REDIS_URL=redis://redis:6379
-KAFKA_URL=kafka:9092
-ELASTICSEARCH_URL=http://elasticsearch:9200
-```
-
-### База данных
-```sql
--- События
-CREATE TABLE events (
-  id UUID PRIMARY KEY,
-  user_id UUID,
-  session_id UUID,
-  event_type VARCHAR(100) NOT NULL,
-  event_name VARCHAR(100) NOT NULL,
-  service VARCHAR(100) NOT NULL,
-  properties JSONB,
-  metadata JSONB,
-  timestamp TIMESTAMP DEFAULT NOW(),
-  ip_address INET,
-  user_agent TEXT
-);
-
--- Метрики
-CREATE TABLE metrics (
-  id UUID PRIMARY KEY,
-  metric_name VARCHAR(100) NOT NULL,
-  metric_value DECIMAL(15,6) NOT NULL,
-  metric_unit VARCHAR(20),
-  tags JSONB,
-  timestamp TIMESTAMP DEFAULT NOW()
-);
-
--- Сессии
-CREATE TABLE sessions (
-  id UUID PRIMARY KEY,
-  user_id UUID,
-  started_at TIMESTAMP DEFAULT NOW(),
-  ended_at TIMESTAMP,
-  duration INTEGER, -- seconds
-  events_count INTEGER DEFAULT 0,
-  properties JSONB
-);
-```
-
-## 📊 События
-
-### Типы событий
-```typescript
-interface Event {
-  id: string;
-  userId: string;
-  sessionId?: string;
-  eventType: 'ai_interaction' | 'user_action' | 'system_event' | 'error';
-  eventName: string;
-  service: string;
-  properties: Record<string, any>;
-  metadata?: Record<string, any>;
-  timestamp: Date;
-  ipAddress?: string;
-  userAgent?: string;
-}
-```
-
-### Отправка события
-```typescript
-POST /analytics/events/track
+**Ответ:**
+```json
 {
-  "userId": "b6793877-246a-4e3a-807f-50e494aa5188",
-  "eventType": "ai_interaction",
-  "eventName": "chat_completion",
-  "service": "api-gateway",
-  "properties": {
-    "model": "gpt-4",
-    "tokens": 30,
-    "cost": 0.05,
-    "provider": "openai"
-  },
-  "metadata": {
-    "requestId": "req-123",
-    "responseTime": 1500
+  "data": [
+    {
+      "period": "2023-12-01T00:00:00.000Z",
+      "service": "chat",
+      "provider": "openai",
+      "model": "gpt-4",
+      "totalRequests": 150,
+      "successfulRequests": 145,
+      "failedRequests": 5,
+      "totalTokens": 4500,
+      "totalCost": 12.50,
+      "avgResponseTime": 1.2,
+      "p95ResponseTime": 2.1,
+      "p99ResponseTime": 3.5
+    }
+  ],
+  "summary": {
+    "totalRequests": 150,
+    "totalCost": 12.50,
+    "avgResponseTime": 1.2,
+    "successRate": 96.67
   }
 }
+```
 
-// Ответ
+#### POST /api/v1/analytics/metrics
+Создание метрики (внутренний API).
+
+**Тело запроса:**
+```json
 {
+  "companyId": "company-uuid",
+  "serviceName": "chat",
+  "provider": "openai",
+  "model": "gpt-4",
+  "requestId": "req-uuid",
+  "tokensUsed": 25,
+  "cost": 0.00125,
+  "responseTimeMs": 1200,
   "success": true,
-  "data": {
-    "id": "2ff79549-7639-4d62-8a54-ca402041b6e7",
-    "userId": "b6793877-246a-4e3a-807f-50e494aa5188",
-    "eventType": "ai_interaction",
-    "eventName": "chat_completion",
-    "service": "api-gateway",
-    "properties": {
-      "model": "gpt-4",
-      "tokens": 30,
-      "cost": 0.05,
-      "provider": "openai"
-    },
-    "timestamp": "2025-10-05T22:22:56.065Z"
-  },
-  "message": "Event tracked successfully"
+  "metadata": {
+    "temperature": 0.7,
+    "maxTokens": 1000
+  }
 }
 ```
 
-### Массовая отправка
-```typescript
-POST /analytics/events/batch
+### Отчеты
+
+#### GET /api/v1/analytics/reports/usage
+Получение отчета об использовании.
+
+**Параметры запроса:**
+- `companyId` (string): ID компании
+- `startDate` (string): Дата начала
+- `endDate` (string): Дата окончания
+- `format` (string): Формат отчета (json, csv, pdf)
+
+**Ответ:**
+```json
 {
-  "events": [
+  "reportId": "report-uuid",
+  "companyId": "company-uuid",
+  "period": {
+    "startDate": "2023-12-01T00:00:00.000Z",
+    "endDate": "2023-12-31T23:59:59.999Z"
+  },
+  "summary": {
+    "totalRequests": 1500,
+    "totalCost": 125.50,
+    "avgResponseTime": 1.2,
+    "successRate": 96.67
+  },
+  "byProvider": [
     {
-      "userId": "user-1",
-      "eventType": "ai_interaction",
-      "eventName": "chat_completion",
-      "service": "api-gateway",
-      "properties": { "model": "gpt-4" }
+      "provider": "openai",
+      "requests": 800,
+      "cost": 80.50,
+      "avgResponseTime": 1.1
     },
     {
-      "userId": "user-2",
-      "eventType": "user_action",
-      "eventName": "login",
-      "service": "auth-service",
-      "properties": { "method": "email" }
+      "provider": "anthropic",
+      "requests": 700,
+      "cost": 45.00,
+      "avgResponseTime": 1.3
+    }
+  ],
+  "byModel": [
+    {
+      "model": "gpt-4",
+      "requests": 500,
+      "cost": 60.00,
+      "avgResponseTime": 1.0
+    },
+    {
+      "model": "claude-3-sonnet",
+      "requests": 700,
+      "cost": 45.00,
+      "avgResponseTime": 1.3
+    }
+  ],
+  "timeline": [
+    {
+      "date": "2023-12-01",
+      "requests": 50,
+      "cost": 4.20,
+      "avgResponseTime": 1.1
     }
   ]
 }
 ```
 
-## 📈 Метрики
+#### GET /api/v1/analytics/reports/performance
+Получение отчета о производительности.
 
-### Метрики использования
-```typescript
-GET /analytics/metrics/usage?period=7d&granularity=hour
-
-// Ответ
-{
-  "success": true,
-  "metrics": {
-    "totalRequests": 1500,
-    "uniqueUsers": 120,
-    "totalTokens": 45000,
-    "totalCost": 125.50,
-    "byHour": [
-      {
-        "timestamp": "2025-10-05T00:00:00Z",
-        "requests": 50,
-        "users": 25,
-        "tokens": 1500,
-        "cost": 4.20
-      }
-    ],
-    "byProvider": {
-      "openai": { "requests": 1000, "cost": 85.50 },
-      "openrouter": { "requests": 500, "cost": 40.00 }
-    },
-    "byModel": {
-      "gpt-4": { "requests": 800, "cost": 70.00 },
-      "gpt-3.5-turbo": { "requests": 700, "cost": 55.50 }
-    }
-  }
-}
-```
-
-### Метрики производительности
-```typescript
-GET /analytics/metrics/performance?period=24h
-
-// Ответ
-{
-  "success": true,
-  "metrics": {
-    "averageResponseTime": 1500,
-    "p95ResponseTime": 3000,
-    "p99ResponseTime": 5000,
-    "successRate": 0.985,
-    "errorRate": 0.015,
-    "byService": {
-      "api-gateway": { "responseTime": 1200, "successRate": 0.99 },
-      "proxy-service": { "responseTime": 1800, "successRate": 0.98 },
-      "billing-service": { "responseTime": 800, "successRate": 0.995 }
-    }
-  }
-}
-```
-
-## 📊 Дашборд
-
-### Основной дашборд
-```typescript
-GET /analytics/dashboard
-
-// Ответ
-{
-  "success": true,
-  "dashboard": {
-    "overview": {
-      "totalUsers": 1200,
-      "activeUsers": 150,
-      "totalRequests": 15000,
-      "totalRevenue": 2500.00
-    },
-    "usage": {
-      "requestsToday": 500,
-      "requestsThisWeek": 3500,
-      "requestsThisMonth": 15000,
-      "growthRate": 0.15
-    },
-    "performance": {
-      "averageResponseTime": 1500,
-      "successRate": 0.985,
-      "uptime": 0.999
-    },
-    "revenue": {
-      "today": 85.50,
-      "thisWeek": 580.00,
-      "thisMonth": 2500.00,
-      "growthRate": 0.12
-    }
-  }
-}
-```
-
-### Пользовательский дашборд
-```typescript
-GET /analytics/dashboard/b6793877-246a-4e3a-807f-50e494aa5188
-
-// Ответ
-{
-  "success": true,
-  "dashboard": {
-    "user": {
-      "id": "b6793877-246a-4e3a-807f-50e494aa5188",
-      "totalRequests": 150,
-      "totalTokens": 4500,
-      "totalCost": 12.50,
-      "favoriteModel": "gpt-4",
-      "favoriteProvider": "openai"
-    },
-    "usage": {
-      "requestsToday": 5,
-      "requestsThisWeek": 35,
-      "requestsThisMonth": 150,
-      "tokensToday": 150,
-      "tokensThisWeek": 1050,
-      "tokensThisMonth": 4500
-    },
-    "costs": {
-      "spentToday": 0.50,
-      "spentThisWeek": 3.50,
-      "spentThisMonth": 12.50,
-      "averageCostPerRequest": 0.083
-    }
-  }
-}
-```
-
-## 📋 Отчеты
-
-### Отчет по использованию
-```typescript
-GET /analytics/reports/usage?period=30d&format=json
-
-// Ответ
-{
-  "success": true,
-  "report": {
-    "period": "30d",
-    "summary": {
-      "totalRequests": 15000,
-      "uniqueUsers": 1200,
-      "totalTokens": 450000,
-      "totalCost": 2500.00
-    },
-    "trends": {
-      "requestsGrowth": 0.15,
-      "usersGrowth": 0.08,
-      "costGrowth": 0.12
-    },
-    "breakdown": {
-      "byDay": [
-        {
-          "date": "2025-10-01",
-          "requests": 500,
-          "users": 120,
-          "tokens": 15000,
-          "cost": 85.50
-        }
-      ],
-      "byProvider": {
-        "openai": { "requests": 10000, "cost": 1700.00 },
-        "openrouter": { "requests": 5000, "cost": 800.00 }
-      },
-      "byModel": {
-        "gpt-4": { "requests": 8000, "cost": 1400.00 },
-        "gpt-3.5-turbo": { "requests": 7000, "cost": 1100.00 }
-      }
-    }
-  }
-}
-```
-
-## 🔄 Интеграция
-
-### HTTP Endpoints
-- Все REST API endpoints
-- Swagger документация на `/api`
-
-### Внутренние сервисы
-- API Gateway (HTTP)
-- Billing Service (HTTP)
-- Provider Orchestrator (HTTP)
-- Proxy Service (HTTP)
-
-## 📊 Мониторинг
-
-### Метрики системы
-- Количество событий в секунду
-- Время обработки событий
-- Использование памяти
-- Размер базы данных
-
-### Логирование
+**Ответ:**
 ```json
 {
-  "timestamp": "2025-10-05T22:30:00.000Z",
-  "level": "INFO",
-  "service": "analytics-service",
-  "action": "event_processed",
-  "eventId": "uuid",
-  "userId": "uuid",
-  "eventType": "ai_interaction",
-  "processingTime": 50
+  "reportId": "perf-report-uuid",
+  "period": {
+    "startDate": "2023-12-01T00:00:00.000Z",
+    "endDate": "2023-12-31T23:59:59.999Z"
+  },
+  "performance": {
+    "avgResponseTime": 1.2,
+    "p95ResponseTime": 2.1,
+    "p99ResponseTime": 3.5,
+    "maxResponseTime": 8.2,
+    "minResponseTime": 0.1
+  },
+  "reliability": {
+    "successRate": 96.67,
+    "uptime": 99.9,
+    "errorRate": 3.33
+  },
+  "byProvider": [
+    {
+      "provider": "openai",
+      "avgResponseTime": 1.1,
+      "successRate": 98.5,
+      "errorRate": 1.5
+    }
+  ]
 }
 ```
 
-## 🚨 Обработка ошибок
+### Алерты
 
-### Типы ошибок
-- `400 Bad Request` - неверные данные события
-- `429 Too Many Requests` - превышен лимит событий
-- `500 Internal Server Error` - ошибки обработки
+#### GET /api/v1/analytics/alerts
+Получение списка алертов.
 
-### Стратегии восстановления
-- Retry для временных ошибок
-- Dead letter queue для проблемных событий
-- Graceful degradation при перегрузке
-
-## 🔧 Разработка
-
-### Структура проекта
+**Ответ:**
+```json
+{
+  "data": [
+    {
+      "id": "alert-uuid",
+      "name": "High Error Rate",
+      "description": "Alert when error rate exceeds 5%",
+      "condition": {
+        "metric": "error_rate",
+        "operator": ">",
+        "threshold": 0.05
+      },
+      "isActive": true,
+      "lastTriggered": "2023-12-01T12:00:00.000Z",
+      "createdAt": "2023-11-01T00:00:00.000Z"
+    }
+  ]
+}
 ```
-src/
-├── analytics/      # Основная логика
-├── events/        # Обработка событий
-├── metrics/        # Метрики
-├── dashboard/      # Дашборды
-├── reports/        # Отчеты
-└── common/         # Общие утилиты
+
+#### POST /api/v1/analytics/alerts
+Создание алерта.
+
+**Тело запроса:**
+```json
+{
+  "name": "High Cost Alert",
+  "description": "Alert when daily cost exceeds $100",
+  "condition": {
+    "metric": "daily_cost",
+    "operator": ">",
+    "threshold": 100.0
+  },
+  "notifications": [
+    {
+      "type": "email",
+      "recipient": "admin@company.com"
+    },
+    {
+      "type": "webhook",
+      "recipient": "https://hooks.slack.com/webhook"
+    }
+  ]
+}
 ```
 
-### Тестирование
+### Системные события
+
+#### GET /api/v1/analytics/events
+Получение системных событий.
+
+**Параметры запроса:**
+- `severity` (string): Уровень серьезности (info, warning, error, critical)
+- `startDate` (string): Дата начала
+- `endDate` (string): Дата окончания
+- `limit` (number): Количество записей
+
+**Ответ:**
+```json
+{
+  "data": [
+    {
+      "id": "event-uuid",
+      "eventType": "service_down",
+      "severity": "critical",
+      "message": "Auth Service is down",
+      "metadata": {
+        "service": "auth-service",
+        "duration": "5m 30s"
+      },
+      "createdAt": "2023-12-01T12:00:00.000Z"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "total": 150,
+    "totalPages": 8
+  }
+}
+```
+
+## Бизнес-логика
+
+### Сбор метрик
+
+```typescript
+@Injectable()
+export class MetricsCollectorService {
+  async collectMetric(metricData: MetricData): Promise<void> {
+    // 1. Сохранение метрики в БД
+    await this.prisma.usageMetrics.create({
+      data: {
+        companyId: metricData.companyId,
+        serviceName: metricData.serviceName,
+        provider: metricData.provider,
+        model: metricData.model,
+        requestId: metricData.requestId,
+        tokensUsed: metricData.tokensUsed,
+        cost: metricData.cost,
+        responseTimeMs: metricData.responseTimeMs,
+        success: metricData.success,
+        errorMessage: metricData.errorMessage,
+        metadata: metricData.metadata
+      }
+    });
+    
+    // 2. Обновление агрегированных метрик
+    await this.updateAggregatedMetrics(metricData);
+    
+    // 3. Отправка в Prometheus
+    await this.sendToPrometheus(metricData);
+    
+    // 4. Проверка алертов
+    await this.checkAlerts(metricData);
+  }
+  
+  private async updateAggregatedMetrics(metricData: MetricData): Promise<void> {
+    const period = this.getCurrentPeriod();
+    
+    await this.prisma.aggregatedMetrics.upsert({
+      where: {
+        companyId_serviceName_provider_model_period_periodStart: {
+          companyId: metricData.companyId,
+          serviceName: metricData.serviceName,
+          provider: metricData.provider,
+          model: metricData.model,
+          period: period.type,
+          periodStart: period.start
+        }
+      },
+      update: {
+        totalRequests: { increment: 1 },
+        successfulRequests: { increment: metricData.success ? 1 : 0 },
+        failedRequests: { increment: metricData.success ? 0 : 1 },
+        totalTokens: { increment: metricData.tokensUsed },
+        totalCost: { increment: metricData.cost },
+        avgResponseTimeMs: this.calculateAverageResponseTime(metricData),
+        p95ResponseTimeMs: this.calculatePercentileResponseTime(metricData, 95),
+        p99ResponseTimeMs: this.calculatePercentileResponseTime(metricData, 99)
+      },
+      create: {
+        companyId: metricData.companyId,
+        serviceName: metricData.serviceName,
+        provider: metricData.provider,
+        model: metricData.model,
+        period: period.type,
+        periodStart: period.start,
+        periodEnd: period.end,
+        totalRequests: 1,
+        successfulRequests: metricData.success ? 1 : 0,
+        failedRequests: metricData.success ? 0 : 1,
+        totalTokens: metricData.tokensUsed,
+        totalCost: metricData.cost,
+        avgResponseTimeMs: metricData.responseTimeMs,
+        p95ResponseTimeMs: metricData.responseTimeMs,
+        p99ResponseTimeMs: metricData.responseTimeMs
+      }
+    });
+  }
+}
+```
+
+### Генерация отчетов
+
+```typescript
+@Injectable()
+export class ReportGeneratorService {
+  async generateUsageReport(
+    companyId: string,
+    startDate: Date,
+    endDate: Date
+  ): Promise<UsageReport> {
+    // 1. Получение агрегированных данных
+    const metrics = await this.prisma.aggregatedMetrics.findMany({
+      where: {
+        companyId,
+        periodStart: { gte: startDate },
+        periodEnd: { lte: endDate }
+      }
+    });
+    
+    // 2. Агрегация по провайдерам
+    const byProvider = this.aggregateByProvider(metrics);
+    
+    // 3. Агрегация по моделям
+    const byModel = this.aggregateByModel(metrics);
+    
+    // 4. Создание временной шкалы
+    const timeline = this.createTimeline(metrics);
+    
+    // 5. Расчет общих метрик
+    const summary = this.calculateSummary(metrics);
+    
+    return {
+      reportId: uuidv4(),
+      companyId,
+      period: { startDate, endDate },
+      summary,
+      byProvider,
+      byModel,
+      timeline
+    };
+  }
+  
+  async generatePerformanceReport(
+    startDate: Date,
+    endDate: Date
+  ): Promise<PerformanceReport> {
+    const metrics = await this.prisma.usageMetrics.findMany({
+      where: {
+        createdAt: { gte: startDate, lte: endDate }
+      }
+    });
+    
+    return {
+      reportId: uuidv4(),
+      period: { startDate, endDate },
+      performance: this.calculatePerformanceMetrics(metrics),
+      reliability: this.calculateReliabilityMetrics(metrics),
+      byProvider: this.calculateProviderMetrics(metrics)
+    };
+  }
+}
+```
+
+### Система алертов
+
+```typescript
+@Injectable()
+export class AlertService {
+  async checkAlerts(metricData: MetricData): Promise<void> {
+    const alerts = await this.prisma.alert.findMany({
+      where: { isActive: true }
+    });
+    
+    for (const alert of alerts) {
+      const shouldTrigger = await this.evaluateAlertCondition(alert, metricData);
+      
+      if (shouldTrigger) {
+        await this.triggerAlert(alert, metricData);
+      }
+    }
+  }
+  
+  private async evaluateAlertCondition(
+    alert: Alert,
+    metricData: MetricData
+  ): Promise<boolean> {
+    const condition = alert.condition;
+    
+    switch (condition.metric) {
+      case 'error_rate':
+        return await this.checkErrorRate(condition, metricData);
+      case 'response_time':
+        return await this.checkResponseTime(condition, metricData);
+      case 'cost':
+        return await this.checkCost(condition, metricData);
+      default:
+        return false;
+    }
+  }
+  
+  private async triggerAlert(alert: Alert, metricData: MetricData): Promise<void> {
+    // 1. Обновление времени последнего срабатывания
+    await this.prisma.alert.update({
+      where: { id: alert.id },
+      data: { lastTriggered: new Date() }
+    });
+    
+    // 2. Создание уведомлений
+    const notifications = await this.prisma.notification.findMany({
+      where: { alertId: alert.id }
+    });
+    
+    for (const notification of notifications) {
+      await this.sendNotification(notification, alert, metricData);
+    }
+  }
+}
+```
+
+### Интеграция с Prometheus
+
+```typescript
+@Injectable()
+export class PrometheusService {
+  private readonly register = new prometheus.Registry();
+  
+  constructor() {
+    this.initializeMetrics();
+  }
+  
+  private initializeMetrics(): void {
+    // Счетчик запросов
+    const requestCounter = new prometheus.Counter({
+      name: 'ai_requests_total',
+      help: 'Total number of AI requests',
+      labelNames: ['service', 'provider', 'model', 'status']
+    });
+    
+    // Гистограмма времени ответа
+    const responseTimeHistogram = new prometheus.Histogram({
+      name: 'ai_response_time_seconds',
+      help: 'AI response time in seconds',
+      labelNames: ['service', 'provider', 'model'],
+      buckets: [0.1, 0.5, 1, 2, 5, 10]
+    });
+    
+    // Счетчик токенов
+    const tokensCounter = new prometheus.Counter({
+      name: 'ai_tokens_total',
+      help: 'Total number of tokens used',
+      labelNames: ['service', 'provider', 'model']
+    });
+    
+    // Счетчик стоимости
+    const costCounter = new prometheus.Counter({
+      name: 'ai_cost_total',
+      help: 'Total cost of AI requests',
+      labelNames: ['service', 'provider', 'model']
+    });
+    
+    this.register.register(requestCounter);
+    this.register.register(responseTimeHistogram);
+    this.register.register(tokensCounter);
+    this.register.register(costCounter);
+  }
+  
+  async recordMetric(metricData: MetricData): Promise<void> {
+    const labels = {
+      service: metricData.serviceName,
+      provider: metricData.provider,
+      model: metricData.model,
+      status: metricData.success ? 'success' : 'error'
+    };
+    
+    // Увеличение счетчиков
+    this.requestCounter.inc(labels);
+    this.tokensCounter.inc(
+      { ...labels, service: metricData.serviceName },
+      metricData.tokensUsed
+    );
+    this.costCounter.inc(
+      { ...labels, service: metricData.serviceName },
+      metricData.cost
+    );
+    
+    // Запись времени ответа
+    this.responseTimeHistogram.observe(
+      { ...labels, service: metricData.serviceName },
+      metricData.responseTimeMs / 1000
+    );
+  }
+  
+  @Get('/metrics')
+  async getMetrics(): Promise<string> {
+    return this.register.metrics();
+  }
+}
+```
+
+## Мониторинг
+
+### Health Check
+
+```typescript
+@Controller('health')
+export class HealthController {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly redis: RedisService,
+    private readonly rabbitMQ: RabbitMQService
+  ) {}
+  
+  @Get()
+  async checkHealth() {
+    const checks = await Promise.allSettled([
+      this.checkDatabase(),
+      this.checkRedis(),
+      this.checkRabbitMQ()
+    ]);
+    
+    const isHealthy = checks.every(check => 
+      check.status === 'fulfilled'
+    );
+    
+    return {
+      status: isHealthy ? 'healthy' : 'unhealthy',
+      timestamp: new Date().toISOString(),
+      services: {
+        database: checks[0].status === 'fulfilled' ? 'up' : 'down',
+        redis: checks[1].status === 'fulfilled' ? 'up' : 'down',
+        rabbitmq: checks[2].status === 'fulfilled' ? 'up' : 'down'
+      }
+    };
+  }
+}
+```
+
+## Troubleshooting
+
+### Частые проблемы
+
+#### 1. Проблемы с метриками
+
 ```bash
-# Unit тесты
-npm run test
+# Проверка метрик в БД
+docker-compose exec analytics-db psql -U postgres -d analytics_db -c "SELECT COUNT(*) FROM usage_metrics WHERE created_at > NOW() - INTERVAL '1 hour';"
 
-# E2E тесты
-npm run test:e2e
-
-# Тестирование аналитики
-npm run test:analytics
+# Проверка Prometheus метрик
+curl http://localhost:3005/metrics
 ```
 
-## 📈 Производительность
+#### 2. Проблемы с отчетами
 
-### Оптимизации
-- Batch обработка событий
-- Асинхронная обработка
-- Индексы в базе данных
-- Кэширование метрик
+```bash
+# Проверка агрегированных метрик
+docker-compose exec analytics-db psql -U postgres -d analytics_db -c "SELECT * FROM aggregated_metrics ORDER BY created_at DESC LIMIT 10;"
 
-### Масштабирование
-- Горизонтальное масштабирование
-- Database sharding
-- Message queues для событий
-- Elasticsearch для поиска
+# Проверка логов генерации отчетов
+docker-compose logs analytics-service | grep "report"
+```
+
+#### 3. Проблемы с алертами
+
+```bash
+# Проверка алертов
+docker-compose exec analytics-db psql -U postgres -d analytics_db -c "SELECT * FROM alerts WHERE is_active = true;"
+
+# Проверка уведомлений
+docker-compose exec analytics-db psql -U postgres -d analytics_db -c "SELECT * FROM notifications WHERE status = 'failed' ORDER BY created_at DESC LIMIT 10;"
+```
+
+### Полезные команды
+
+```bash
+# Перезапуск сервиса
+docker-compose restart analytics-service
+
+# Просмотр логов
+docker-compose logs -f analytics-service
+
+# Проверка Prometheus метрик
+curl http://localhost:3005/metrics | grep ai_requests_total
+
+# Очистка старых метрик
+docker-compose exec analytics-db psql -U postgres -d analytics_db -c "DELETE FROM usage_metrics WHERE created_at < NOW() - INTERVAL '30 days';"
+```

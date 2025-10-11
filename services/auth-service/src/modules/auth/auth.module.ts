@@ -10,12 +10,14 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { LocalStrategy } from './strategies/local.strategy';
 import { PassportModule } from '@nestjs/passport';
 import { PrismaModule } from '../../common/prisma/prisma.module';
+import { CacheModule } from '../../common/cache/cache.module';
 import { ReferralModule } from '../referral/referral.module';
 
 @Module({
   imports: [
     PassportModule,
     PrismaModule,
+    CacheModule,
     ReferralModule,
     HttpModule.register({
       timeout: 10000,

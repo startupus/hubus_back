@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { RabbitMQService } from '../../rabbitmq/rabbitmq.service';
 import { LoggerUtil } from '@ai-aggregator/shared';
 import { Decimal } from '@prisma/client/runtime/library';
 
@@ -8,7 +9,10 @@ export class RealisticPaymentService {
   private readonly logger = new Logger(RealisticPaymentService.name);
   private isDatabaseAvailable = false;
 
-  constructor(private readonly prisma: PrismaService) {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly rabbitMQ: RabbitMQService,
+  ) {
     // Проверяем доступность базы данных
     this.checkDatabaseAvailability();
   }
@@ -65,6 +69,17 @@ export class RealisticPaymentService {
         const payment = await this.prisma.payment.create({
           data: paymentData
         });
+
+        // Отправляем сообщение в RabbitMQ о создании платежа
+        await this.rabbitMQ.publishPaymentCreated({
+          paymentId: payment.id,
+          companyId: payment.companyId,
+          amount: payment.amount.toNumber(),
+          currency: payment.currency,
+          yookassaId: payment.yookassaId,
+          description: payment.description
+        });
+
         return this.formatPaymentResponse(payment);
       } catch (error) {
         this.logger.error('Failed to save payment to database, using in-memory storage', error);
@@ -73,7 +88,23 @@ export class RealisticPaymentService {
     }
 
     // Fallback to in-memory storage
-    return this.createPaymentInMemory(paymentData);
+    const result = this.createPaymentInMemory(paymentData);
+    
+    // Отправляем сообщение в RabbitMQ даже для in-memory платежей
+    try {
+      await this.rabbitMQ.publishPaymentCreated({
+        paymentId: paymentData.id,
+        companyId: paymentData.companyId,
+        amount: paymentData.amount.toNumber(),
+        currency: paymentData.currency,
+        yookassaId: paymentData.yookassaId,
+        description: paymentData.description
+      });
+    } catch (error) {
+      this.logger.error('Failed to publish payment created message', error);
+    }
+
+    return result;
   }
 
   /**
@@ -158,9 +189,16 @@ export class RealisticPaymentService {
             }
           });
 
-          // Если платеж успешен, пополняем баланс в billing-service
+          // Если платеж успешен, отправляем сообщение в RabbitMQ для зачисления на баланс
           if (status === 'SUCCEEDED') {
-            await this.creditCompanyBalance(payment.companyId, payment.amount);
+            await this.rabbitMQ.publishPaymentSucceeded({
+              paymentId: payment.id,
+              companyId: payment.companyId,
+              amount: payment.amount.toNumber(),
+              currency: payment.currency,
+              yookassaId: paymentId,
+              paidAt: new Date().toISOString()
+            });
           }
 
           return { success: true, paymentId, status, amount };
@@ -256,7 +294,8 @@ export class RealisticPaymentService {
   private async creditCompanyBalance(companyId: string, amount: Decimal) {
     // Заглушка для пополнения баланса в billing-service
     // В реальной реализации здесь будет HTTP вызов к billing-service
-    LoggerUtil.info('payment-service', 'Crediting company balance', {
+    // Теперь зачисление происходит через RabbitMQ в billing-service
+    LoggerUtil.info('payment-service', 'Balance credit request sent via RabbitMQ', {
       companyId,
       amount: amount.toString()
     });

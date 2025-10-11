@@ -56,7 +56,9 @@ export class HttpController {
       return {
         success: true,
         message: 'Balance retrieved successfully',
-        balance: result.balance,
+        balance: result.balance.balance,
+        currency: result.balance.currency,
+        creditLimit: result.balance.creditLimit,
       };
     } catch (error) {
       LoggerUtil.error('billing-service', 'HTTP GetBalance failed', error as Error);
@@ -428,7 +430,9 @@ export class HttpController {
       return {
         success: true,
         message: 'Company balance retrieved successfully',
-        balance: result.balance,
+        balance: result.balance.balance,
+        currency: result.balance.currency,
+        creditLimit: result.balance.creditLimit,
       };
     } catch (error) {
       LoggerUtil.error('billing-service', 'HTTP GetCompanyBalance failed', error as Error);

@@ -1,155 +1,188 @@
-# API Gateway Service
+# API Gateway
 
-## 🚀 Overview
+## Описание
 
-The API Gateway is the main entry point for all client requests. It handles authentication, authorization, rate limiting, and request routing to appropriate microservices.
+API Gateway является единой точкой входа для всех клиентских запросов. Он обеспечивает маршрутизацию, аутентификацию, rate limiting и агрегацию ответов от различных микросервисов.
 
-## 🔧 Configuration
+## Основные функции
 
-### Environment Variables
-```env
+- **Маршрутизация запросов** к соответствующим микросервисам
+- **Аутентификация и авторизация** через JWT токены и API ключи
+- **Rate limiting** для защиты от злоупотреблений
+- **Агрегация ответов** от нескольких сервисов
+- **Логирование и мониторинг** всех запросов
+- **Валидация входных данных**
+
+## Архитектура
+
+```mermaid
+graph TB
+    Client[Клиент] --> Gateway[API Gateway]
+    
+    Gateway --> Auth[Auth Service]
+    Gateway --> Billing[Billing Service]
+    Gateway --> Payment[Payment Service]
+    Gateway --> Orchestrator[Provider Orchestrator]
+    
+    Orchestrator --> Proxy[Proxy Service]
+    Proxy --> OpenAI[OpenAI API]
+    Proxy --> OpenRouter[OpenRouter API]
+    Proxy --> Anthropic[Anthropic API]
+```
+
+## Конфигурация
+
+### Переменные окружения
+
+```bash
+# Основные настройки
+NODE_ENV=development
+HOST=0.0.0.0
 PORT=3000
-NODE_ENV=production
+
+# JWT
+JWT_SECRET=your-super-secret-jwt-key-here
+
+# Сервисы
 AUTH_SERVICE_URL=http://auth-service:3001
 BILLING_SERVICE_URL=http://billing-service:3004
-PROVIDER_ORCHESTRATOR_URL=http://provider-orchestrator:3002
+PAYMENT_SERVICE_URL=http://payment-service:3006
+ORCHESTRATOR_SERVICE_URL=http://provider-orchestrator:3002
+
+# Redis
+REDIS_URL=redis://redis:6379
+
+# Rate limiting
 RATE_LIMIT_WINDOW_MS=900000
 RATE_LIMIT_MAX_REQUESTS=100
-CORS_ORIGIN=https://yourdomain.com
 ```
 
-### Dependencies
-- **Auth Service**: User authentication and authorization
-- **Billing Service**: Balance checks and transaction processing
-- **Provider Orchestrator**: AI provider selection and routing
+### Docker конфигурация
 
-## 📋 API Endpoints
+```yaml
+api-gateway:
+  build:
+    context: .
+    dockerfile: ./services/api-gateway/Dockerfile
+  ports:
+    - "3000:3000"
+  environment:
+    - NODE_ENV=development
+    - HOST=0.0.0.0
+    - PORT=3000
+    - AUTH_SERVICE_URL=http://auth-service:3001
+    - BILLING_SERVICE_URL=http://billing-service:3004
+    - ORCHESTRATOR_SERVICE_URL=http://provider-orchestrator:3002
+    - JWT_SECRET=your-super-secret-jwt-key-here
+    - REDIS_URL=redis://redis:6379
+  depends_on:
+    - auth-service
+    - billing-service
+    - provider-orchestrator
+  networks:
+    - ai-aggregator
+```
 
-### Authentication Endpoints
+## API Endpoints
 
-#### Register Company
-```http
-POST /v1/auth/register
-Content-Type: application/json
+### Аутентификация
 
+#### POST /api/v1/auth/register
+Регистрация новой компании.
+
+**Тело запроса:**
+```json
 {
-  "name": "Company Name",
-  "email": "company@example.com",
-  "password": "securepassword",
-  "description": "Company description",
-  "website": "https://company.com",
-  "phone": "+1234567890",
-  "address": {
-    "city": "New York",
-    "country": "USA"
-  },
-  "referralLink": "https://example.com/ref/ABC123"
+  "email": "admin@company.com",
+  "password": "securepassword123",
+  "name": "My Company",
+  "description": "AI-powered company"
 }
 ```
 
-**Response:**
+**Ответ:**
 ```json
 {
-  "success": true,
-  "message": "Company registered successfully",
+  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "tokenType": "Bearer",
+  "expiresIn": 3600,
   "company": {
-    "id": "company-id",
-    "name": "Company Name",
-    "email": "company@example.com",
-    "isActive": true,
-    "isVerified": true,
+    "id": "company-uuid",
+    "email": "admin@company.com",
+    "name": "My Company",
     "role": "company",
-    "createdAt": "2024-12-01T00:00:00.000Z"
-  },
-  "accessToken": "jwt-token"
-}
-```
-
-#### Login Company
-```http
-POST /v1/auth/login
-Content-Type: application/json
-
-{
-  "email": "company@example.com",
-  "password": "securepassword"
-}
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "message": "Login successful",
-  "accessToken": "jwt-token",
-  "company": {
-    "id": "company-id",
-    "name": "Company Name",
-    "email": "company@example.com",
-    "isActive": true,
-    "isVerified": true,
-    "role": "company"
+    "isVerified": false
   }
 }
 ```
 
-### Billing Endpoints
+#### POST /api/v1/auth/login
+Вход в систему.
 
-#### Get Balance
-```http
-GET /v1/billing/balance
-Authorization: Bearer <jwt-token>
-```
-
-**Response:**
+**Тело запроса:**
 ```json
 {
-  "success": true,
-  "balance": {
-    "id": "balance-id",
-    "userId": "company-id",
-    "balance": 100.0,
-    "currency": "USD",
-    "updatedAt": "2024-12-01T00:00:00.000Z"
-  }
+  "email": "admin@company.com",
+  "password": "securepassword123"
 }
 ```
 
-#### Update Balance
-```http
-POST /v1/billing/balance
-Authorization: Bearer <jwt-token>
-Content-Type: application/json
+#### POST /api/v1/auth/refresh
+Обновление токена.
 
+**Тело запроса:**
+```json
 {
-  "amount": 100.0,
-  "operation": "CREDIT"
+  "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
 }
 ```
 
-### AI Chat Endpoints
+#### POST /api/v1/auth/api-keys
+Создание API ключа.
 
-#### Send Chat Request
+**Заголовки:**
 ```http
-POST /v1/chat/completions
 Authorization: Bearer <jwt-token>
-Content-Type: application/json
+```
 
+**Тело запроса:**
+```json
+{
+  "name": "Production API Key",
+  "permissions": ["chat", "billing", "analytics"]
+}
+```
+
+### Чат и ИИ
+
+#### POST /api/v1/chat/completions
+Создание чата с ИИ.
+
+**Заголовки:**
+```http
+Authorization: Bearer <jwt-token>
+# или
+X-API-Key: <api-key>
+```
+
+**Тело запроса:**
+```json
 {
   "model": "gpt-4",
   "messages": [
     {
       "role": "user",
-      "content": "Hello, how are you?"
+      "content": "Привет! Как дела?"
     }
   ],
-  "max_tokens": 1000,
   "temperature": 0.7,
+  "max_tokens": 1000,
   "stream": false
 }
 ```
 
-**Response:**
+**Ответ:**
 ```json
 {
   "id": "chatcmpl-123",
@@ -161,387 +194,493 @@ Content-Type: application/json
       "index": 0,
       "message": {
         "role": "assistant",
-        "content": "Hello! I'm doing well, thank you for asking. How can I help you today?"
+        "content": "Привет! У меня все отлично, спасибо за вопрос!"
       },
       "finish_reason": "stop"
     }
   ],
   "usage": {
     "prompt_tokens": 10,
-    "completion_tokens": 20,
-    "total_tokens": 30
-  }
+    "completion_tokens": 15,
+    "total_tokens": 25
+  },
+  "cost": 0.00125,
+  "provider": "openai"
 }
 ```
 
-#### Get Available Models
-```http
-GET /v1/models
-Authorization: Bearer <jwt-token>
+#### GET /v1/chat/models
+Получение всех доступных моделей нейросетей.
+
+**Параметры запроса:**
+- `provider` (optional): Фильтр по провайдеру (`openai`, `openrouter`, `yandex`)
+- `category` (optional): Фильтр по категории (`chat`, `image`, `embedding`)
+
+**Примеры запросов:**
+```bash
+# Все модели
+curl http://localhost:3000/v1/chat/models
+
+# Модели OpenAI
+curl "http://localhost:3000/v1/chat/models?provider=openai"
+
+# Chat модели
+curl "http://localhost:3000/v1/chat/models?category=chat"
 ```
 
-**Response:**
+**Ответ:**
 ```json
 {
   "success": true,
+  "message": "Models retrieved successfully",
   "models": [
     {
       "id": "gpt-4",
       "name": "GPT-4",
       "provider": "openai",
+      "category": "chat",
       "description": "Most capable GPT-4 model",
-      "pricing": {
-        "input": 0.03,
-        "output": 0.06
-      }
+      "max_tokens": 8192,
+      "cost_per_input_token": 0.00003,
+      "cost_per_output_token": 0.00006,
+      "currency": "USD",
+      "is_available": true,
+      "capabilities": ["chat", "completion"],
+      "created_at": "2023-03-14T00:00:00Z",
+      "updated_at": "2023-03-14T00:00:00Z"
     }
   ]
 }
 ```
 
-### Health Check
+#### GET /v1/chat/models/{provider}/{model}
+Получение детальной информации о конкретной модели.
 
-#### Service Health
-```http
-GET /health
+**Параметры пути:**
+- `provider`: Провайдер модели (`openai`, `openrouter`, `yandex`)
+- `model`: ID модели (например, `gpt-4`)
+
+**Пример запроса:**
+```bash
+curl http://localhost:3000/v1/chat/models/openai/gpt-4
 ```
 
-**Response:**
+**Ответ:**
 ```json
 {
-  "service": "api-gateway",
-  "status": "healthy",
-  "timestamp": "2024-12-01T00:00:00.000Z",
-  "uptime": 3600,
-  "version": "1.0.0",
-  "dependencies": {
-    "auth-service": "healthy",
-    "billing-service": "healthy",
-    "provider-orchestrator": "healthy"
+  "success": true,
+  "message": "Model info retrieved successfully",
+  "model": {
+    "id": "gpt-4",
+    "name": "GPT-4",
+    "provider": "openai",
+    "category": "chat",
+    "description": "Most capable GPT-4 model",
+    "max_tokens": 8192,
+    "cost_per_input_token": 0.00003,
+    "cost_per_output_token": 0.00006,
+    "currency": "USD",
+    "is_available": true,
+    "capabilities": ["chat", "completion"],
+    "created_at": "2023-03-14T00:00:00Z",
+    "updated_at": "2023-03-14T00:00:00Z"
   }
 }
 ```
 
-## 🔒 Security Features
+### Биллинг
 
-### Authentication
-- **JWT Token Validation**: Validates JWT tokens from Auth Service
-- **API Key Support**: Supports API key authentication
-- **Token Refresh**: Handles token refresh logic
+#### GET /api/v1/billing/balance
+Получение баланса компании.
 
-### Authorization
-- **Role-based Access**: Different access levels for different user types
-- **Resource Permissions**: Fine-grained access control
-- **Rate Limiting**: Prevents abuse and ensures fair usage
+**Заголовки:**
+```http
+Authorization: Bearer <jwt-token>
+```
+
+**Ответ:**
+```json
+{
+  "companyId": "company-uuid",
+  "balance": 100.50,
+  "currency": "USD",
+  "creditLimit": 1000.00,
+  "lastUpdated": "2023-12-01T12:00:00.000Z"
+}
+```
+
+#### GET /api/v1/billing/transactions
+Получение истории транзакций.
+
+**Параметры запроса:**
+- `page` (number): Номер страницы (по умолчанию: 1)
+- `limit` (number): Количество записей на странице (по умолчанию: 20)
+- `startDate` (string): Дата начала (ISO 8601)
+- `endDate` (string): Дата окончания (ISO 8601)
+- `type` (string): Тип транзакции (DEBIT, CREDIT)
+
+### Платежи
+
+#### POST /api/v1/payments
+Создание платежа.
+
+**Заголовки:**
+```http
+Authorization: Bearer <jwt-token>
+```
+
+**Тело запроса:**
+```json
+{
+  "amount": 1000.00,
+  "currency": "RUB",
+  "description": "Пополнение баланса"
+}
+```
+
+**Ответ:**
+```json
+{
+  "id": "payment-uuid",
+  "status": "pending",
+  "confirmationUrl": "https://yookassa.ru/payment/123",
+  "amount": "1000.00",
+  "currency": "RUB"
+}
+```
+
+#### GET /api/v1/payments
+Получение платежей компании.
+
+**Параметры запроса:**
+- `page` (number): Номер страницы
+- `limit` (number): Количество записей на странице
+- `status` (string): Статус платежа (pending, succeeded, failed, canceled)
+
+## Middleware
+
+### Аутентификация
+
+```typescript
+@Injectable()
+export class JwtAuthGuard implements CanActivate {
+  canActivate(context: ExecutionContext): boolean {
+    const request = context.switchToHttp().getRequest();
+    const token = this.extractTokenFromHeader(request);
+    
+    if (!token) {
+      throw new UnauthorizedException('Token not found');
+    }
+    
+    try {
+      const payload = this.jwtService.verify(token);
+      request.user = payload;
+      return true;
+    } catch (error) {
+      throw new UnauthorizedException('Invalid token');
+    }
+  }
+}
+```
 
 ### Rate Limiting
+
 ```typescript
-// Rate limiting configuration
-const rateLimitConfig = {
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
-  message: 'Too many requests from this IP',
-  standardHeaders: true,
-  legacyHeaders: false,
-};
-```
-
-## 🚀 Performance Features
-
-### Caching
-- **Response Caching**: Cache frequently requested data
-- **Token Caching**: Cache JWT token validation results
-- **Model Caching**: Cache available models list
-
-### Load Balancing
-- **Round Robin**: Distribute requests across service instances
-- **Health Checks**: Remove unhealthy instances from rotation
-- **Circuit Breaker**: Prevent cascading failures
-
-### Compression
-- **Gzip Compression**: Compress responses to reduce bandwidth
-- **Content Negotiation**: Support different compression formats
-
-## 🔧 Middleware
-
-### Request Processing Pipeline
-1. **CORS**: Handle cross-origin requests
-2. **Rate Limiting**: Apply rate limits
-3. **Authentication**: Validate JWT tokens
-4. **Authorization**: Check permissions
-5. **Request Logging**: Log incoming requests
-6. **Body Parsing**: Parse request bodies
-7. **Validation**: Validate request data
-8. **Routing**: Route to appropriate service
-
-### Error Handling
-```typescript
-// Global error handler
-app.use((error: Error, req: Request, res: Response, next: NextFunction) => {
-  logger.error('Unhandled error:', error);
+@Injectable()
+export class RateLimitGuard implements CanActivate {
+  constructor(private readonly redisService: RedisService) {}
   
-  res.status(500).json({
-    success: false,
-    error: {
-      code: 'INTERNAL_ERROR',
-      message: 'An internal error occurred',
-      timestamp: new Date().toISOString()
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    const request = context.switchToHttp().getRequest();
+    const key = `rate_limit:${request.ip}`;
+    
+    const current = await this.redisService.incr(key);
+    if (current === 1) {
+      await this.redisService.expire(key, 60); // 1 минута
     }
-  });
-});
-```
-
-## 📊 Monitoring
-
-### Metrics
-- **Request Count**: Total number of requests
-- **Response Time**: Average response time
-- **Error Rate**: Percentage of failed requests
-- **Active Connections**: Number of active connections
-
-### Logging
-```typescript
-// Request logging
-app.use((req: Request, res: Response, next: NextFunction) => {
-  const start = Date.now();
-  
-  res.on('finish', () => {
-    const duration = Date.now() - start;
-    logger.info('Request completed', {
-      method: req.method,
-      url: req.url,
-      statusCode: res.statusCode,
-      duration: `${duration}ms`,
-      userAgent: req.get('User-Agent'),
-      ip: req.ip
-    });
-  });
-  
-  next();
-});
-```
-
-### Health Checks
-- **Liveness**: Is the service running?
-- **Readiness**: Is the service ready to handle requests?
-- **Dependencies**: Are external services available?
-
-## 🔄 Service Communication
-
-### HTTP Client Configuration
-```typescript
-// HTTP client for service communication
-const httpClient = axios.create({
-  timeout: 5000,
-  headers: {
-    'Content-Type': 'application/json',
-    'User-Agent': 'api-gateway/1.0.0'
+    
+    if (current > 100) { // 100 запросов в минуту
+      throw new TooManyRequestsException('Rate limit exceeded');
+    }
+    
+    return true;
   }
-});
+}
+```
 
-// Request interceptor
-httpClient.interceptors.request.use((config) => {
-  config.metadata = { startTime: Date.now() };
-  return config;
-});
+### Логирование
 
-// Response interceptor
-httpClient.interceptors.response.use(
-  (response) => {
-    const duration = Date.now() - response.config.metadata.startTime;
-    logger.info('Service call completed', {
-      service: response.config.baseURL,
-      duration: `${duration}ms`,
-      status: response.status
+```typescript
+@Injectable()
+export class LoggingMiddleware implements NestMiddleware {
+  use(req: Request, res: Response, next: NextFunction) {
+    const { method, url, ip } = req;
+    const userAgent = req.get('User-Agent') || '';
+    const startTime = Date.now();
+    
+    res.on('finish', () => {
+      const { statusCode } = res;
+      const contentLength = res.get('content-length');
+      const responseTime = Date.now() - startTime;
+      
+      console.log({
+        method,
+        url,
+        statusCode,
+        contentLength,
+        responseTime,
+        ip,
+        userAgent,
+        timestamp: new Date().toISOString()
+      });
     });
-    return response;
-  },
-  (error) => {
-    logger.error('Service call failed', {
-      service: error.config?.baseURL,
-      error: error.message,
-      status: error.response?.status
-    });
-    return Promise.reject(error);
+    
+    next();
   }
-);
+}
 ```
 
-## 🧪 Testing
+## Обработка ошибок
 
-### Unit Tests
+### Глобальный обработчик ошибок
+
 ```typescript
-describe('AuthController', () => {
-  let controller: AuthController;
-  let authService: AuthService;
-
-  beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
-      controllers: [AuthController],
-      providers: [
-        {
-          provide: AuthService,
-          useValue: mockAuthService
-        }
-      ],
-    }).compile();
-
-    controller = module.get<AuthController>(AuthController);
-    authService = module.get<AuthService>(AuthService);
-  });
-
-  it('should register a company', async () => {
-    const companyData = {
-      name: 'Test Company',
-      email: 'test@example.com',
-      password: 'password123'
+@Catch()
+export class GlobalExceptionFilter implements ExceptionFilter {
+  catch(exception: unknown, host: ArgumentsHost) {
+    const ctx = host.switchToHttp();
+    const response = ctx.getResponse<Response>();
+    const request = ctx.getRequest<Request>();
+    
+    let status = HttpStatus.INTERNAL_SERVER_ERROR;
+    let message = 'Internal server error';
+    
+    if (exception instanceof HttpException) {
+      status = exception.getStatus();
+      message = exception.message;
+    }
+    
+    const errorResponse = {
+      statusCode: status,
+      message,
+      error: HttpStatus[status],
+      timestamp: new Date().toISOString(),
+      path: request.url
     };
-
-    const mockResponse = {
-      success: true,
-      company: { id: 'company-id', ...companyData },
-      accessToken: 'jwt-token'
-    };
-
-    jest.spyOn(authService, 'registerCompany').mockResolvedValue(mockResponse);
-
-    const result = await controller.registerCompany(companyData);
-
-    expect(result).toEqual(mockResponse);
-    expect(authService.registerCompany).toHaveBeenCalledWith(companyData);
-  });
-});
+    
+    response.status(status).json(errorResponse);
+  }
+}
 ```
 
-### Integration Tests
+### Валидация данных
+
 ```typescript
-describe('API Gateway Integration', () => {
-  let app: INestApplication;
-
-  beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({
-      imports: [AppModule],
-    })
-    .overrideProvider(AuthService)
-    .useValue(mockAuthService)
-    .compile();
-
-    app = moduleRef.createNestApplication();
-    await app.init();
-  });
-
-  afterAll(async () => {
-    await app.close();
-  });
-
-  it('should handle complete auth flow', async () => {
-    // Register
-    const registerResponse = await request(app.getHttpServer())
-      .post('/v1/auth/register')
-      .send({
-        name: 'Test Company',
-        email: 'test@example.com',
-        password: 'password123'
-      })
-      .expect(201);
-
-    const { accessToken } = registerResponse.body;
-
-    // Login
-    const loginResponse = await request(app.getHttpServer())
-      .post('/v1/auth/login')
-      .send({
-        email: 'test@example.com',
-        password: 'password123'
-      })
-      .expect(200);
-
-    expect(loginResponse.body.accessToken).toBeDefined();
-  });
-});
+@Injectable()
+export class ValidationPipe implements PipeTransform {
+  transform(value: any, metadata: ArgumentMetadata) {
+    if (!metadata.metatype || !this.toValidate(metadata)) {
+      return value;
+    }
+    
+    const object = plainToClass(metadata.metatype, value);
+    const errors = validate(object);
+    
+    if (errors.length > 0) {
+      throw new BadRequestException('Validation failed');
+    }
+    
+    return object;
+  }
+}
 ```
 
-## 🚀 Deployment
+## Мониторинг
 
-### Docker Configuration
+### Health Check
+
+```typescript
+@Controller('health')
+export class HealthController {
+  constructor(
+    private readonly authService: AuthService,
+    private readonly billingService: BillingService
+  ) {}
+  
+  @Get()
+  async checkHealth() {
+    const checks = await Promise.allSettled([
+      this.authService.healthCheck(),
+      this.billingService.healthCheck()
+    ]);
+    
+    const isHealthy = checks.every(check => 
+      check.status === 'fulfilled'
+    );
+    
+    return {
+      status: isHealthy ? 'healthy' : 'unhealthy',
+      timestamp: new Date().toISOString(),
+      services: {
+        auth: checks[0].status === 'fulfilled' ? 'up' : 'down',
+        billing: checks[1].status === 'fulfilled' ? 'up' : 'down'
+      }
+    };
+  }
+}
+```
+
+### Метрики
+
+```typescript
+@Injectable()
+export class MetricsService {
+  private readonly requestCounter = new prometheus.Counter({
+    name: 'http_requests_total',
+    help: 'Total number of HTTP requests',
+    labelNames: ['method', 'route', 'status_code']
+  });
+  
+  private readonly requestDuration = new prometheus.Histogram({
+    name: 'http_request_duration_seconds',
+    help: 'Duration of HTTP requests in seconds',
+    labelNames: ['method', 'route']
+  });
+  
+  recordRequest(method: string, route: string, statusCode: number, duration: number) {
+    this.requestCounter.inc({ method, route, status_code: statusCode });
+    this.requestDuration.observe({ method, route }, duration);
+  }
+}
+```
+
+## Развертывание
+
+### Docker
+
 ```dockerfile
 FROM node:18-alpine
 
 WORKDIR /app
 
-COPY package*.json ./
+# Копирование package.json
+COPY services/api-gateway/package*.json ./
+COPY services/shared ../shared
+
+# Установка зависимостей
 RUN npm ci --only=production
 
-COPY dist/ ./dist/
+# Копирование исходного кода
+COPY services/api-gateway/src ./src
+COPY services/api-gateway/tsconfig.json ./
 
+# Сборка приложения
+RUN npm run build
+
+# Запуск приложения
 EXPOSE 3000
-
 CMD ["node", "dist/main.js"]
 ```
 
-### Docker Compose
+### Kubernetes
+
 ```yaml
-api-gateway:
-  build: ./services/api-gateway
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-gateway
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: api-gateway
+  template:
+    metadata:
+      labels:
+        app: api-gateway
+    spec:
+      containers:
+      - name: api-gateway
+        image: ai-aggregator/api-gateway:latest
+        ports:
+        - containerPort: 3000
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: AUTH_SERVICE_URL
+          value: "http://auth-service:3001"
+        - name: BILLING_SERVICE_URL
+          value: "http://billing-service:3004"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-gateway-service
+spec:
+  selector:
+    app: api-gateway
   ports:
-    - "3000:3000"
-  environment:
-    - PORT=3000
-    - AUTH_SERVICE_URL=http://auth-service:3001
-    - BILLING_SERVICE_URL=http://billing-service:3004
-    - PROVIDER_ORCHESTRATOR_URL=http://provider-orchestrator:3002
-  depends_on:
-    - auth-service
-    - billing-service
-    - provider-orchestrator
+  - port: 80
+    targetPort: 3000
+  type: LoadBalancer
 ```
 
-## 🔧 Troubleshooting
+## Troubleshooting
 
-### Common Issues
+### Частые проблемы
 
-#### Service Unavailable
+#### 1. Сервис недоступен
+
 ```bash
-# Check service status
+# Проверка статуса
 curl http://localhost:3000/health
 
-# Check logs
+# Проверка логов
 docker-compose logs api-gateway
+
+# Проверка подключения к зависимостям
+docker-compose exec api-gateway curl http://auth-service:3001/health
 ```
 
-#### Authentication Errors
-```bash
-# Verify JWT token
-echo "your-jwt-token" | base64 -d
+#### 2. Ошибки аутентификации
 
-# Check auth service
-curl http://localhost:3001/health
+```bash
+# Проверка JWT секрета
+echo $JWT_SECRET
+
+# Проверка токена
+jwt decode <your-token>
 ```
 
-#### Rate Limiting
-```bash
-# Check rate limit headers
-curl -I http://localhost:3000/v1/auth/login
+#### 3. Проблемы с rate limiting
 
-# Reset rate limits (if needed)
+```bash
+# Проверка Redis
+docker-compose exec redis redis-cli ping
+
+# Очистка rate limit ключей
+docker-compose exec redis redis-cli FLUSHDB
+```
+
+### Полезные команды
+
+```bash
+# Перезапуск сервиса
 docker-compose restart api-gateway
+
+# Просмотр логов в реальном времени
+docker-compose logs -f api-gateway
+
+# Выполнение команд в контейнере
+docker-compose exec api-gateway bash
+
+# Проверка переменных окружения
+docker-compose exec api-gateway env
 ```
-
-### Performance Issues
-
-#### High Response Times
-- Check service dependencies
-- Verify network connectivity
-- Review database performance
-- Check for memory leaks
-
-#### High Error Rates
-- Check service health
-- Verify configuration
-- Review error logs
-- Check resource limits
-
----
-
-**Last Updated**: December 2024
-**Service Version**: 1.0.0

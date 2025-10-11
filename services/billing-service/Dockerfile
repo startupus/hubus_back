@@ -89,7 +89,7 @@ EXPOSE 3004
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:3004/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
+  CMD node -e "require('http').get('http://0.0.0.0:3004/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
 
 # Запустить приложение
 CMD ["node", "dist/main"]

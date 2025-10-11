@@ -233,8 +233,8 @@ export class ValidationService {
       throw new Error(`Invalid ${fieldName} length`);
     }
 
-    // Проверяем, что ID содержит только допустимые символы
-    if (!/^[a-zA-Z0-9_-]+$/.test(id)) {
+    // Проверяем, что ID содержит только допустимые символы (включая UUID формат)
+    if (!/^[a-zA-Z0-9_-]+$/.test(id) && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
       throw new Error(`Invalid ${fieldName} format`);
     }
   }

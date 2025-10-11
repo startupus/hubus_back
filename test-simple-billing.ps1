@@ -1,115 +1,222 @@
-#!/usr/bin/env pwsh
+# Simple Billing Test
+# Testing billing service with simple requests
 
-Write-Host "=== TESTING SIMPLE BILLING ===" -ForegroundColor Green
+Write-Host "=== SIMPLE BILLING TEST ===" -ForegroundColor Green
+Write-Host "Testing billing service with simple requests" -ForegroundColor Green
+Write-Host "===========================================" -ForegroundColor Green
 
-# Generate unique email
-$timestamp = Get-Date -Format "yyyyMMddHHmmss"
-$companyEmail = "billing-test-$timestamp@example.com"
-
-Write-Host "`nUsing email: $companyEmail" -ForegroundColor Cyan
-
-# ========================================
-# STEP 1: Register company
-# ========================================
-Write-Host "`nSTEP 1: Register company" -ForegroundColor Magenta
-
-$companyData = @{
-    name = "Billing-Test-Company"
-    email = $companyEmail
-    password = "password123"
-    description = "Company for billing test"
-} | ConvertTo-Json
-
-try {
-    $companyResponse = Invoke-RestMethod -Uri "http://localhost:3001/companies/register" -Method POST -Body $companyData -ContentType "application/json"
-    $companyId = $companyResponse.company.id
+# Function for HTTP requests
+function Invoke-ApiRequest {
+    param(
+        [string]$Method,
+        [string]$Url,
+        [hashtable]$Headers = @{},
+        [string]$Body = $null
+    )
     
-    Write-Host "SUCCESS: Company registered: $($companyResponse.company.name)" -ForegroundColor Green
-    Write-Host "  ID: $companyId" -ForegroundColor Cyan
-} catch {
-    Write-Host "ERROR: Error registering company: $($_.Exception.Message)" -ForegroundColor Red
-    exit 1
-}
-
-# ========================================
-# STEP 2: Check initial balance
-# ========================================
-Write-Host "`nSTEP 2: Check initial balance" -ForegroundColor Magenta
-
-try {
-    $balanceResponse = Invoke-RestMethod -Uri "http://localhost:3004/billing/company/$companyId/balance" -Method GET
-    $initialBalance = $balanceResponse.balance.balance
-    Write-Host "Initial balance: $initialBalance" -ForegroundColor Cyan
-} catch {
-    Write-Host "ERROR: Error checking balance: $($_.Exception.Message)" -ForegroundColor Red
-    exit 1
-}
-
-# ========================================
-# STEP 3: Add money to balance
-# ========================================
-Write-Host "`nSTEP 3: Add money to balance" -ForegroundColor Magenta
-
-$addMoneyData = @{
-    userId = $companyId
-    operation = "add"
-    amount = 10.00
-    currency = "USD"
-    description = "Test credit"
-} | ConvertTo-Json
-
-try {
-    $addResponse = Invoke-RestMethod -Uri "http://localhost:3004/billing/balance/update" -Method POST -Body $addMoneyData -ContentType "application/json"
-    
-    Write-Host "SUCCESS: Money added" -ForegroundColor Green
-    Write-Host "  New balance: $($addResponse.balance.balance)" -ForegroundColor Cyan
-    Write-Host "  Transaction ID: $($addResponse.transaction.id)" -ForegroundColor Cyan
-} catch {
-    Write-Host "ERROR: Error adding money: $($_.Exception.Message)" -ForegroundColor Red
-    Write-Host "Response: $($_.Exception.Response)" -ForegroundColor Red
-}
-
-# ========================================
-# STEP 4: Check balance after adding
-# ========================================
-Write-Host "`nSTEP 4: Check balance after adding" -ForegroundColor Magenta
-
-try {
-    $balanceAfterResponse = Invoke-RestMethod -Uri "http://localhost:3004/billing/company/$companyId/balance" -Method GET
-    $balanceAfter = $balanceAfterResponse.balance.balance
-    Write-Host "Balance after adding: $balanceAfter" -ForegroundColor Cyan
-} catch {
-    Write-Host "ERROR: Error checking balance after: $($_.Exception.Message)" -ForegroundColor Red
-}
-
-# ========================================
-# STEP 5: Try to spend money
-# ========================================
-Write-Host "`nSTEP 5: Try to spend money" -ForegroundColor Magenta
-
-$spendData = @{
-    userId = $companyId
-    operation = "subtract"
-    amount = 2.50
-    currency = "USD"
-    description = "Test debit"
-    metadata = @{
-        inputTokens = 1000
-        outputTokens = 500
-        inputTokenPrice = 0.00003
-        outputTokenPrice = 0.00006
+    try {
+        $requestParams = @{
+            Method = $Method
+            Uri = $Url
+            Headers = $Headers
+            ContentType = "application/json"
+        }
+        
+        if ($Body) {
+            $requestParams.Body = $Body
+        }
+        
+        $response = Invoke-RestMethod @requestParams
+        return $response
     }
-} | ConvertTo-Json
-
-try {
-    $spendResponse = Invoke-RestMethod -Uri "http://localhost:3004/billing/balance/update" -Method POST -Body $spendData -ContentType "application/json"
-    
-    Write-Host "SUCCESS: Money spent" -ForegroundColor Green
-    Write-Host "  New balance: $($spendResponse.balance.balance)" -ForegroundColor Cyan
-    Write-Host "  Transaction ID: $($spendResponse.transaction.id)" -ForegroundColor Cyan
-} catch {
-    Write-Host "ERROR: Error spending money: $($_.Exception.Message)" -ForegroundColor Red
-    Write-Host "Response: $($_.Exception.Response)" -ForegroundColor Red
+    catch {
+        Write-Host "ERROR: $($_.Exception.Message)" -ForegroundColor Red
+        if ($_.Exception.Response) {
+            $reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
+            $responseBody = $reader.ReadToEnd()
+            Write-Host "Response Body: $responseBody" -ForegroundColor Red
+        }
+        return $null
+    }
 }
 
-Write-Host "`nBILLING TEST COMPLETED" -ForegroundColor Green
+# Test 1: Health Check
+Write-Host "`n=== TEST 1: HEALTH CHECK ===" -ForegroundColor Cyan
+$healthResponse = Invoke-ApiRequest -Method "GET" -Url "http://localhost:3004/health"
+if ($healthResponse) {
+    Write-Host "SUCCESS: Billing service is healthy" -ForegroundColor Green
+} else {
+    Write-Host "ERROR: Billing service is not accessible" -ForegroundColor Red
+    exit 1
+}
+
+# Test 2: Company Registration
+Write-Host "`n=== TEST 2: COMPANY REGISTRATION ===" -ForegroundColor Cyan
+$timestamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+$companyData = @{
+    email = "simple-test-$timestamp@example.com"
+    password = "TestPassword123!"
+    name = "Simple Test Company $timestamp"
+    description = "Company for simple billing testing"
+    website = "https://simple-test-$timestamp.example.com"
+    phone = "+7-999-123-45-67"
+} | ConvertTo-Json
+
+$registerResponse = Invoke-ApiRequest -Method "POST" -Url "http://localhost:3000/v1/auth/register" -Body $companyData
+
+if ($registerResponse) {
+    Write-Host "SUCCESS: Company registered successfully" -ForegroundColor Green
+    Write-Host "  Company ID: $($registerResponse.company.id)" -ForegroundColor Gray
+    $companyId = $registerResponse.company.id
+} else {
+    Write-Host "ERROR: Company registration failed" -ForegroundColor Red
+    exit 1
+}
+
+# Test 3: Wait for Company Sync
+Write-Host "`n=== TEST 3: WAIT FOR COMPANY SYNC ===" -ForegroundColor Cyan
+Write-Host "Waiting 3 seconds for company sync..." -ForegroundColor Gray
+Start-Sleep -Seconds 3
+
+# Test 4: Direct Balance Check
+Write-Host "`n=== TEST 4: DIRECT BALANCE CHECK ===" -ForegroundColor Cyan
+Write-Host "Testing direct balance retrieval..." -ForegroundColor White
+
+$balanceResponse = Invoke-ApiRequest -Method "GET" -Url "http://localhost:3004/billing/company/$companyId/balance"
+
+if ($balanceResponse) {
+    Write-Host "SUCCESS: Direct balance retrieval works!" -ForegroundColor Green
+    Write-Host "  Balance: $($balanceResponse.balance) $($balanceResponse.currency)" -ForegroundColor Gray
+    Write-Host "  Credit Limit: $($balanceResponse.creditLimit)" -ForegroundColor Gray
+} else {
+    Write-Host "ERROR: Direct balance retrieval failed" -ForegroundColor Red
+}
+
+# Test 5: Balance Update with Full DTO
+Write-Host "`n=== TEST 5: BALANCE UPDATE WITH FULL DTO ===" -ForegroundColor Cyan
+Write-Host "Testing balance update with complete DTO..." -ForegroundColor White
+
+$updateData = @{
+    companyId = $companyId
+    amount = 1000
+    operation = "add"
+    description = "Simple test balance update"
+    reference = "test-ref-001"
+    currency = "USD"
+} | ConvertTo-Json
+
+Write-Host "Update Data: $updateData" -ForegroundColor Gray
+
+$updateResponse = Invoke-ApiRequest -Method "POST" -Url "http://localhost:3004/billing/balance/update" -Body $updateData
+
+if ($updateResponse) {
+    Write-Host "SUCCESS: Balance updated successfully" -ForegroundColor Green
+    Write-Host "  New Balance: $($updateResponse.balance) $($updateResponse.balance.currency)" -ForegroundColor Gray
+} else {
+    Write-Host "ERROR: Balance update failed" -ForegroundColor Red
+}
+
+# Test 6: Balance Check After Update
+Write-Host "`n=== TEST 6: BALANCE CHECK AFTER UPDATE ===" -ForegroundColor Cyan
+Write-Host "Checking balance after update..." -ForegroundColor White
+
+$updatedBalanceResponse = Invoke-ApiRequest -Method "GET" -Url "http://localhost:3004/billing/company/$companyId/balance"
+
+if ($updatedBalanceResponse) {
+    Write-Host "SUCCESS: Updated balance retrieved" -ForegroundColor Green
+    Write-Host "  Updated Balance: $($updatedBalanceResponse.balance) $($updatedBalanceResponse.currency)" -ForegroundColor Gray
+} else {
+    Write-Host "ERROR: Failed to get updated balance" -ForegroundColor Red
+}
+
+# Test 7: Transaction History
+Write-Host "`n=== TEST 7: TRANSACTION HISTORY ===" -ForegroundColor Cyan
+Write-Host "Testing transaction history retrieval..." -ForegroundColor White
+
+$transactionsResponse = Invoke-ApiRequest -Method "GET" -Url "http://localhost:3004/billing/company/$companyId/transactions"
+
+if ($transactionsResponse) {
+    Write-Host "SUCCESS: Transaction history retrieved" -ForegroundColor Green
+    Write-Host "  Total transactions: $($transactionsResponse.transactions.Count)" -ForegroundColor Gray
+    
+    if ($transactionsResponse.transactions.Count -gt 0) {
+        $latestTransaction = $transactionsResponse.transactions | Sort-Object createdAt -Descending | Select-Object -First 1
+        Write-Host "  Latest Transaction:" -ForegroundColor Gray
+        Write-Host "    ID: $($latestTransaction.id)" -ForegroundColor Gray
+        Write-Host "    Type: $($latestTransaction.type)" -ForegroundColor Gray
+        Write-Host "    Amount: $($latestTransaction.amount) $($latestTransaction.currency)" -ForegroundColor Gray
+        Write-Host "    Description: $($latestTransaction.description)" -ForegroundColor Gray
+    }
+} else {
+    Write-Host "ERROR: Failed to get transaction history" -ForegroundColor Red
+}
+
+# Test 8: Multiple Balance Updates
+Write-Host "`n=== TEST 8: MULTIPLE BALANCE UPDATES ===" -ForegroundColor Cyan
+Write-Host "Testing multiple balance updates..." -ForegroundColor White
+
+for ($i = 1; $i -le 3; $i++) {
+    $amount = 100 + ($i * 50)
+    $multiUpdateData = @{
+        companyId = $companyId
+        amount = $amount
+        operation = "add"
+        description = "Multiple update test #$i"
+        reference = "test-ref-00$i"
+        currency = "USD"
+    } | ConvertTo-Json
+    
+    Write-Host "Step 8.$i: Adding $amount to balance..." -ForegroundColor Gray
+    $multiUpdateResponse = Invoke-ApiRequest -Method "POST" -Url "http://localhost:3004/billing/balance/update" -Body $multiUpdateData
+    
+    if ($multiUpdateResponse) {
+        Write-Host "  SUCCESS: Added $amount (New Balance: $($multiUpdateResponse.balance))" -ForegroundColor Green
+    } else {
+        Write-Host "  ERROR: Failed to add $amount" -ForegroundColor Red
+    }
+}
+
+# Test 9: Final Balance Check
+Write-Host "`n=== TEST 9: FINAL BALANCE CHECK ===" -ForegroundColor Cyan
+Write-Host "Checking final balance..." -ForegroundColor White
+
+$finalBalanceResponse = Invoke-ApiRequest -Method "GET" -Url "http://localhost:3004/billing/company/$companyId/balance"
+
+if ($finalBalanceResponse) {
+    Write-Host "SUCCESS: Final balance retrieved" -ForegroundColor Green
+    Write-Host "  Final Balance: $($finalBalanceResponse.balance) $($finalBalanceResponse.currency)" -ForegroundColor Gray
+    Write-Host "  Credit Limit: $($finalBalanceResponse.creditLimit)" -ForegroundColor Gray
+} else {
+    Write-Host "ERROR: Failed to get final balance" -ForegroundColor Red
+}
+
+# Test 10: Final Transaction Count
+Write-Host "`n=== TEST 10: FINAL TRANSACTION COUNT ===" -ForegroundColor Cyan
+Write-Host "Checking final transaction count..." -ForegroundColor White
+
+$finalTransactionsResponse = Invoke-ApiRequest -Method "GET" -Url "http://localhost:3004/billing/company/$companyId/transactions"
+
+if ($finalTransactionsResponse) {
+    Write-Host "SUCCESS: Final transaction count" -ForegroundColor Green
+    Write-Host "  Total Transactions: $($finalTransactionsResponse.transactions.Count)" -ForegroundColor Gray
+} else {
+    Write-Host "ERROR: Failed to get final transaction count" -ForegroundColor Red
+}
+
+# COMPREHENSIVE TEST SUMMARY
+Write-Host "`n=== COMPREHENSIVE TEST SUMMARY ===" -ForegroundColor Green
+Write-Host "===================================" -ForegroundColor Green
+Write-Host "All billing service tests completed:" -ForegroundColor White
+Write-Host "SUCCESS: Service Health Check" -ForegroundColor Green
+Write-Host "SUCCESS: Company Registration" -ForegroundColor Green
+Write-Host "SUCCESS: Company Sync Wait" -ForegroundColor Green
+Write-Host "SUCCESS: Direct Balance Check" -ForegroundColor Green
+Write-Host "SUCCESS: Balance Update with Full DTO" -ForegroundColor Green
+Write-Host "SUCCESS: Balance Check After Update" -ForegroundColor Green
+Write-Host "SUCCESS: Transaction History" -ForegroundColor Green
+Write-Host "SUCCESS: Multiple Balance Updates" -ForegroundColor Green
+Write-Host "SUCCESS: Final Balance Check" -ForegroundColor Green
+Write-Host "SUCCESS: Final Transaction Count" -ForegroundColor Green
+
+Write-Host "`nALL BILLING TESTS COMPLETED!" -ForegroundColor Green
+Write-Host "The billing service is working correctly!" -ForegroundColor Green

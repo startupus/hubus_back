@@ -8,6 +8,8 @@ import { CriticalOperationsService } from './critical-operations.service';
 import { ReferralService } from './referral.service';
 import { PrismaModule } from '../common/prisma/prisma.module';
 import { CacheService } from '../common/cache/cache.service';
+import { RedisCacheService } from '../common/cache/redis-cache.service';
+import { ConnectionPoolService } from '../common/database/connection-pool.service';
 import { ValidationService } from '../common/validation/validation.service';
 import { RabbitMQModule } from '../common/rabbitmq/rabbitmq.module';
 
@@ -22,6 +24,8 @@ import { RabbitMQModule } from '../common/rabbitmq/rabbitmq.module';
     CriticalOperationsService,
     ReferralService,
     CacheService,
+    RedisCacheService,
+    ConnectionPoolService,
     ValidationService
   ],
   exports: [
@@ -32,6 +36,8 @@ import { RabbitMQModule } from '../common/rabbitmq/rabbitmq.module';
     CriticalOperationsService,
     ReferralService,
     CacheService,
+    RedisCacheService,
+    ConnectionPoolService,
     ValidationService
   ],
 })

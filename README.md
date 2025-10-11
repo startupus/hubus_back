@@ -1,310 +1,248 @@
-# AI Aggregator Platform
+# AI Aggregator - Агрегатор ИИ-провайдеров
 
-## 🚀 Overview
+## Описание проекта
 
-AI Aggregator Platform is a comprehensive microservices-based system that provides unified access to multiple AI providers (OpenAI, OpenRouter, etc.) with advanced features including billing, referral systems, API key management, and provider preferences.
+**AI Aggregator** — это микросервисная платформа для агрегации и управления различными ИИ-провайдерами. Система предоставляет единый API для работы с различными языковыми моделями, обеспечивая гибкость, масштабируемость и экономическую эффективность.
 
-## ✨ Key Features
+## Основные возможности
 
-### 🔐 Authentication & Authorization
-- **Company Registration & Login**: Secure company account management
-- **JWT Authentication**: Token-based authentication system
-- **API Key Management**: Generate and manage API keys for external integrations
-- **Role-based Access Control**: Different access levels for different user types
+### 🚀 **Управление провайдерами**
+- Поддержка множества ИИ-провайдеров (OpenAI, OpenRouter, Anthropic и др.)
+- Автоматическая маршрутизация запросов
+- Балансировка нагрузки между провайдерами
+- Мониторинг доступности и производительности
 
-### 💰 Advanced Billing System
-- **Pay-as-you-go Billing**: Real-time token-based billing
-- **Subscription Plans**: Monthly plans with token packages (10% discount)
-- **Balance Management**: Real-time balance tracking and updates
-- **Transaction History**: Complete audit trail of all financial operations
-- **Referral System**: Commission-based referral program with unlimited referrals
+### 💰 **Гибкая тарификация**
+- Планы подписки с включенными токенами
+- Pay-as-you-go тарификация
+- Система рефералов с комиссиями
+- Детальная аналитика расходов
 
-### 🤖 AI Provider Integration
-- **Multi-Provider Support**: OpenAI, OpenRouter, and other AI providers
-- **Provider Preferences**: Company-specific provider selection for models
-- **Intelligent Routing**: Automatic provider selection based on availability and cost
-- **Model Management**: Support for various AI models across providers
+### 🔐 **Безопасность и аутентификация**
+- JWT-аутентификация
+- API-ключи для интеграций
+- Роли и права доступа
+- Аудит безопасности
 
-### 📊 Analytics & Monitoring
-- **Usage Analytics**: Detailed usage statistics and reporting
-- **Performance Monitoring**: Real-time system performance metrics
-- **Cost Tracking**: Comprehensive cost analysis and reporting
-- **Audit Logs**: Complete system activity logging
+### 📊 **Аналитика и мониторинг**
+- Детальная статистика использования
+- Мониторинг производительности
+- Алерты и уведомления
+- Экспорт данных
 
-## 🏗️ Architecture
+## Архитектура системы
 
-### Microservices Structure
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   API Gateway   │────│  Auth Service   │    │ Billing Service │
-│   (Port 3000)   │    │   (Port 3001)   │    │   (Port 3004)   │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-         │                       │                       │
-         └───────────────────────┼───────────────────────┘
-                                 │
-         ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-         │Provider         │    │  Proxy Service  │    │Analytics Service│
-         │Orchestrator     │    │   (Port 3003)   │    │   (Port 3005)   │
-         │  (Port 3002)    │    └─────────────────┘    └─────────────────┘
-         └─────────────────┘
-```
+### Микросервисы
 
-### Technology Stack
-- **Backend**: NestJS with TypeScript
-- **Database**: PostgreSQL (separate database per service)
-- **Message Queue**: RabbitMQ for async communication
-- **Authentication**: JWT tokens
-- **Containerization**: Docker & Docker Compose
-- **Testing**: Jest with comprehensive test suite
+| Сервис | Порт | Описание |
+|--------|------|----------|
+| **API Gateway** | 3000 | Единая точка входа, маршрутизация запросов |
+| **Auth Service** | 3001 | Аутентификация, управление пользователями |
+| **Provider Orchestrator** | 3002 | Управление провайдерами, маршрутизация |
+| **Proxy Service** | 3003 | Проксирование запросов к ИИ-провайдерам |
+| **Billing Service** | 3004 | Биллинг, управление балансами |
+| **Analytics Service** | 3005 | Аналитика и мониторинг |
+| **Payment Service** | 3006 | Обработка платежей |
 
-## 🚀 Quick Start
+### Технологический стек
 
-### Prerequisites
-- Node.js 18+ 
-- Docker & Docker Compose
-- PostgreSQL 14+
-- RabbitMQ
+- **Backend**: NestJS, TypeScript
+- **База данных**: PostgreSQL (отдельная БД на сервис)
+- **Кэширование**: Redis
+- **Очереди**: RabbitMQ
+- **Контейнеризация**: Docker, Docker Compose
+- **Мониторинг**: Prometheus, Grafana
 
-### Installation
+## Быстрый старт
 
-1. **Clone the repository**
+### Предварительные требования
+
+- Node.js 18+
+- Docker и Docker Compose
+- Git
+
+### Установка и запуск
+
+1. **Клонирование репозитория**
 ```bash
 git clone <repository-url>
-cd ai-aggregator-platform
+cd ai-aggregator
 ```
 
-2. **Install dependencies**
-```bash
-npm install
-```
-
-3. **Set up environment variables**
-```bash
-cp env.example .env
-# Edit .env with your configuration
-```
-
-4. **Start services with Docker**
+2. **Запуск всех сервисов**
 ```bash
 docker-compose up -d
 ```
 
-5. **Run database migrations**
+3. **Проверка статуса**
 ```bash
-npm run migrate
+docker-compose ps
 ```
 
-6. **Verify installation**
+4. **Просмотр логов**
 ```bash
-curl http://localhost:3000/health
+docker-compose logs -f
 ```
 
-## 📖 API Documentation
+### Первоначальная настройка
 
-### Authentication Endpoints
-
-#### Register Company
-```http
-POST /v1/auth/register
-Content-Type: application/json
-
-{
-  "name": "Company Name",
-  "email": "company@example.com",
-  "password": "securepassword",
-  "description": "Company description",
-  "website": "https://company.com",
-  "phone": "+1234567890",
-  "address": {
-    "city": "New York",
-    "country": "USA"
-  }
-}
-```
-
-#### Login Company
-```http
-POST /v1/auth/login
-Content-Type: application/json
-
-{
-  "email": "company@example.com",
-  "password": "securepassword"
-}
-```
-
-### Billing Endpoints
-
-#### Get Balance
-```http
-GET /v1/billing/balance
-Authorization: Bearer <jwt-token>
-```
-
-#### Update Balance
-```http
-POST /v1/billing/balance
-Authorization: Bearer <jwt-token>
-Content-Type: application/json
-
-{
-  "amount": 100.0,
-  "operation": "CREDIT"
-}
-```
-
-### AI Chat Endpoints
-
-#### Send Chat Request
-```http
-POST /v1/chat/completions
-Authorization: Bearer <jwt-token>
-Content-Type: application/json
-
-{
-  "model": "gpt-4",
-  "messages": [
-    {
-      "role": "user",
-      "content": "Hello, how are you?"
-    }
-  ],
-  "max_tokens": 1000,
-  "temperature": 0.7
-}
-```
-
-## 🔧 Configuration
-
-### Environment Variables
-
-#### API Gateway
-```env
-PORT=3000
-AUTH_SERVICE_URL=http://auth-service:3001
-BILLING_SERVICE_URL=http://billing-service:3004
-PROVIDER_ORCHESTRATOR_URL=http://provider-orchestrator:3002
-```
-
-#### Auth Service
-```env
-PORT=3001
-DATABASE_URL=postgresql://user:password@auth-db:5432/auth
-JWT_SECRET=your-jwt-secret
-JWT_EXPIRES_IN=1h
-```
-
-#### Billing Service
-```env
-PORT=3004
-DATABASE_URL=postgresql://user:password@billing-db:5432/billing
-RABBITMQ_URL=amqp://user:password@rabbitmq:5672
-```
-
-## 🧪 Testing
-
-### Run Tests
+1. **Регистрация компании**
 ```bash
-# Run all tests
+curl -X POST http://localhost:3000/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "admin@company.com",
+    "password": "securepassword123"
+  }'
+```
+
+2. **Получение API-ключа**
+```bash
+curl -X POST http://localhost:3000/api/v1/auth/api-keys \
+  -H "Authorization: Bearer <your-jwt-token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Production API Key"
+  }'
+```
+
+## API Документация
+
+После запуска сервисов документация API доступна по адресам:
+
+- **API Gateway**: http://localhost:3000/api/v1/docs
+- **Auth Service**: http://localhost:3001/api/v1/docs
+- **Billing Service**: http://localhost:3004/api/v1/docs
+- **Payment Service**: http://localhost:3006/api/v1/docs
+
+## Тестирование
+
+### Запуск тестов
+
+```bash
+# Все тесты
 npm test
 
-# Run specific test suites
+# Unit тесты
 npm run test:unit
+
+# Integration тесты
 npm run test:integration
+
+# E2E тесты
 npm run test:e2e
-
-# Run with coverage
-npm run test:coverage
 ```
 
-### Test Structure
-```
-tests/
-├── unit/           # Unit tests for individual services
-├── integration/    # Integration tests between services
-├── e2e/           # End-to-end tests
-└── shared/        # Shared test utilities
+### PowerShell скрипты
+
+```powershell
+# Запуск всех тестов
+.\run-tests.ps1
+
+# Запуск конкретного типа тестов
+.\run-tests.ps1 -Type unit
 ```
 
-## 📊 Monitoring & Analytics
+## Развертывание
+
+### Development
+
+```bash
+docker-compose up -d
+```
+
+### Production
+
+```bash
+# Сборка образов
+docker-compose -f docker-compose.prod.yml build
+
+# Запуск в production режиме
+docker-compose -f docker-compose.prod.yml up -d
+```
+
+## Мониторинг
 
 ### Health Checks
-- **API Gateway**: `http://localhost:3000/health`
-- **Auth Service**: `http://localhost:3001/health`
-- **Billing Service**: `http://localhost:3004/health`
 
-### Metrics
-- **Usage Statistics**: Real-time token usage and costs
-- **Performance Metrics**: Response times and throughput
-- **Error Rates**: System error tracking and reporting
+- **API Gateway**: http://localhost:3000/health
+- **Auth Service**: http://localhost:3001/health
+- **Billing Service**: http://localhost:3004/health
+- **Payment Service**: http://localhost:3006/health
 
-## 🔒 Security
+### Метрики
 
-### Authentication
-- JWT-based authentication with configurable expiration
-- API key authentication for external integrations
-- Role-based access control
+- **Prometheus**: http://localhost:9090
+- **Grafana**: http://localhost:3001 (admin/admin)
 
-### Data Protection
-- Password hashing with bcrypt
-- Secure API key generation
-- Input validation and sanitization
-- SQL injection prevention
+## Конфигурация
 
-## 🚀 Deployment
+### Переменные окружения
 
-### Docker Deployment
+Основные переменные окружения для каждого сервиса:
+
 ```bash
-# Build and start all services
-docker-compose up -d
+# База данных
+DATABASE_URL=postgresql://user:password@host:port/database
 
-# View logs
-docker-compose logs -f
+# JWT
+JWT_SECRET=your-super-secret-jwt-key
 
-# Stop services
-docker-compose down
+# Redis
+REDIS_URL=redis://localhost:6379
+
+# RabbitMQ
+RABBITMQ_URL=amqp://user:password@localhost:5672
 ```
 
-### Production Considerations
-- Use environment-specific configuration
-- Set up proper database backups
-- Configure monitoring and alerting
-- Implement rate limiting
-- Set up SSL/TLS certificates
+## Разработка
 
-## 🤝 Contributing
+### Структура проекта
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests for new functionality
-5. Run the test suite
-6. Submit a pull request
+```
+ai-aggregator/
+├── services/                 # Микросервисы
+│   ├── api-gateway/         # API Gateway
+│   ├── auth-service/        # Сервис аутентификации
+│   ├── billing-service/     # Сервис биллинга
+│   ├── payment-service/     # Сервис платежей
+│   └── shared/              # Общие компоненты
+├── tests/                   # Тесты
+├── docker-compose.yml       # Docker Compose конфигурация
+└── README.md               # Документация
+```
 
-## 📄 License
+### Добавление нового сервиса
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+1. Создайте папку в `services/`
+2. Настройте `Dockerfile`
+3. Добавьте сервис в `docker-compose.yml`
+4. Создайте тесты в `tests/`
 
-## 🆘 Support
+## Поддержка
 
-For support and questions:
-- Create an issue in the repository
-- Check the documentation in the `docs/` folder
-- Review the API documentation
+### Логи и отладка
 
-## 🔄 Changelog
+```bash
+# Логи конкретного сервиса
+docker-compose logs -f auth-service
 
-### v1.0.0
-- Initial release with core functionality
-- Multi-provider AI integration
-- Advanced billing system
-- Referral system
-- API key management
-- Provider preferences
-- Comprehensive testing suite
+# Логи всех сервисов
+docker-compose logs -f
+```
 
----
+### Частые проблемы
 
-**Status**: ✅ **Production Ready**
-**Last Updated**: December 2024
-**Version**: 1.0.0
+1. **Порт уже используется**: Измените порт в `docker-compose.yml`
+2. **База данных недоступна**: Проверьте статус PostgreSQL контейнеров
+3. **JWT ошибки**: Убедитесь, что `JWT_SECRET` одинаковый во всех сервисах
+
+## Лицензия
+
+MIT License
+
+## Контакты
+
+- **Email**: support@ai-aggregator.com
+- **Документация**: [docs/](docs/)
+- **Issues**: [GitHub Issues](https://github.com/your-org/ai-aggregator/issues)

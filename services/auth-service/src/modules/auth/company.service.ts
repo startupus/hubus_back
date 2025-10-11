@@ -3,6 +3,7 @@ import { JwtService } from '@nestjs/jwt';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { TokenCacheService } from '../../common/cache/token-cache.service';
 import { LoggerUtil } from '@ai-aggregator/shared';
 import * as bcrypt from 'bcrypt';
 import { firstValueFrom } from 'rxjs';
@@ -17,6 +18,7 @@ export class CompanyService {
     private readonly jwtService: JwtService,
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
+    private readonly tokenCache: TokenCacheService,
   ) {
     this.billingServiceUrl = this.configService.get('BILLING_SERVICE_URL', 'http://billing-service:3004');
   }
@@ -101,18 +103,27 @@ export class CompanyService {
       });
 
       // Generate JWT tokens
-      const accessToken = this.jwtService.sign({
+      const accessTokenPayload = {
         sub: company.id,
         email: company.email,
         role: company.role,
         type: 'company',
-      });
+      };
 
-      const refreshToken = this.jwtService.sign({
+      const refreshTokenPayload = {
         sub: company.id,
         email: company.email,
         type: 'refresh',
-      }, { expiresIn: '7d' });
+      };
+
+      const accessToken = this.jwtService.sign(accessTokenPayload);
+      const refreshToken = this.jwtService.sign(refreshTokenPayload, { expiresIn: '7d' });
+
+      // Cache tokens for faster validation
+      await Promise.all([
+        this.tokenCache.cacheAccessToken(accessToken, accessTokenPayload),
+        this.tokenCache.cacheRefreshToken(refreshToken, refreshTokenPayload)
+      ]);
 
       LoggerUtil.info('auth-service', 'Company registered successfully', { 
         companyId: company.id, 
@@ -233,18 +244,27 @@ export class CompanyService {
       });
 
       // Generate JWT tokens
-      const accessToken = this.jwtService.sign({
+      const accessTokenPayload = {
         sub: company.id,
         email: company.email,
         role: company.role,
         type: 'company',
-      });
+      };
 
-      const refreshToken = this.jwtService.sign({
+      const refreshTokenPayload = {
         sub: company.id,
         email: company.email,
         type: 'refresh',
-      }, { expiresIn: '7d' });
+      };
+
+      const accessToken = this.jwtService.sign(accessTokenPayload);
+      const refreshToken = this.jwtService.sign(refreshTokenPayload, { expiresIn: '7d' });
+
+      // Cache tokens for faster validation
+      await Promise.all([
+        this.tokenCache.cacheAccessToken(accessToken, accessTokenPayload),
+        this.tokenCache.cacheRefreshToken(refreshToken, refreshTokenPayload)
+      ]);
 
       LoggerUtil.info('auth-service', 'Company logged in successfully', { 
         companyId: company.id, 

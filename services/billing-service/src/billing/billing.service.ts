@@ -897,6 +897,27 @@ export class BillingService {
   }
 
   /**
+   * Получить транзакцию по payment ID (для идемпотентности)
+   */
+  async getTransactionByPaymentId(paymentId: string): Promise<Transaction | null> {
+    try {
+      const transaction = await this.prisma.transaction.findFirst({
+        where: {
+          metadata: {
+            path: ['paymentId'],
+            equals: paymentId
+          }
+        }
+      });
+
+      return transaction as any;
+    } catch (error) {
+      LoggerUtil.error('billing-service', 'Failed to get transaction by payment ID', error as Error, { paymentId });
+      return null;
+    }
+  }
+
+  /**
    * Обновить транзакцию
    */
   async updateTransaction(transactionId: string, updateData: Partial<Transaction>): Promise<Transaction> {

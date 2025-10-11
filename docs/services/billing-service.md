@@ -1,772 +1,809 @@
 # Billing Service
 
-## 🚀 Overview
+## Описание
 
-The Billing Service handles all financial operations including balance management, transaction processing, pricing plans, subscriptions, and referral commissions. It provides comprehensive billing functionality with real-time balance tracking and transaction history.
+Billing Service отвечает за управление биллингом, тарификацией, балансами компаний, обработку транзакций и систему реферальных комиссий.
 
-## 🔧 Configuration
+## Основные функции
 
-### Environment Variables
-```env
+- **Управление балансами компаний** и кредитными лимитами
+- **Обработка транзакций** (списание, пополнение, возвраты)
+- **Тарификация запросов** к ИИ-провайдерам
+- **Система подписок** с планами и включенными токенами
+- **Pay-as-you-go тарификация** для запросов без подписки
+- **Реферальная система** с комиссиями
+- **Генерация отчетов** и аналитика расходов
+
+## Архитектура
+
+```mermaid
+graph TB
+    Client[Клиент] --> Gateway[API Gateway]
+    Gateway --> Billing[Billing Service]
+    
+    Billing --> BillingDB[(Billing Database)]
+    Billing --> Redis[(Redis Cache)]
+    Billing --> RabbitMQ[RabbitMQ]
+    
+    Billing --> Auth[Auth Service]
+    Billing --> Payment[Payment Service]
+    Billing --> Analytics[Analytics Service]
+    
+    Billing --> Pricing[Pricing Engine]
+    Billing --> Referrals[Referral System]
+```
+
+## Конфигурация
+
+### Переменные окружения
+
+```bash
+# Основные настройки
+NODE_ENV=development
+HOST=0.0.0.0
 PORT=3004
-NODE_ENV=production
-DATABASE_URL=postgresql://billing_user:billing_password@localhost:5432/billing_service
-RABBITMQ_URL=amqp://user:password@localhost:5672
-BILLING_CURRENCY=USD
+
+# База данных
+DATABASE_URL=postgresql://postgres:password@billing-db:5432/billing_db
+
+# Redis
+REDIS_URL=redis://redis:6379
+
+# RabbitMQ
+RABBITMQ_URL=amqp://user:password@rabbitmq:5672
+
+# Внешние сервисы
+AUTH_SERVICE_URL=http://auth-service:3001
+PAYMENT_SERVICE_URL=http://payment-service:3006
+
+# Тарификация
 DEFAULT_BALANCE=100.0
-COMMISSION_RATE=0.1
+CREDIT_LIMIT=1000.0
+REFERRAL_COMMISSION_RATE=0.1
 ```
 
-### Dependencies
-- **PostgreSQL**: Financial data storage
-- **RabbitMQ**: Asynchronous communication
-- **Auth Service**: User validation
-- **Provider Orchestrator**: Cost calculation
+### Docker конфигурация
 
-## 📋 API Endpoints
-
-### Balance Management
-
-#### Get Balance
-```http
-GET /v1/billing/balance
-Authorization: Bearer <jwt-token>
+```yaml
+billing-service:
+  build:
+    context: .
+    dockerfile: ./services/billing-service/Dockerfile
+  ports:
+    - "3004:3004"
+  environment:
+    - NODE_ENV=development
+    - HOST=0.0.0.0
+    - PORT=3004
+    - DATABASE_URL=postgresql://postgres:password@billing-db:5432/billing_db
+    - REDIS_URL=redis://redis:6379
+    - RABBITMQ_URL=amqp://user:password@rabbitmq:5672
+    - AUTH_SERVICE_URL=http://auth-service:3001
+    - PAYMENT_SERVICE_URL=http://payment-service:3006
+  depends_on:
+    - billing-db
+    - redis
+    - rabbitmq
+  networks:
+    - ai-aggregator
 ```
 
-**Response:**
-```json
-{
-  "success": true,
-  "balance": {
-    "id": "balance-id",
-    "userId": "company-id",
-    "balance": 100.0,
-    "currency": "USD",
-    "createdAt": "2024-12-01T00:00:00.000Z",
-    "updatedAt": "2024-12-01T00:00:00.000Z"
-  }
-}
-```
+## База данных
 
-#### Update Balance
-```http
-POST /v1/billing/balance
-Authorization: Bearer <jwt-token>
-Content-Type: application/json
+### Схема
 
-{
-  "amount": 100.0,
-  "operation": "CREDIT"
-}
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "message": "Balance updated successfully",
-  "balance": {
-    "id": "balance-id",
-    "userId": "company-id",
-    "balance": 200.0,
-    "currency": "USD",
-    "updatedAt": "2024-12-01T00:00:00.000Z"
-  }
-}
-```
-
-### Transaction Management
-
-#### Get Transactions
-```http
-GET /v1/billing/transactions?limit=50&offset=0
-Authorization: Bearer <jwt-token>
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "transactions": [
-    {
-      "id": "transaction-id",
-      "userId": "company-id",
-      "type": "DEBIT",
-      "amount": 10.0,
-      "currency": "USD",
-      "description": "AI request",
-      "provider": "openai",
-      "metadata": {
-        "model": "gpt-4",
-        "tokens": 100
-      },
-      "createdAt": "2024-12-01T00:00:00.000Z"
-    }
-  ],
-  "pagination": {
-    "total": 100,
-    "limit": 50,
-    "offset": 0,
-    "hasMore": true
-  }
-}
-```
-
-#### Create Transaction
-```http
-POST /v1/billing/transactions
-Authorization: Bearer <jwt-token>
-Content-Type: application/json
-
-{
-  "type": "DEBIT",
-  "amount": 10.0,
-  "currency": "USD",
-  "description": "AI request",
-  "provider": "openai",
-  "metadata": {
-    "model": "gpt-4",
-    "tokens": 100
-  }
-}
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "transaction": {
-    "id": "transaction-id",
-    "userId": "company-id",
-    "type": "DEBIT",
-    "amount": 10.0,
-    "currency": "USD",
-    "description": "AI request",
-    "provider": "openai",
-    "metadata": {
-      "model": "gpt-4",
-      "tokens": 100
-    },
-    "createdAt": "2024-12-01T00:00:00.000Z"
-  }
-}
-```
-
-### Pricing Plans
-
-#### Get Pricing Plans
-```http
-GET /v1/billing/pricing-plans
-Authorization: Bearer <jwt-token>
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "plans": [
-    {
-      "id": "plan-id",
-      "name": "Basic Plan",
-      "description": "Basic monthly plan",
-      "type": "TOKEN_BASED",
-      "price": 50.0,
-      "currency": "USD",
-      "inputTokens": 10000,
-      "outputTokens": 20000,
-      "inputTokenPrice": 0.001,
-      "outputTokenPrice": 0.002,
-      "discountPercent": 10,
-      "isActive": true,
-      "createdAt": "2024-12-01T00:00:00.000Z"
-    }
-  ]
-}
-```
-
-#### Subscribe to Plan
-```http
-POST /v1/billing/subscribe
-Authorization: Bearer <jwt-token>
-Content-Type: application/json
-
-{
-  "planId": "plan-id",
-  "paymentMethod": "balance"
-}
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "subscription": {
-    "id": "subscription-id",
-    "companyId": "company-id",
-    "planId": "plan-id",
-    "status": "ACTIVE",
-    "inputTokensUsed": 0,
-    "outputTokensUsed": 0,
-    "inputTokensLimit": 10000,
-    "outputTokensLimit": 20000,
-    "startsAt": "2024-12-01T00:00:00.000Z",
-    "expiresAt": "2025-01-01T00:00:00.000Z",
-    "createdAt": "2024-12-01T00:00:00.000Z"
-  }
-}
-```
-
-### Referral System
-
-#### Get Referral Stats
-```http
-GET /v1/billing/referral-stats
-Authorization: Bearer <jwt-token>
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "stats": {
-    "totalReferrals": 10,
-    "activeReferrals": 8,
-    "totalCommission": 150.0,
-    "commissionRate": 0.1,
-    "referralCode": "ABC123"
-  }
-}
-```
-
-#### Get Referral History
-```http
-GET /v1/billing/referral-history
-Authorization: Bearer <jwt-token>
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "referrals": [
-    {
-      "id": "referral-id",
-      "referrerId": "referrer-company-id",
-      "referredId": "referred-company-id",
-      "commissionAmount": 15.0,
-      "status": "ACTIVE",
-      "createdAt": "2024-12-01T00:00:00.000Z"
-    }
-  ]
-}
-```
-
-## 🗄️ Database Schema
-
-### Company Balances Table
 ```sql
+-- Балансы компаний
 CREATE TABLE company_balances (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL UNIQUE,
-  balance DECIMAL(10,2) DEFAULT 100.0,
+  company_id UUID UNIQUE NOT NULL,
+  balance DECIMAL(15,2) DEFAULT 100.0,
+  credit_limit DECIMAL(15,2) DEFAULT 1000.0,
   currency VARCHAR(3) DEFAULT 'USD',
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );
-```
 
-### Transactions Table
-```sql
+-- Транзакции
 CREATE TABLE transactions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL,
+  company_id UUID NOT NULL,
   type VARCHAR(20) NOT NULL, -- DEBIT, CREDIT
-  amount DECIMAL(10,2) NOT NULL,
+  amount DECIMAL(15,2) NOT NULL,
   currency VARCHAR(3) DEFAULT 'USD',
   description TEXT,
-  provider VARCHAR(50),
   metadata JSONB DEFAULT '{}',
-  status VARCHAR(20) DEFAULT 'COMPLETED',
   created_at TIMESTAMP DEFAULT NOW()
 );
-```
 
-### Pricing Plans Table
-```sql
-CREATE TABLE pricing_plans (
+-- События использования
+CREATE TABLE usage_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id UUID NOT NULL,
+  provider VARCHAR(100) NOT NULL,
+  model VARCHAR(100) NOT NULL,
+  cost DECIMAL(15,6) NOT NULL,
+  tokens JSONB NOT NULL, -- {prompt_tokens, completion_tokens, total_tokens}
+  request_id VARCHAR(255),
+  metadata JSONB DEFAULT '{}',
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Правила тарификации
+CREATE TABLE pricing_rules (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name VARCHAR(255) NOT NULL,
-  description TEXT,
-  type VARCHAR(20) NOT NULL, -- MONTHLY, TOKEN_BASED
-  price DECIMAL(10,2) NOT NULL,
+  service VARCHAR(100) NOT NULL,
+  resource VARCHAR(100) NOT NULL,
+  provider VARCHAR(100),
+  model VARCHAR(100),
+  provider_type VARCHAR(20) DEFAULT 'FOREIGN', -- DOMESTIC, FOREIGN
+  type VARCHAR(20) NOT NULL, -- fixed, per_unit, per_token, tiered
+  price DECIMAL(15,6) NOT NULL,
   currency VARCHAR(3) DEFAULT 'USD',
-  input_tokens INTEGER,
-  output_tokens INTEGER,
-  input_token_price DECIMAL(10,6),
-  output_token_price DECIMAL(10,6),
-  discount_percent DECIMAL(5,2),
+  limits JSONB DEFAULT '{}',
+  discounts JSONB DEFAULT '{}',
   is_active BOOLEAN DEFAULT true,
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );
-```
 
-### Subscriptions Table
-```sql
+-- Подписки
 CREATE TABLE subscriptions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   company_id UUID NOT NULL,
-  plan_id UUID NOT NULL REFERENCES pricing_plans(id),
-  status VARCHAR(20) DEFAULT 'ACTIVE',
-  input_tokens_used INTEGER DEFAULT 0,
-  output_tokens_used INTEGER DEFAULT 0,
-  input_tokens_limit INTEGER,
-  output_tokens_limit INTEGER,
-  starts_at TIMESTAMP NOT NULL,
-  expires_at TIMESTAMP NOT NULL,
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW()
-);
-```
-
-### Referral Transactions Table
-```sql
-CREATE TABLE referral_transactions (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  referrer_id UUID NOT NULL,
-  referred_id UUID NOT NULL,
-  commission_amount DECIMAL(10,2) NOT NULL,
-  status VARCHAR(20) DEFAULT 'PENDING',
-  metadata JSONB DEFAULT '{}',
+  plan_name VARCHAR(100) NOT NULL,
+  plan_type VARCHAR(50) NOT NULL, -- monthly, yearly
+  price DECIMAL(15,2) NOT NULL,
+  currency VARCHAR(3) DEFAULT 'USD',
+  included_tokens INTEGER DEFAULT 0,
+  discount_rate DECIMAL(5,4) DEFAULT 0.0,
+  status VARCHAR(20) DEFAULT 'active', -- active, cancelled, expired
+  started_at TIMESTAMP DEFAULT NOW(),
+  expires_at TIMESTAMP,
   created_at TIMESTAMP DEFAULT NOW()
 );
 ```
 
-## 💰 Business Logic
+## API Endpoints
 
-### Balance Management
-```typescript
-// Update balance with transaction
-async updateCompanyBalance(
-  companyId: string,
-  amount: number,
-  operation: 'CREDIT' | 'DEBIT',
-  description: string,
-  metadata: any = {}
-): Promise<CompanyBalance> {
-  return await this.prisma.$transaction(async (tx) => {
-    // Get current balance
-    const currentBalance = await tx.companyBalance.findUnique({
-      where: { userId: companyId }
-    });
+### Баланс
 
-    if (!currentBalance) {
-      throw new Error('Company balance not found');
-    }
+#### GET /api/v1/billing/balance
+Получение баланса компании.
 
-    // Calculate new balance
-    const newBalance = operation === 'CREDIT' 
-      ? currentBalance.balance + amount
-      : currentBalance.balance - amount;
+**Заголовки:**
+```http
+Authorization: Bearer <jwt-token>
+```
 
-    // Check for insufficient balance
-    if (operation === 'DEBIT' && newBalance < 0) {
-      throw new Error('Insufficient balance');
-    }
-
-    // Update balance
-    const updatedBalance = await tx.companyBalance.update({
-      where: { userId: companyId },
-      data: { balance: newBalance }
-    });
-
-    // Create transaction record
-    await tx.transaction.create({
-      data: {
-        userId: companyId,
-        type: operation,
-        amount,
-        currency: 'USD',
-        description,
-        metadata,
-        status: 'COMPLETED'
-      }
-    });
-
-    return updatedBalance;
-  });
+**Ответ:**
+```json
+{
+  "companyId": "company-uuid",
+  "balance": 100.50,
+  "currency": "USD",
+  "creditLimit": 1000.00,
+  "availableCredit": 899.50,
+  "lastUpdated": "2023-12-01T12:00:00.000Z"
 }
 ```
 
-### Pricing Calculation
-```typescript
-// Calculate cost for AI request
-async calculateRequestCost(
-  model: string,
-  inputTokens: number,
-  outputTokens: number,
-  provider: string
-): Promise<number> {
-  // Get pricing for model
-  const pricing = await this.getModelPricing(model, provider);
-  
-  // Calculate cost
-  const inputCost = inputTokens * pricing.inputTokenPrice;
-  const outputCost = outputTokens * pricing.outputTokenPrice;
-  
-  return inputCost + outputCost;
-}
+#### POST /api/v1/billing/balance/update
+Обновление баланса (внутренний API).
 
-// Apply subscription discounts
-async applySubscriptionDiscount(
-  companyId: string,
-  cost: number
-): Promise<number> {
-  const subscription = await this.getActiveSubscription(companyId);
-  
-  if (!subscription) {
-    return cost;
+**Тело запроса:**
+```json
+{
+  "companyId": "company-uuid",
+  "amount": 50.00,
+  "operation": "add",
+  "description": "Payment received",
+  "metadata": {
+    "paymentId": "payment-uuid",
+    "source": "payment_service"
+  }
+}
+```
+
+### Транзакции
+
+#### GET /api/v1/billing/transactions
+Получение истории транзакций.
+
+**Параметры запроса:**
+- `page` (number): Номер страницы (по умолчанию: 1)
+- `limit` (number): Количество записей на странице (по умолчанию: 20)
+- `startDate` (string): Дата начала (ISO 8601)
+- `endDate` (string): Дата окончания (ISO 8601)
+- `type` (string): Тип транзакции (DEBIT, CREDIT)
+
+**Ответ:**
+```json
+{
+  "data": [
+    {
+      "id": "transaction-uuid",
+      "type": "DEBIT",
+      "amount": 0.00125,
+      "currency": "USD",
+      "description": "GPT-4 usage",
+      "metadata": {
+        "provider": "openai",
+        "model": "gpt-4",
+        "tokens": 25
+      },
+      "createdAt": "2023-12-01T12:00:00.000Z"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "total": 150,
+    "totalPages": 8
+  }
+}
+```
+
+#### POST /api/v1/billing/transactions
+Создание транзакции (внутренний API).
+
+**Тело запроса:**
+```json
+{
+  "companyId": "company-uuid",
+  "type": "DEBIT",
+  "amount": 0.00125,
+  "description": "GPT-4 usage",
+  "metadata": {
+    "provider": "openai",
+    "model": "gpt-4",
+    "tokens": 25
+  }
+}
+```
+
+### Тарификация
+
+#### GET /api/v1/billing/pricing/rules
+Получение правил тарификации.
+
+**Ответ:**
+```json
+{
+  "data": [
+    {
+      "id": "rule-uuid",
+      "name": "OpenAI GPT-4",
+      "service": "chat",
+      "resource": "completion",
+      "provider": "openai",
+      "model": "gpt-4",
+      "type": "per_token",
+      "price": 0.00003,
+      "currency": "USD",
+      "isActive": true
+    }
+  ]
+}
+```
+
+#### POST /api/v1/billing/pricing/calculate
+Расчет стоимости запроса.
+
+**Тело запроса:**
+```json
+{
+  "provider": "openai",
+  "model": "gpt-4",
+  "tokens": {
+    "prompt_tokens": 10,
+    "completion_tokens": 15,
+    "total_tokens": 25
+  }
+}
+```
+
+**Ответ:**
+```json
+{
+  "cost": 0.00125,
+  "currency": "USD",
+  "breakdown": {
+    "promptCost": 0.0003,
+    "completionCost": 0.0009,
+    "totalCost": 0.00125
+  },
+  "pricingRule": {
+    "id": "rule-uuid",
+    "name": "OpenAI GPT-4",
+    "inputPrice": 0.00003,
+    "outputPrice": 0.00006
+  }
+}
+```
+
+### Подписки
+
+#### GET /api/v1/billing/subscriptions
+Получение подписок компании.
+
+**Заголовки:**
+```http
+Authorization: Bearer <jwt-token>
+```
+
+**Ответ:**
+```json
+{
+  "data": [
+    {
+      "id": "subscription-uuid",
+      "planName": "Pro Plan",
+      "planType": "monthly",
+      "price": 99.00,
+      "currency": "USD",
+      "includedTokens": 100000,
+      "discountRate": 0.1,
+      "status": "active",
+      "startedAt": "2023-12-01T12:00:00.000Z",
+      "expiresAt": "2024-01-01T12:00:00.000Z"
+    }
+  ]
+}
+```
+
+#### POST /api/v1/billing/subscriptions
+Создание подписки.
+
+**Заголовки:**
+```http
+Authorization: Bearer <jwt-token>
+```
+
+**Тело запроса:**
+```json
+{
+  "planName": "Pro Plan",
+  "planType": "monthly",
+  "paymentMethod": "card"
+}
+```
+
+### Отчеты
+
+#### GET /api/v1/billing/reports/usage
+Получение отчета об использовании.
+
+**Параметры запроса:**
+- `startDate` (string): Дата начала (ISO 8601)
+- `endDate` (string): Дата окончания (ISO 8601)
+- `groupBy` (string): Группировка (day, week, month, provider, model)
+
+**Ответ:**
+```json
+{
+  "period": {
+    "startDate": "2023-12-01T00:00:00.000Z",
+    "endDate": "2023-12-31T23:59:59.999Z"
+  },
+  "summary": {
+    "totalRequests": 1500,
+    "totalTokens": 45000,
+    "totalCost": 12.50,
+    "averageCostPerRequest": 0.0083
+  },
+  "byProvider": [
+    {
+      "provider": "openai",
+      "requests": 800,
+      "tokens": 25000,
+      "cost": 8.50
+    }
+  ],
+  "byModel": [
+    {
+      "model": "gpt-4",
+      "requests": 500,
+      "tokens": 15000,
+      "cost": 6.00
+    }
+  ],
+  "timeline": [
+    {
+      "date": "2023-12-01",
+      "requests": 50,
+      "tokens": 1500,
+      "cost": 0.42
+    }
+  ]
+}
+```
+
+## Бизнес-логика
+
+### Управление балансом
+
+```typescript
+@Injectable()
+export class BillingService {
+  async getBalance(companyId: string): Promise<CompanyBalance> {
+    // 1. Получение баланса из кэша
+    const cachedBalance = await this.cacheService.getCachedCompanyBalance(companyId);
+    if (cachedBalance) {
+      return cachedBalance;
+    }
+    
+    // 2. Получение баланса из БД
+    let balance = await this.prisma.companyBalance.findUnique({
+      where: { companyId }
+    });
+    
+    // 3. Создание баланса если не существует
+    if (!balance) {
+      balance = await this.prisma.companyBalance.create({
+        data: {
+          companyId,
+          balance: this.configService.get('DEFAULT_BALANCE', 100.0),
+          creditLimit: this.configService.get('CREDIT_LIMIT', 1000.0)
+        }
+      });
+    }
+    
+    // 4. Кэширование баланса
+    await this.cacheService.cacheCompanyBalance(companyId, balance);
+    
+    return balance;
   }
   
-  const discount = subscription.plan.discountPercent / 100;
-  return cost * (1 - discount);
+  async updateBalance(
+    companyId: string,
+    amount: number,
+    operation: 'add' | 'subtract',
+    description: string,
+    metadata: any = {}
+  ): Promise<Transaction> {
+    return await this.prisma.$transaction(async (tx) => {
+      // 1. Получение текущего баланса
+      const balance = await tx.companyBalance.findUnique({
+        where: { companyId }
+      });
+      
+      if (!balance) {
+        throw new CompanyNotFoundException(companyId);
+      }
+      
+      // 2. Проверка достаточности средств
+      const newAmount = operation === 'add' 
+        ? balance.balance.add(amount)
+        : balance.balance.sub(amount);
+        
+      if (operation === 'subtract' && newAmount.lt(0)) {
+        const availableCredit = balance.balance.add(balance.creditLimit);
+        if (availableCredit.lt(amount)) {
+          throw new InsufficientBalanceException(companyId, amount);
+        }
+      }
+      
+      // 3. Обновление баланса
+      await tx.companyBalance.update({
+        where: { companyId },
+        data: { balance: newAmount }
+      });
+      
+      // 4. Создание транзакции
+      const transaction = await tx.transaction.create({
+        data: {
+          companyId,
+          type: operation === 'add' ? 'CREDIT' : 'DEBIT',
+          amount,
+          description,
+          metadata
+        }
+      });
+      
+      // 5. Обновление кэша
+      await this.cacheService.cacheCompanyBalance(companyId, {
+        ...balance,
+        balance: newAmount
+      });
+      
+      return transaction;
+    });
+  }
 }
 ```
 
-### Referral Commission
+### Тарификация
+
 ```typescript
-// Process referral commission
-async processReferralCommission(
-  referrerId: string,
-  referredId: string,
-  amount: number,
-  commissionRate: number = 0.1
-): Promise<void> {
-  const commissionAmount = amount * commissionRate;
+@Injectable()
+export class PricingService {
+  async calculateCost(
+    provider: string,
+    model: string,
+    tokens: TokenUsage
+  ): Promise<PricingResult> {
+    // 1. Поиск правила тарификации
+    const pricingRule = await this.findPricingRule(provider, model);
+    
+    if (!pricingRule) {
+      throw new PricingRuleNotFoundException(provider, model);
+    }
+    
+    // 2. Расчет стоимости
+    let cost = new Decimal(0);
+    
+    if (pricingRule.type === 'per_token') {
+      const promptCost = new Decimal(tokens.prompt_tokens).mul(pricingRule.price);
+      const completionCost = new Decimal(tokens.completion_tokens).mul(pricingRule.outputPrice || pricingRule.price);
+      cost = promptCost.add(completionCost);
+    } else if (pricingRule.type === 'fixed') {
+      cost = new Decimal(pricingRule.price);
+    }
+    
+    // 3. Применение скидок
+    const discounts = await this.calculateDiscounts(provider, model, cost);
+    const finalCost = cost.sub(discounts.total);
+    
+    return {
+      cost: finalCost.toNumber(),
+      currency: pricingRule.currency,
+      breakdown: {
+        promptCost: promptCost?.toNumber() || 0,
+        completionCost: completionCost?.toNumber() || 0,
+        totalCost: finalCost.toNumber()
+      },
+      discounts: discounts,
+      pricingRule: {
+        id: pricingRule.id,
+        name: pricingRule.name,
+        inputPrice: pricingRule.price,
+        outputPrice: pricingRule.outputPrice
+      }
+    };
+  }
   
-  // Update referrer balance
-  await this.updateCompanyBalance(
-    referrerId,
-    commissionAmount,
-    'CREDIT',
-    'Referral commission',
-    { referredId, originalAmount: amount }
-  );
-  
-  // Create referral transaction record
-  await this.prisma.referralTransaction.create({
-    data: {
-      referrerId,
-      referredId,
-      commissionAmount,
-      status: 'COMPLETED',
-      metadata: {
+  private async findPricingRule(provider: string, model: string): Promise<PricingRule | null> {
+    // Поиск по провайдеру и модели
+    let rule = await this.prisma.pricingRule.findFirst({
+      where: {
+        provider,
+        model,
+        isActive: true
+      }
+    });
+    
+    // Поиск по провайдеру (общее правило)
+    if (!rule) {
+      rule = await this.prisma.pricingRule.findFirst({
+        where: {
+          provider,
+          model: null,
+          isActive: true
+        }
+      });
+    }
+    
+    return rule;
+  }
+}
+```
+
+### Обработка использования
+
+```typescript
+@Injectable()
+export class UsageTrackingService {
+  async trackUsage(
+    companyId: string,
+    provider: string,
+    model: string,
+    tokens: TokenUsage,
+    requestId: string,
+    metadata: any = {}
+  ): Promise<UsageEvent> {
+    // 1. Расчет стоимости
+    const pricingResult = await this.pricingService.calculateCost(
+      provider,
+      model,
+      tokens
+    );
+    
+    // 2. Создание события использования
+    const usageEvent = await this.prisma.usageEvent.create({
+      data: {
+        companyId,
+        provider,
+        model,
+        cost: pricingResult.cost,
+        tokens: {
+          prompt_tokens: tokens.prompt_tokens,
+          completion_tokens: tokens.completion_tokens,
+          total_tokens: tokens.total_tokens
+        },
+        requestId,
+        metadata: {
+          ...metadata,
+          pricingRule: pricingResult.pricingRule
+        }
+      }
+    });
+    
+    // 3. Списание с баланса
+    await this.billingService.updateBalance(
+      companyId,
+      pricingResult.cost,
+      'subtract',
+      `${provider}/${model} usage`,
+      {
+        usageEventId: usageEvent.id,
+        requestId,
+        tokens: tokens.total_tokens
+      }
+    );
+    
+    // 4. Обработка реферальных комиссий
+    await this.referralService.processReferralCommission(
+      companyId,
+      pricingResult.cost
+    );
+    
+    // 5. Отправка метрик в Analytics Service
+    await this.analyticsService.trackUsage(usageEvent);
+    
+    return usageEvent;
+  }
+}
+```
+
+### Реферальная система
+
+```typescript
+@Injectable()
+export class ReferralService {
+  async processReferralCommission(
+    companyId: string,
+    amount: number
+  ): Promise<void> {
+    // 1. Поиск реферера
+    const company = await this.prisma.company.findUnique({
+      where: { id: companyId },
+      include: { referredBy: true }
+    });
+    
+    if (!company?.referredBy) {
+      return; // Нет реферера
+    }
+    
+    // 2. Расчет комиссии
+    const commissionRate = this.configService.get('REFERRAL_COMMISSION_RATE', 0.1);
+    const commission = new Decimal(amount).mul(commissionRate);
+    
+    // 3. Начисление комиссии рефереру
+    await this.billingService.updateBalance(
+      company.referredBy.id,
+      commission.toNumber(),
+      'add',
+      `Referral commission from ${company.email}`,
+      {
+        referredCompanyId: companyId,
         originalAmount: amount,
         commissionRate
       }
-    }
-  });
-}
-```
-
-## 🔄 Message Queue Integration
-
-### RabbitMQ Handlers
-```typescript
-// Handle billing events
-@RabbitSubscribe('billing.transaction')
-async handleTransactionEvent(data: TransactionEvent) {
-  try {
-    await this.processTransaction(data);
-    logger.info('Transaction processed successfully', { transactionId: data.id });
-  } catch (error) {
-    logger.error('Failed to process transaction', { error, transactionId: data.id });
-    // Implement retry logic or dead letter queue
+    );
+    
+    // 4. Логирование события
+    await this.logReferralCommission(
+      company.referredBy.id,
+      companyId,
+      commission.toNumber()
+    );
   }
-}
-
-// Handle referral events
-@RabbitSubscribe('billing.referral')
-async handleReferralEvent(data: ReferralEvent) {
-  try {
-    await this.processReferralCommission(data);
-    logger.info('Referral commission processed', { referrerId: data.referrerId });
-  } catch (error) {
-    logger.error('Failed to process referral commission', { error, referrerId: data.referrerId });
+  
+  async getReferralStats(companyId: string): Promise<ReferralStats> {
+    const stats = await this.prisma.$queryRaw`
+      SELECT 
+        COUNT(DISTINCT c.id) as total_referrals,
+        COUNT(DISTINCT CASE WHEN c.is_active THEN c.id END) as active_referrals,
+        COALESCE(SUM(t.amount), 0) as total_earnings,
+        COALESCE(SUM(CASE WHEN t.created_at >= date_trunc('month', NOW()) THEN t.amount ELSE 0 END), 0) as this_month_earnings
+      FROM companies c
+      LEFT JOIN transactions t ON t.company_id = ${companyId} 
+        AND t.description LIKE '%Referral commission%'
+        AND t.type = 'CREDIT'
+      WHERE c.referred_by = ${companyId}
+    `;
+    
+    return stats[0];
   }
 }
 ```
 
-### Event Publishing
+## Мониторинг
+
+### Health Check
+
 ```typescript
-// Publish billing events
-async publishBillingEvent(event: BillingEvent) {
-  await this.rabbitMQService.publish('billing.events', event);
-}
-
-// Publish analytics events
-async publishAnalyticsEvent(event: AnalyticsEvent) {
-  await this.rabbitMQService.publish('analytics.events', event);
-}
-```
-
-## 📊 Monitoring & Analytics
-
-### Business Metrics
-```typescript
-// Get billing metrics
-async getBillingMetrics(companyId: string, period: string) {
-  const startDate = this.getPeriodStartDate(period);
+@Controller('health')
+export class HealthController {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly redis: RedisService,
+    private readonly rabbitMQ: RabbitMQService
+  ) {}
   
-  const metrics = await this.prisma.transaction.aggregate({
-    where: {
-      userId: companyId,
-      createdAt: { gte: startDate }
-    },
-    _sum: {
-      amount: true
-    },
-    _count: {
-      id: true
-    }
-  });
-  
-  return {
-    totalSpent: metrics._sum.amount || 0,
-    transactionCount: metrics._count.id,
-    averageTransaction: metrics._sum.amount / metrics._count.id
-  };
-}
-```
-
-### Cost Analysis
-```typescript
-// Analyze costs by provider
-async getCostAnalysis(companyId: string, period: string) {
-  const startDate = this.getPeriodStartDate(period);
-  
-  const costs = await this.prisma.transaction.groupBy({
-    by: ['provider'],
-    where: {
-      userId: companyId,
-      type: 'DEBIT',
-      createdAt: { gte: startDate }
-    },
-    _sum: {
-      amount: true
-    },
-    _count: {
-      id: true
-    }
-  });
-  
-  return costs.map(cost => ({
-    provider: cost.provider,
-    totalCost: cost._sum.amount,
-    transactionCount: cost._count.id
-  }));
-}
-```
-
-## 🧪 Testing
-
-### Unit Tests
-```typescript
-describe('BillingService', () => {
-  let service: BillingService;
-  let prismaService: PrismaService;
-
-  beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        BillingService,
-        {
-          provide: PrismaService,
-          useValue: mockPrismaService
-        }
-      ],
-    }).compile();
-
-    service = module.get<BillingService>(BillingService);
-    prismaService = module.get<PrismaService>(PrismaService);
-  });
-
-  it('should update balance successfully', async () => {
-    const companyId = 'test-company-id';
-    const amount = 100.0;
-    const operation = 'CREDIT';
-
-    const mockBalance = {
-      id: 'balance-id',
-      userId: companyId,
-      balance: 100.0,
-      currency: 'USD'
+  @Get()
+  async checkHealth() {
+    const checks = await Promise.allSettled([
+      this.checkDatabase(),
+      this.checkRedis(),
+      this.checkRabbitMQ()
+    ]);
+    
+    const isHealthy = checks.every(check => 
+      check.status === 'fulfilled'
+    );
+    
+    return {
+      status: isHealthy ? 'healthy' : 'unhealthy',
+      timestamp: new Date().toISOString(),
+      services: {
+        database: checks[0].status === 'fulfilled' ? 'up' : 'down',
+        redis: checks[1].status === 'fulfilled' ? 'up' : 'down',
+        rabbitmq: checks[2].status === 'fulfilled' ? 'up' : 'down'
+      }
     };
-
-    const updatedBalance = {
-      ...mockBalance,
-      balance: 200.0
-    };
-
-    jest.spyOn(prismaService.companyBalance, 'findUnique').mockResolvedValue(mockBalance);
-    jest.spyOn(prismaService.companyBalance, 'update').mockResolvedValue(updatedBalance);
-    jest.spyOn(prismaService.transaction, 'create').mockResolvedValue({} as any);
-
-    const result = await service.updateCompanyBalance(companyId, amount, operation, 'Test credit');
-
-    expect(result.balance).toBe(200.0);
-    expect(prismaService.companyBalance.update).toHaveBeenCalled();
-    expect(prismaService.transaction.create).toHaveBeenCalled();
-  });
-});
+  }
+}
 ```
 
-### Integration Tests
-```typescript
-describe('Billing Integration', () => {
-  let app: INestApplication;
+## Troubleshooting
 
-  beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({
-      imports: [AppModule],
-    })
-    .overrideProvider(PrismaService)
-    .useValue(mockPrismaService)
-    .compile();
+### Частые проблемы
 
-    app = moduleRef.createNestApplication();
-    await app.init();
-  });
+#### 1. Ошибки баланса
 
-  afterAll(async () => {
-    await app.close();
-  });
-
-  it('should handle complete billing flow', async () => {
-    // Get balance
-    const balanceResponse = await request(app.getHttpServer())
-      .get('/v1/billing/balance')
-      .set('Authorization', 'Bearer test-token')
-      .expect(200);
-
-    expect(balanceResponse.body.balance).toBeDefined();
-
-    // Update balance
-    const updateResponse = await request(app.getHttpServer())
-      .post('/v1/billing/balance')
-      .set('Authorization', 'Bearer test-token')
-      .send({
-        amount: 50.0,
-        operation: 'CREDIT'
-      })
-      .expect(200);
-
-    expect(updateResponse.body.balance.balance).toBe(150.0);
-  });
-});
-```
-
-## 🚀 Deployment
-
-### Docker Configuration
-```dockerfile
-FROM node:18-alpine
-
-WORKDIR /app
-
-COPY package*.json ./
-RUN npm ci --only=production
-
-COPY dist/ ./dist/
-
-EXPOSE 3004
-
-CMD ["node", "dist/main.js"]
-```
-
-### Docker Compose
-```yaml
-billing-service:
-  build: ./services/billing-service
-  ports:
-    - "3004:3004"
-  environment:
-    - PORT=3004
-    - DATABASE_URL=postgresql://billing_user:billing_password@billing-db:5432/billing_service
-    - RABBITMQ_URL=amqp://user:password@rabbitmq:5672
-    - BILLING_CURRENCY=USD
-    - DEFAULT_BALANCE=100.0
-  depends_on:
-    - billing-db
-    - rabbitmq
-
-billing-db:
-  image: postgres:14
-  environment:
-    - POSTGRES_DB=billing_service
-    - POSTGRES_USER=billing_user
-    - POSTGRES_PASSWORD=billing_password
-  volumes:
-    - billing_data:/var/lib/postgresql/data
-```
-
-## 🔧 Troubleshooting
-
-### Common Issues
-
-#### Database Connection Issues
 ```bash
-# Check database status
-docker-compose logs billing-db
+# Проверка баланса компании
+docker-compose exec billing-db psql -U postgres -d billing_db -c "SELECT * FROM company_balances WHERE company_id = 'company-uuid';"
 
-# Test database connection
-psql -h localhost -U billing_user -d billing_service -c "SELECT 1;"
+# Проверка транзакций
+docker-compose exec billing-db psql -U postgres -d billing_db -c "SELECT * FROM transactions WHERE company_id = 'company-uuid' ORDER BY created_at DESC LIMIT 10;"
 ```
 
-#### RabbitMQ Issues
+#### 2. Проблемы с тарификацией
+
 ```bash
-# Check RabbitMQ status
-docker-compose logs rabbitmq
+# Проверка правил тарификации
+docker-compose exec billing-db psql -U postgres -d billing_db -c "SELECT * FROM pricing_rules WHERE provider = 'openai' AND model = 'gpt-4';"
 
-# Check queues
-docker exec -it rabbitmq rabbitmqctl list_queues
+# Проверка событий использования
+docker-compose exec billing-db psql -U postgres -d billing_db -c "SELECT * FROM usage_events WHERE company_id = 'company-uuid' ORDER BY created_at DESC LIMIT 10;"
 ```
 
-#### Balance Calculation Issues
-```sql
--- Check balance calculations
-SELECT 
-  user_id,
-  balance,
-  (SELECT SUM(amount) FROM transactions WHERE user_id = cb.user_id AND type = 'CREDIT') as total_credits,
-  (SELECT SUM(amount) FROM transactions WHERE user_id = cb.user_id AND type = 'DEBIT') as total_debits
-FROM company_balances cb;
-```
+#### 3. Проблемы с реферальной системой
 
-### Performance Issues
-
-#### Slow Transaction Queries
-```sql
--- Check transaction table performance
-EXPLAIN ANALYZE SELECT * FROM transactions 
-WHERE user_id = 'company-id' 
-ORDER BY created_at DESC 
-LIMIT 50;
-
--- Add indexes if needed
-CREATE INDEX idx_transactions_user_id_created_at ON transactions(user_id, created_at DESC);
-```
-
-#### Memory Issues
 ```bash
-# Check memory usage
-docker stats billing-service
+# Проверка рефералов
+docker-compose exec billing-db psql -U postgres -d billing_db -c "SELECT * FROM companies WHERE referred_by = 'company-uuid';"
 
-# Check for memory leaks
-docker-compose logs billing-service | grep -i memory
+# Проверка реферальных комиссий
+docker-compose exec billing-db psql -U postgres -d billing_db -c "SELECT * FROM transactions WHERE description LIKE '%Referral commission%' AND company_id = 'company-uuid';"
 ```
 
----
+### Полезные команды
 
-**Last Updated**: December 2024
-**Service Version**: 1.0.0
+```bash
+# Перезапуск сервиса
+docker-compose restart billing-service
+
+# Просмотр логов
+docker-compose logs -f billing-service
+
+# Очистка кэша Redis
+docker-compose exec redis redis-cli FLUSHDB
+
+# Проверка очередей RabbitMQ
+docker-compose exec rabbitmq rabbitmqctl list_queues
+```

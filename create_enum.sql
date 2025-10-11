@@ -1,1 +1,0 @@
-CREATE TYPE "ReferralTransactionStatus" AS ENUM ('PENDING', 'PROCESSING', 'COMPLETED', 'FAILED', 'CANCELLED');

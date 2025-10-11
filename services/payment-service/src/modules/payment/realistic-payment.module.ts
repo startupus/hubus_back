@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { PrismaModule } from '../../common/prisma/prisma.module';
+import { RabbitMQModule } from '../../rabbitmq/rabbitmq.module';
+import { SecurityModule } from '../../security/security.module';
 import { RealisticPaymentService } from './realistic-payment.service';
 import { RealisticPaymentController } from './realistic-payment.controller';
 import { RealisticYooKassaService } from '../yookassa/realistic-yookassa.service';
@@ -10,6 +12,8 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 @Module({
   imports: [
     PrismaModule,
+    RabbitMQModule,
+    SecurityModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({

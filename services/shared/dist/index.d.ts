@@ -32,5 +32,6 @@ export type { BaseEntity, PaginationParams, PaginatedResponse, ServiceResponse, 
 export type { BaseEvent, Event, EventHandler, EventPublisher, EventSubscriber, } from './types/events';
 export type { MicroserviceConfig, DatabaseConfig, RedisConfig, RabbitMQConfig, JwtConfig, ProvidersConfig, BillingConfig, RateLimitConfig, MonitoringConfig, SecurityConfig, ServiceConfig, } from './interfaces/config.interface';
 export type { AICategory, AICertificationLevel, AICertificationStatus, AISafetyLevel, AICapability, TestResult, AICertification, ComplianceInfo, AIClassification, AIClassificationRequest, AIClassificationResponse, CertificationAudit, AuditFinding, AIPerformanceMetrics, AISafetyAssessment, RiskFactor, SafetyIncident, } from './types/ai-certification';
-export type { RequestHistory, RequestType, RequestStatus, CreateRequestHistoryDto, UpdateRequestHistoryDto, RequestHistoryQueryDto, RequestHistoryResponse, SessionHistory, CreateSessionHistoryDto, UpdateSessionHistoryDto, SessionHistoryQueryDto, SessionHistoryResponse, } from './types/request-history';
+export type { RequestHistory, CreateRequestHistoryDto, UpdateRequestHistoryDto, RequestHistoryQueryDto, RequestHistoryResponse, SessionHistory, CreateSessionHistoryDto, UpdateSessionHistoryDto, SessionHistoryQueryDto, SessionHistoryResponse, } from './types/request-history';
+export { RequestType, RequestStatus, } from './types/request-history';
 //# sourceMappingURL=index.d.ts.map

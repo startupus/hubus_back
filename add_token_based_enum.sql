@@ -1,1 +1,0 @@
-ALTER TYPE "PricingType" ADD VALUE 'TOKEN_BASED';

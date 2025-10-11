@@ -68,10 +68,8 @@ export class PerformanceMonitorService {
       const currentErrors = this.errorRates.get(operation) || 0;
       this.errorRates.set(operation, currentErrors + 1);
 
-      LoggerUtil.error('performance-monitor', 'Error recorded', {
+      LoggerUtil.error('performance-monitor', 'Error recorded', error, {
         operation,
-        error: error.message,
-        stack: error.stack,
       });
     } catch (err) {
       LoggerUtil.error('performance-monitor', 'Failed to record error', err as Error);

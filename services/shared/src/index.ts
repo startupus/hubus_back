@@ -40,6 +40,9 @@ export * from './services/thread-pool.service';
 export * from './monitoring/performance-monitor.service';
 export * from './decorators/performance.decorator';
 
+// Clients
+export * from './clients/redis.client';
+
 // Constants
 export * from './constants';
 

@@ -159,6 +159,26 @@ services:
       timeout: 5s
       retries: 5
 
+  # Redis Service
+  redis-service:
+    build: ./services/redis-service
+    ports:
+      - "3009:3009"
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - PORT=3009
+    networks:
+      - ai-aggregator
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "const http = require('http'); const options = { host: 'localhost', port: 3009, path: '/api/redis/keys/*', timeout: 2000 }; const req = http.request(options, (res) => { process.exit(res.statusCode === 200 ? 0 : 1); }); req.on('error', () => process.exit(1)); req.end();"]
+      interval: 30s
+      timeout: 3s
+      start_period: 5s
+      retries: 3
+
   # RabbitMQ
   rabbitmq:
     image: rabbitmq:3-management-alpine
@@ -474,10 +494,11 @@ services:
       - FRONTEND_URL=http://localhost:3000
       - LOG_LEVEL=debug
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3006/health"]
+      test: ["CMD", "node", "-e", "require('http').get('http://0.0.0.0:3006/api/v1/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 40s
     depends_on:
       payment-db:
         condition: service_healthy

@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
-import { HttpModule, HttpService } from '@nestjs/axios';
-import axios from 'axios';
+import { HttpModule } from '@nestjs/axios';
 import { ConfigModule } from '@nestjs/config';
 import { OrchestratorService } from './orchestrator.service';
 import { OrchestratorCacheService } from './orchestrator-cache.service';
@@ -19,15 +18,15 @@ import { RedisClient } from '@ai-aggregator/shared';
     })
   ],
   providers: [
-    OrchestratorService,
-    OrchestratorCacheService,
-    ConcurrentOrchestratorService,
-    RedisClient
+    // OrchestratorService, // Временно отключен для диагностики
+    // OrchestratorCacheService, // Временно отключен для диагностики
+    // ConcurrentOrchestratorService, // Временно отключен для диагностики
+    // RedisClient, // Временно отключен для диагностики
   ],
   exports: [
-    OrchestratorService,
-    OrchestratorCacheService,
-    ConcurrentOrchestratorService
+    // OrchestratorService, // Временно отключен для диагностики
+    // OrchestratorCacheService, // Временно отключен для диагностики
+    // ConcurrentOrchestratorService // Временно отключен для диагностики
   ],
 })
 export class OrchestratorModule {}

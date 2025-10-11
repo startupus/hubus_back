@@ -6,8 +6,8 @@ import { LoggerUtil } from '@ai-aggregator/shared';
 @Injectable()
 export class RabbitMQService {
   private readonly logger = new Logger(RabbitMQService.name);
-  private connection: amqp.Connection | null = null;
-  private channel: amqp.Channel | null = null;
+  private connection: any = null;
+  private channel: any = null;
 
   constructor(private readonly configService: ConfigService) {}
 

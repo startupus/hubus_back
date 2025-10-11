@@ -1,5 +1,8 @@
 FROM node:18-alpine
 
+# Install required system dependencies for Prisma
+RUN apk add --no-cache openssl libc6-compat
+
 WORKDIR /app
 
 # Copy package files
@@ -28,7 +31,7 @@ EXPOSE 3006
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:3006/api/v1/health || exit 1
+  CMD node -e "require('http').get('http://0.0.0.0:3006/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
 
 # Start the application
 CMD ["node", "dist/realistic-main.js"]

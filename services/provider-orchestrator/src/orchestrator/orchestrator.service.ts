@@ -68,8 +68,16 @@ export class OrchestratorService {
     private readonly configService: ConfigService,
     private readonly httpService: HttpService
   ) {
-    this.initializeProviders();
-    this.startHealthMonitoring();
+    console.log('OrchestratorService: Constructor called');
+    // Инициализация в асинхронном режиме, чтобы не блокировать запуск
+    Promise.resolve().then(() => {
+      console.log('OrchestratorService: Starting async initialization...');
+      this.initializeProviders();
+      this.startHealthMonitoring();
+      console.log('OrchestratorService: Async initialization completed');
+    }).catch(error => {
+      console.error('OrchestratorService initialization error:', error);
+    });
   }
 
   /**
@@ -144,6 +152,7 @@ export class OrchestratorService {
    * Инициализация провайдеров из конфигурации
    */
   private initializeProviders(): void {
+    console.log('OrchestratorService: initializeProviders called');
     const providersConfig = this.configService.get('providers', {});
     
     // OpenAI Provider
@@ -527,6 +536,7 @@ export class OrchestratorService {
    * Запуск мониторинга здоровья провайдеров
    */
   private startHealthMonitoring(): void {
+    console.log('OrchestratorService: startHealthMonitoring called');
     this.healthCheckInterval = setInterval(async () => {
       LoggerUtil.debug('provider-orchestrator', 'Running health checks');
       

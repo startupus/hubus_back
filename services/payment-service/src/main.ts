@@ -15,8 +15,8 @@ async function bootstrap() {
     console.log('Payment Service: CORS enabled');
     
     // Set global prefix (exclude health endpoints)
-    app.setGlobalPrefix('v1', {
-      exclude: ['health', 'health/ready', 'health/live']
+    app.setGlobalPrefix('api/v1', {
+      exclude: ['health', 'health/ready', 'health/live', '/health', '/health/ready', '/health/live']
     });
     console.log('Payment Service: Global prefix set to v1');
     

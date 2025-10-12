@@ -1,9 +1,9 @@
 import { Controller, Get, HttpStatus, Res } from '@nestjs/common';
 import { Response } from 'express';
 
-@Controller('health')
+@Controller()
 export class HealthController {
-  @Get()
+  @Get('health')
   checkHealth(@Res() res: Response) {
     console.log('Payment Service: Health check endpoint called - START');
     try {
@@ -18,6 +18,28 @@ export class HealthController {
       return res.status(HttpStatus.OK).json(response);
     } catch (error) {
       console.error('Payment Service: Health check error:', error);
+      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+        status: 'error',
+        error: error.message
+      });
+    }
+  }
+
+  @Get()
+  checkHealthRoot(@Res() res: Response) {
+    console.log('Payment Service: Health check root endpoint called - START');
+    try {
+      const response = {
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        service: 'payment-service',
+        version: '1.0.0',
+        uptime: process.uptime(),
+      };
+      console.log('Payment Service: Health check root response:', response);
+      return res.status(HttpStatus.OK).json(response);
+    } catch (error) {
+      console.error('Payment Service: Health check root error:', error);
       return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
         status: 'error',
         error: error.message

@@ -13,96 +13,56 @@ export class ChatMessageDto {
 }
 
 export class AnonymizeRequestDto {
-  // @ApiProperty({ 
-    description: 'Text to anonymize (if not using messages)',
-    required: false 
-  })
   @IsOptional()
   @IsString()
   text?: string;
 
-  // @ApiProperty({ 
-    description: 'Chat messages to anonymize (if not using text)',
-    type: [ChatMessageDto],
-    required: false 
-  })
   @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => ChatMessageDto)
   messages?: ChatMessageDto[];
 
-  // @ApiProperty({ 
-    description: 'User ID for settings lookup',
-    required: false 
-  })
   @IsOptional()
   @IsString()
   userId?: string;
 }
 
 export class AnonymizeResponseDto {
-  // @ApiProperty({ description: 'Anonymized text (if text was provided)' })
   @IsOptional()
   @IsString()
   anonymizedText?: string;
 
-  // @ApiProperty({ 
-    description: 'Anonymized messages (if messages were provided)',
-    type: [ChatMessageDto]
-  })
   @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => ChatMessageDto)
   anonymizedMessages?: ChatMessageDto[];
 
-  // @ApiProperty({ 
-    description: 'Mapping of original values to anonymized values',
-    example: { 'john@example.com': 'user1@example.com', 'John Doe': '[ОБЕЗЛИЧЕНО_1]' }
-  })
   @IsObject()
   mapping: Record<string, string>;
 }
 
 export class DeanonymizeRequestDto {
-  // @ApiProperty({ 
-    description: 'Text to deanonymize (if not using messages)',
-    required: false 
-  })
   @IsOptional()
   @IsString()
   text?: string;
 
-  // @ApiProperty({ 
-    description: 'Chat messages to deanonymize (if not using text)',
-    type: [ChatMessageDto],
-    required: false 
-  })
   @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => ChatMessageDto)
   messages?: ChatMessageDto[];
 
-  // @ApiProperty({ 
-    description: 'Mapping of anonymized values to original values',
-    example: { 'user1@example.com': 'john@example.com', '[ОБЕЗЛИЧЕНО_1]': 'John Doe' }
-  })
   @IsObject()
   mapping: Record<string, string>;
 }
 
 export class DeanonymizeResponseDto {
-  // @ApiProperty({ description: 'Deanonymized text (if text was provided)' })
   @IsOptional()
   @IsString()
   deanonymizedText?: string;
 
-  // @ApiProperty({ 
-    description: 'Deanonymized messages (if messages were provided)',
-    type: [ChatMessageDto]
-  })
   @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })

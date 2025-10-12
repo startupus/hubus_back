@@ -199,7 +199,7 @@ export class TokenCacheService {
       const [accessKeys, refreshKeys, info] = await Promise.all([
         this.redisClient.keys(`${this.keyPrefix}access:*`),
         this.redisClient.keys(`${this.keyPrefix}refresh:*`),
-        this.redisClient.memory('USAGE')
+        this.redisClient.info('memory')
       ]);
 
       return {

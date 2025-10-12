@@ -1,19 +1,19 @@
-import { ApiProperty } from '@nestjs/swagger';
+// import { ApiProperty } from '@nestjs/swagger';
 import { IsString, IsArray, IsOptional, IsBoolean, IsObject, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class ChatMessageDto {
-  @ApiProperty({ description: 'Message role (user, assistant, system)' })
+  // @ApiProperty({ description: 'Message role (user, assistant, system)' })
   @IsString()
   role: string;
 
-  @ApiProperty({ description: 'Message content' })
+  // @ApiProperty({ description: 'Message content' })
   @IsString()
   content: string;
 }
 
 export class AnonymizeRequestDto {
-  @ApiProperty({ 
+  // @ApiProperty({ 
     description: 'Text to anonymize (if not using messages)',
     required: false 
   })
@@ -21,7 +21,7 @@ export class AnonymizeRequestDto {
   @IsString()
   text?: string;
 
-  @ApiProperty({ 
+  // @ApiProperty({ 
     description: 'Chat messages to anonymize (if not using text)',
     type: [ChatMessageDto],
     required: false 
@@ -32,7 +32,7 @@ export class AnonymizeRequestDto {
   @Type(() => ChatMessageDto)
   messages?: ChatMessageDto[];
 
-  @ApiProperty({ 
+  // @ApiProperty({ 
     description: 'User ID for settings lookup',
     required: false 
   })
@@ -42,12 +42,12 @@ export class AnonymizeRequestDto {
 }
 
 export class AnonymizeResponseDto {
-  @ApiProperty({ description: 'Anonymized text (if text was provided)' })
+  // @ApiProperty({ description: 'Anonymized text (if text was provided)' })
   @IsOptional()
   @IsString()
   anonymizedText?: string;
 
-  @ApiProperty({ 
+  // @ApiProperty({ 
     description: 'Anonymized messages (if messages were provided)',
     type: [ChatMessageDto]
   })
@@ -57,7 +57,7 @@ export class AnonymizeResponseDto {
   @Type(() => ChatMessageDto)
   anonymizedMessages?: ChatMessageDto[];
 
-  @ApiProperty({ 
+  // @ApiProperty({ 
     description: 'Mapping of original values to anonymized values',
     example: { 'john@example.com': 'user1@example.com', 'John Doe': '[ОБЕЗЛИЧЕНО_1]' }
   })
@@ -66,7 +66,7 @@ export class AnonymizeResponseDto {
 }
 
 export class DeanonymizeRequestDto {
-  @ApiProperty({ 
+  // @ApiProperty({ 
     description: 'Text to deanonymize (if not using messages)',
     required: false 
   })
@@ -74,7 +74,7 @@ export class DeanonymizeRequestDto {
   @IsString()
   text?: string;
 
-  @ApiProperty({ 
+  // @ApiProperty({ 
     description: 'Chat messages to deanonymize (if not using text)',
     type: [ChatMessageDto],
     required: false 
@@ -85,7 +85,7 @@ export class DeanonymizeRequestDto {
   @Type(() => ChatMessageDto)
   messages?: ChatMessageDto[];
 
-  @ApiProperty({ 
+  // @ApiProperty({ 
     description: 'Mapping of anonymized values to original values',
     example: { 'user1@example.com': 'john@example.com', '[ОБЕЗЛИЧЕНО_1]': 'John Doe' }
   })
@@ -94,12 +94,12 @@ export class DeanonymizeRequestDto {
 }
 
 export class DeanonymizeResponseDto {
-  @ApiProperty({ description: 'Deanonymized text (if text was provided)' })
+  // @ApiProperty({ description: 'Deanonymized text (if text was provided)' })
   @IsOptional()
   @IsString()
   deanonymizedText?: string;
 
-  @ApiProperty({ 
+  // @ApiProperty({ 
     description: 'Deanonymized messages (if messages were provided)',
     type: [ChatMessageDto]
   })
@@ -111,39 +111,39 @@ export class DeanonymizeResponseDto {
 }
 
 export class AnonymizationSettingsDto {
-  @ApiProperty({ description: 'Enable anonymization' })
+  // @ApiProperty({ description: 'Enable anonymization' })
   @IsBoolean()
   enabled: boolean;
 
-  @ApiProperty({ description: 'Anonymize email addresses' })
+  // @ApiProperty({ description: 'Anonymize email addresses' })
   @IsBoolean()
   anonymizeEmails: boolean;
 
-  @ApiProperty({ description: 'Anonymize phone numbers' })
+  // @ApiProperty({ description: 'Anonymize phone numbers' })
   @IsBoolean()
   anonymizePhones: boolean;
 
-  @ApiProperty({ description: 'Anonymize names' })
+  // @ApiProperty({ description: 'Anonymize names' })
   @IsBoolean()
   anonymizeNames: boolean;
 
-  @ApiProperty({ description: 'Anonymize addresses' })
+  // @ApiProperty({ description: 'Anonymize addresses' })
   @IsBoolean()
   anonymizeAddresses: boolean;
 
-  @ApiProperty({ description: 'Anonymize personal numbers (INN, SNILS)' })
+  // @ApiProperty({ description: 'Anonymize personal numbers (INN, SNILS)' })
   @IsBoolean()
   anonymizePersonalNumbers: boolean;
 
-  @ApiProperty({ description: 'Anonymize IP addresses' })
+  // @ApiProperty({ description: 'Anonymize IP addresses' })
   @IsBoolean()
   anonymizeIPs: boolean;
 
-  @ApiProperty({ description: 'Anonymize URLs' })
+  // @ApiProperty({ description: 'Anonymize URLs' })
   @IsBoolean()
   anonymizeURLs: boolean;
 
-  @ApiProperty({ description: 'Custom patterns for anonymization' })
+  // @ApiProperty({ description: 'Custom patterns for anonymization' })
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
@@ -151,15 +151,15 @@ export class AnonymizationSettingsDto {
 }
 
 export class AnonymizationSettingsResponseDto extends AnonymizationSettingsDto {
-  @ApiProperty({ description: 'User ID' })
+  // @ApiProperty({ description: 'User ID' })
   @IsString()
   userId: string;
 
-  @ApiProperty({ description: 'Settings creation timestamp' })
+  // @ApiProperty({ description: 'Settings creation timestamp' })
   @IsString()
   createdAt: string;
 
-  @ApiProperty({ description: 'Settings last update timestamp' })
+  // @ApiProperty({ description: 'Settings last update timestamp' })
   @IsString()
   updatedAt: string;
 }

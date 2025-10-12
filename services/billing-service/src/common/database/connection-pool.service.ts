@@ -32,7 +32,7 @@ export class ConnectionPoolService implements OnModuleInit, OnModuleDestroy {
     this.prisma = new PrismaClient({
       datasources: {
         db: {
-          url: this.configService.get('DATABASE_URL'),
+          url: this.configService.get('BILLING_DATABASE_URL'),
         },
       },
       log: [
@@ -43,28 +43,28 @@ export class ConnectionPoolService implements OnModuleInit, OnModuleDestroy {
       ],
     });
 
-    // Настройка логирования Prisma
-    this.prisma.$on('query', (e) => {
-      if (e.duration > 1000) { // Логируем медленные запросы
-        LoggerUtil.warn('billing-service', 'Slow query detected', {
-          query: e.query,
-          duration: e.duration,
-          params: e.params,
-        });
-      }
-    });
+    // Настройка логирования Prisma (отключено для совместимости)
+    // this.prisma.$on('query', (e: any) => {
+    //   if (e.duration > 1000) { // Логируем медленные запросы
+    //     LoggerUtil.warn('billing-service', 'Slow query detected', {
+    //       query: e.query,
+    //       duration: e.duration,
+    //       params: e.params,
+    //     });
+    //   }
+    // });
 
-    this.prisma.$on('error', (e) => {
-      LoggerUtil.error('billing-service', 'Prisma error', e);
-    });
+    // this.prisma.$on('error', (e: any) => {
+    //   LoggerUtil.error('billing-service', 'Prisma error', e);
+    // });
 
-    this.prisma.$on('info', (e) => {
-      LoggerUtil.info('billing-service', 'Prisma info', e);
-    });
+    // this.prisma.$on('info', (e: any) => {
+    //   LoggerUtil.info('billing-service', 'Prisma info', e);
+    // });
 
-    this.prisma.$on('warn', (e) => {
-      LoggerUtil.warn('billing-service', 'Prisma warning', e);
-    });
+    // this.prisma.$on('warn', (e: any) => {
+    //   LoggerUtil.warn('billing-service', 'Prisma warning', e);
+    // });
   }
 
   async onModuleInit() {
@@ -135,11 +135,7 @@ export class ConnectionPoolService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
-    LoggerUtil.error('billing-service', 'Operation failed after all retries', {
-      operation: operationName,
-      maxRetries,
-      error: lastError?.message,
-    });
+    LoggerUtil.error('billing-service', 'Operation failed after all retries', lastError || new Error('Unknown error'));
 
     throw lastError || new Error(`Operation ${operationName} failed after ${maxRetries} attempts`);
   }

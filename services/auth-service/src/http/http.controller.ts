@@ -1,11 +1,11 @@
-import { Controller, Post, Get, Body, Param, Query, HttpCode, HttpStatus, Req, UseGuards, ValidationPipe } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, Query, HttpCode, HttpStatus, Req, UseGuards, ValidationPipe, HttpException, BadRequestException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { AuthService } from '../modules/auth/auth.service';
 import { ApiKeyService } from '../modules/api-key/api-key.service';
 import { CompanyService } from '../modules/auth/company.service';
 import { LoggerUtil } from '@ai-aggregator/shared';
-import { RegisterDto, LoginDto } from '@ai-aggregator/shared';
+import { RegisterDto, LoginDto, CreateApiKeyDto } from '@ai-aggregator/shared';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -167,57 +167,17 @@ export class HttpController {
     }
   }
 
-  @Post('validate-token')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Validate token' })
-  @ApiBody({
-    schema: {
-      type: 'object',
-      properties: {
-        token: { type: 'string' },
-        tokenType: { type: 'string', enum: ['access', 'api_key'] }
-      },
-      required: ['token', 'tokenType']
-    }
-  })
-  @ApiResponse({ status: 200, description: 'Token validation result' })
-  async validateToken(@Body() data: any) {
-    try {
-      LoggerUtil.debug('auth-service', 'HTTP ValidateToken called', { tokenType: data.tokenType });
-      
-      if (data.tokenType === 'api_key') {
-        const validation = await this.apiKeyService.validateApiKey(data.token);
-        return {
-          success: validation.isValid,
-          authContext: validation.isValid ? {
-            companyId: validation.companyId,
-            email: '', // Will be filled by the caller
-            role: '', // Will be filled by the caller
-            permissions: validation.permissions || [],
-            apiKeyId: data.token,
-          } : undefined,
-          error: validation.isValid ? undefined : 'Invalid API key',
-        };
-      } else {
-        const payload = await this.authService.validateToken(data.token);
-        return {
-          success: !!payload,
-          authContext: payload ? {
-            companyId: payload.sub,
-            email: payload.email,
-            role: payload.role,
-            permissions: [], // Will be filled by the caller
-          } : undefined,
-          error: payload ? undefined : 'Invalid token',
-        };
-      }
-    } catch (error) {
-      LoggerUtil.error('auth-service', 'HTTP ValidateToken failed', error as Error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      };
-    }
+
+  @Get('validate-token')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({ summary: 'Validate JWT token' })
+  @ApiResponse({ status: 200, description: 'Token is valid' })
+  @ApiResponse({ status: 401, description: 'Token is invalid' })
+  async validateToken(@Req() req: any) {
+    return {
+      valid: true,
+      user: req.user
+    };
   }
 
   @Post('api-keys')
@@ -237,9 +197,35 @@ export class HttpController {
     }
   })
   @ApiResponse({ status: 201, description: 'API key created successfully' })
-  async createApiKey(@Body() data: any, @Req() req: any) {
+  async createApiKey(@Body() data: CreateApiKeyDto, @Req() req: any) {
+    
+    console.log('=== HttpController.createApiKey called ===');
+    console.log('data:', data);
+    console.log('name:', data.name);
+    console.log('name type:', typeof data.name);
+    console.log('name length:', data.name?.length);
+    
     try {
-      LoggerUtil.debug('auth-service', 'HTTP CreateApiKey called - req.user', { reqUser: req.user, name: data.name });
+      LoggerUtil.debug('auth-service', 'HTTP CreateApiKey called', { 
+        reqUser: req.user, 
+        name: data.name, 
+        nameType: typeof data.name,
+        nameLength: data.name?.length,
+        dataKeys: Object.keys(data)
+      });
+      
+      // Manual validation
+      if (!data.name || data.name.trim().length === 0) {
+        LoggerUtil.warn('auth-service', 'Validation failed: empty name', { name: data.name, nameLength: data.name?.length });
+        throw new HttpException('Name is required and cannot be empty', HttpStatus.BAD_REQUEST);
+      }
+      if (data.name.length > 100) {
+        LoggerUtil.warn('auth-service', 'Validation failed: name too long', { name: data.name, nameLength: data.name.length });
+        throw new HttpException('Name cannot exceed 100 characters', HttpStatus.BAD_REQUEST);
+      }
+      
+      LoggerUtil.debug('auth-service', 'Validation passed, creating API key');
+      
       const companyId = req.user?.sub;
       LoggerUtil.debug('auth-service', 'HTTP CreateApiKey called - extracted companyId', { companyId, name: data.name });
 
@@ -267,6 +253,40 @@ export class HttpController {
       };
     } catch (error) {
       LoggerUtil.error('auth-service', 'HTTP CreateApiKey failed', error as Error);
+      return {
+        success: false,
+        error: error instanceof Error ? (error as Error).message : String(error),
+      };
+    }
+  }
+
+  @Get('api-keys')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({ summary: 'Get user API keys' })
+  @ApiResponse({ status: 200, description: 'API keys retrieved successfully' })
+  async getApiKeys(@Req() req: any) {
+    try {
+      const companyId = req.user?.sub;
+      LoggerUtil.debug('auth-service', 'HTTP GetApiKeys called', { companyId });
+
+      const apiKeys = await this.apiKeyService.getApiKeysByCompanyId(companyId);
+
+      return {
+        success: true,
+        apiKeys: apiKeys.map(key => ({
+          id: key.id,
+          name: key.name,
+          description: key.description,
+          isActive: key.isActive,
+          permissions: key.permissions,
+          lastUsedAt: key.lastUsedAt?.toISOString(),
+          expiresAt: key.expiresAt?.toISOString(),
+          createdAt: key.createdAt.toISOString(),
+        })),
+      };
+    } catch (error) {
+      LoggerUtil.error('auth-service', 'HTTP GetApiKeys failed', error as Error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',

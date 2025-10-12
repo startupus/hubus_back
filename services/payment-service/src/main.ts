@@ -14,6 +14,12 @@ async function bootstrap() {
     app.enableCors();
     console.log('Payment Service: CORS enabled');
     
+    // Set global prefix (exclude health endpoints)
+    app.setGlobalPrefix('v1', {
+      exclude: ['health', 'health/ready', 'health/live']
+    });
+    console.log('Payment Service: Global prefix set to v1');
+    
     // Global validation pipe
     app.useGlobalPipes(new ValidationPipe({
       transform: true,

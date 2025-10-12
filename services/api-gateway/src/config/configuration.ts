@@ -46,13 +46,13 @@ export const configuration = (): MicroserviceConfig => ({
     exchange: process.env.RABBITMQ_EXCHANGE || 'ai_aggregator',
     queue: process.env.RABBITMQ_QUEUE || 'api_gateway',
   },
-  jwt: {
-    secret: process.env.JWT_SECRET || 'default-secret',
-    expiresIn: process.env.JWT_EXPIRES_IN || '24h',
-    refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
-    issuer: process.env.JWT_ISSUER || 'ai-aggregator',
-    audience: process.env.JWT_AUDIENCE || 'ai-aggregator-users',
-  },
+        jwt: {
+          secret: process.env.JWT_SECRET || 'your-super-secret-jwt-key-here',
+          expiresIn: process.env.JWT_EXPIRES_IN || '24h',
+          refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
+          issuer: process.env.JWT_ISSUER || 'ai-aggregator',
+          audience: process.env.JWT_AUDIENCE || 'ai-aggregator-users',
+        },
   providers: {
     openai: {
       apiKey: process.env.OPENAI_API_KEY || '',

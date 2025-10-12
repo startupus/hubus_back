@@ -6,9 +6,10 @@ import { AISafetyController } from './ai-safety.controller';
 import { AIClassificationService } from './ai-classification.service';
 import { AICertificationService } from './ai-certification.service';
 import { AISafetyService } from './ai-safety.service';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
-  imports: [HttpModule],
+  imports: [HttpModule, AuthModule],
   controllers: [
     AIClassificationController,
     AICertificationController,

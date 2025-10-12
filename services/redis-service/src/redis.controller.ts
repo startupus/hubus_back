@@ -5,6 +5,26 @@ import { RedisService } from './redis.service';
 export class RedisController {
   constructor(private readonly redisService: RedisService) {}
 
+  @Get('health')
+  async health() {
+    return {
+      status: 'healthy',
+      timestamp: new Date().toISOString(),
+      service: 'redis-service',
+      version: '1.0.0',
+      uptime: process.uptime()
+    };
+  }
+
+  @Get('status')
+  async status() {
+    return {
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      service: 'redis-service'
+    };
+  }
+
   @Post('set')
   async set(@Body() body: { key: string; value: any; ttl?: number }) {
     const success = await this.redisService.set(body.key, body.value, body.ttl);

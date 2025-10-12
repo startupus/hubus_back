@@ -23,6 +23,9 @@ export * from './utils/concurrency.util';
 export * from './contracts';
 export * from './clients';
 export * from './services/thread-pool.service';
+export * from './monitoring/performance-monitor.service';
+export * from './decorators/performance.decorator';
+export * from './clients/redis.client';
 export * from './constants';
 export * from './interfaces/config.interface';
 export type { Company, ApiKey, JwtPayload, UserRole, Permission, AuthContext, AuthResult, } from './types/auth';
@@ -31,7 +34,7 @@ export type { ProviderRequest, ProviderResponse, ChatMessage, TokenUsage, Provid
 export type { BaseEntity, PaginationParams, PaginatedResponse, ServiceResponse, ErrorResponse, RequestContext, HealthCheck, Metrics, } from './types/common';
 export type { BaseEvent, Event, EventHandler, EventPublisher, EventSubscriber, } from './types/events';
 export type { MicroserviceConfig, DatabaseConfig, RedisConfig, RabbitMQConfig, JwtConfig, ProvidersConfig, BillingConfig, RateLimitConfig, MonitoringConfig, SecurityConfig, ServiceConfig, } from './interfaces/config.interface';
-export type { AICategory, AICertificationLevel, AICertificationStatus, AISafetyLevel, AICapability, TestResult, AICertification, ComplianceInfo, AIClassification, AIClassificationRequest, AIClassificationResponse, CertificationAudit, AuditFinding, AIPerformanceMetrics, AISafetyAssessment, RiskFactor, SafetyIncident, } from './types/ai-certification';
+export { AICategory, AICertificationLevel, AICertificationStatus, AISafetyLevel, AICapability, TestResult, AICertification, ComplianceInfo, AIClassification, AIClassificationRequest, AIClassificationResponse, CertificationAudit, AuditFinding, AIPerformanceMetrics, AISafetyAssessment, RiskFactor, SafetyIncident, } from './types/ai-certification';
 export type { RequestHistory, CreateRequestHistoryDto, UpdateRequestHistoryDto, RequestHistoryQueryDto, RequestHistoryResponse, SessionHistory, CreateSessionHistoryDto, UpdateSessionHistoryDto, SessionHistoryQueryDto, SessionHistoryResponse, } from './types/request-history';
 export { RequestType, RequestStatus, } from './types/request-history';
 //# sourceMappingURL=index.d.ts.map

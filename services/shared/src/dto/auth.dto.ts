@@ -1,7 +1,7 @@
 /**
  * Authentication DTOs
  */
-import { IsEmail, IsString, IsOptional, MinLength, MaxLength } from 'class-validator';
+import { IsEmail, IsString, IsOptional, MinLength, MaxLength, IsNotEmpty, IsArray, IsISO8601 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class RegisterDto {
@@ -61,9 +61,25 @@ export class VerifyEmailDto {
 }
 
 export class CreateApiKeyDto {
+  @IsNotEmpty({ message: 'Name is required' })
+  @IsString({ message: 'Name must be a string' })
+  @MinLength(1, { message: 'Name cannot be empty' })
+  @MaxLength(100, { message: 'Name cannot exceed 100 characters' })
   name!: string;
+
+  @IsOptional()
+  @IsString({ message: 'Description must be a string' })
+  @MaxLength(500, { message: 'Description cannot exceed 500 characters' })
   description?: string;
+
+  @IsOptional()
+  @IsArray({ message: 'Permissions must be an array' })
+  @IsString({ each: true, message: 'Each permission must be a string' })
   permissions?: string[];
+
+  @IsOptional()
+  @IsString({ message: 'ExpiresAt must be a string' })
+  @IsISO8601({}, { message: 'ExpiresAt must be a valid ISO 8601 date' })
   expiresAt?: string;
 }
 

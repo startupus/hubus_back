@@ -1,5 +1,5 @@
-import { Controller, Post, Get, Body, Param, Query } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery } from '@nestjs/swagger';
+import { Controller, Post, Get, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
 import { 
   AISafetyLevel,
   AISafetyAssessment,
@@ -7,9 +7,12 @@ import {
   RiskFactorCategory
 } from '@ai-aggregator/shared';
 import { AISafetyService, SafetyTestRequest, SafetyTestResponse } from './ai-safety.service';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @ApiTags('AI Safety')
 @Controller('ai/safety')
+@UseGuards(JwtAuthGuard)
+@ApiBearerAuth()
 export class AISafetyController {
   constructor(private readonly safetyService: AISafetyService) {}
 

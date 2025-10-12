@@ -1,12 +1,11 @@
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { ApiKeysController } from './api-keys.controller';
 import { ApiKeysDemoController } from './api-keys-demo.controller';
-import { ApiKeysService } from './api-keys.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { ApiKeyAuthGuard } from '../auth/guards/api-key-auth.guard';
+import { ApiKeyService } from '../api-key/api-key.service';
 
 @Module({
   imports: [
@@ -23,8 +22,8 @@ import { ApiKeyAuthGuard } from '../auth/guards/api-key-auth.guard';
       inject: [ConfigService],
     }),
   ],
-  controllers: [ApiKeysController, ApiKeysDemoController],
-  providers: [ApiKeysService, PrismaService, JwtAuthGuard, ApiKeyAuthGuard],
-  exports: [ApiKeysService, ApiKeyAuthGuard]
+  controllers: [ApiKeysDemoController],
+  providers: [PrismaService, JwtAuthGuard, ApiKeyAuthGuard, ApiKeyService],
+  exports: [ApiKeyAuthGuard, ApiKeyService]
 })
 export class ApiKeysModule {}

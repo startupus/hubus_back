@@ -341,17 +341,12 @@ export class CompanyService {
     }
   }
 
+
   /**
-   * Create API key for company
+   * Create company API key
    */
-  async createCompanyApiKey(companyId: string, apiKeyData: {
-    name: string;
-    description?: string;
-    permissions?: string[];
-    expiresAt?: Date;
-  }) {
+  async createCompanyApiKey(companyId: string, apiKeyData: any) {
     try {
-      // Check if company exists
       const company = await this.prisma.company.findUnique({
         where: { id: companyId },
       });
@@ -360,30 +355,11 @@ export class CompanyService {
         throw new NotFoundException('Company not found');
       }
 
-      // Generate unique API key
-      const key = `sk-comp-${Buffer.from(`${companyId}-${Date.now()}-${Math.random()}`).toString('base64').replace(/[^a-zA-Z0-9]/g, '')}`;
-
-      // Create API key
-      const apiKey = await this.prisma.apiKey.create({
-        data: {
-          key,
-          companyId: companyId,
-          name: apiKeyData.name,
-          description: apiKeyData.description,
-          permissions: apiKeyData.permissions || [],
-          expiresAt: apiKeyData.expiresAt,
-          isActive: true,
-        },
-      });
-
-      LoggerUtil.info('auth-service', 'Company API key created successfully', { 
-        companyId, 
-        apiKeyId: apiKey.id 
-      });
-
-      return apiKey;
+      // Use ApiKeyService to create the API key
+      const apiKeyService = new (await import('../api-key/api-key.service')).ApiKeyService(this.prisma);
+      return await apiKeyService.createApiKey(companyId, apiKeyData);
     } catch (error) {
-      LoggerUtil.error('auth-service', 'Failed to create company API key', error as Error);
+      LoggerUtil.error('auth-service', 'Failed to create company API key', error as Error, { companyId });
       throw error;
     }
   }

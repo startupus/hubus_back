@@ -17,8 +17,8 @@ export interface RedisClearPatternRequest {
 }
 export declare class RedisClient {
     private readonly REDIS_SERVICE_URL;
-    private readonly axiosInstance;
-    constructor();
+    private axiosInstance;
+    private getAxiosInstance;
     set(key: string, value: any, ttl?: number): Promise<boolean>;
     get<T = any>(key: string): Promise<T | null>;
     mdelete(keys: string[]): Promise<number>;

@@ -1,5 +1,5 @@
-import { Controller, Post, Get, Body, Param } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
+import { Controller, Post, Get, Body, Param, UseGuards } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiBearerAuth } from '@nestjs/swagger';
 import { 
   AIClassificationRequest, 
   AIClassificationResponse,
@@ -7,9 +7,12 @@ import {
   AIClassification
 } from '@ai-aggregator/shared';
 import { AIClassificationService } from './ai-classification.service';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @ApiTags('AI Classification')
 @Controller('ai/classification')
+@UseGuards(JwtAuthGuard)
+@ApiBearerAuth()
 export class AIClassificationController {
   constructor(private readonly classificationService: AIClassificationService) {}
 

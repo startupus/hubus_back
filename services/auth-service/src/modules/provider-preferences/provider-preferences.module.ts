@@ -6,7 +6,7 @@ import { ProviderPreferencesService } from './provider-preferences.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { ApiKeyAuthGuard } from '../auth/guards/api-key-auth.guard';
-import { ApiKeysService } from '../api-keys/api-keys.service';
+import { ApiKeyService } from '../api-key/api-key.service';
 
 @Module({
   imports: [
@@ -24,7 +24,7 @@ import { ApiKeysService } from '../api-keys/api-keys.service';
     }),
   ],
   controllers: [ProviderPreferencesController, ProviderPreferencesApiController],
-  providers: [ProviderPreferencesService, PrismaService, JwtAuthGuard, ApiKeyAuthGuard, ApiKeysService],
+  providers: [ProviderPreferencesService, PrismaService, JwtAuthGuard, ApiKeyAuthGuard, ApiKeyService],
   exports: [ProviderPreferencesService]
 })
 export class ProviderPreferencesModule {}

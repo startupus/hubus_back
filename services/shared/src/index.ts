@@ -110,7 +110,7 @@ export type {
   ServiceConfig,
 } from './interfaces/config.interface';
 
-export type {
+export {
   AICategory,
   AICertificationLevel,
   AICertificationStatus,

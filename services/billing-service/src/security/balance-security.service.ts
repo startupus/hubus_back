@@ -1,12 +1,15 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { LoggerUtil } from '@ai-aggregator/shared';
 import { Decimal } from '@prisma/client/runtime/library';
+import { PrismaService } from '../common/prisma/prisma.service';
 import * as crypto from 'crypto';
 
 @Injectable()
 export class BalanceSecurityService {
   private readonly logger = new Logger(BalanceSecurityService.name);
   private processedOperations = new Map<string, { timestamp: number; amount: Decimal }>();
+
+  constructor(private readonly prisma: PrismaService) {}
 
   /**
    * Валидация операции зачисления
@@ -275,6 +278,104 @@ export class BalanceSecurityService {
       LoggerUtil.error('billing-service', 'Secure credit operation failed', error as Error, {
         companyId: data.companyId,
         paymentId: data.paymentId
+      });
+
+      return {
+        success: false,
+        error: 'Внутренняя ошибка системы безопасности'
+      };
+    }
+  }
+
+  /**
+   * Безопасное списание средств
+   */
+  async secureDebitBalance(data: {
+    companyId: string;
+    amount: number;
+    currency: string;
+    description: string;
+    metadata?: any;
+  }): Promise<{ success: boolean; error?: string; transactionId?: string; balance?: number }> {
+    try {
+      // Проверка лимитов
+      if (data.amount <= 0) {
+        return {
+          success: false,
+          error: 'Сумма списания должна быть положительной'
+        };
+      }
+
+      if (data.amount > 1000) {
+        return {
+          success: false,
+          error: 'Превышен максимальный лимит списания'
+        };
+      }
+
+      // Получаем текущий баланс компании
+      const balance = await this.prisma.companyBalance.findUnique({
+        where: { companyId: data.companyId }
+      });
+
+      if (!balance) {
+        return {
+          success: false,
+          error: 'Баланс компании не найден'
+        };
+      }
+
+      const currentBalance = balance.balance.toNumber();
+      const newBalance = currentBalance - data.amount;
+
+      if (newBalance < 0) {
+        return {
+          success: false,
+          error: 'Недостаточно средств на балансе'
+        };
+      }
+
+      // Регистрация операции
+      const operationKey = this.generateOperationKey(data.companyId, Date.now().toString());
+      this.registerOperation(operationKey, new Decimal(data.amount));
+
+      // Создаем транзакцию списания
+      const transaction = await this.prisma.transaction.create({
+        data: {
+          companyId: data.companyId,
+          type: 'DEBIT',
+          amount: new Decimal(data.amount),
+          currency: data.currency,
+          description: data.description,
+          metadata: data.metadata || {},
+          status: 'COMPLETED',
+        }
+      });
+
+      // Обновляем баланс
+      await this.prisma.companyBalance.update({
+        where: { companyId: data.companyId },
+        data: {
+          balance: new Decimal(newBalance),
+        }
+      });
+
+      LoggerUtil.info('billing-service', 'Secure debit operation completed', {
+        companyId: data.companyId,
+        amount: data.amount,
+        newBalance,
+        transactionId: transaction.id
+      });
+
+      return {
+        success: true,
+        transactionId: transaction.id,
+        balance: newBalance,
+      };
+
+    } catch (error) {
+      LoggerUtil.error('billing-service', 'Secure debit operation failed', error as Error, {
+        companyId: data.companyId,
       });
 
       return {

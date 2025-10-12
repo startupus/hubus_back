@@ -1,12 +1,12 @@
 import { Injectable, CanActivate, ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { ApiKeysService } from '../../api-keys/api-keys.service';
+import { ApiKeyService } from '../../api-key/api-key.service';
 import { LoggerUtil } from '@ai-aggregator/shared';
 
 @Injectable()
 export class ApiKeyAuthGuard implements CanActivate {
   constructor(
-    private readonly apiKeysService: ApiKeysService,
+    private readonly apiKeyService: ApiKeyService,
     private readonly reflector: Reflector
   ) {}
 
@@ -19,9 +19,9 @@ export class ApiKeyAuthGuard implements CanActivate {
     }
 
     try {
-      const validation = await this.apiKeysService.validateApiKey(apiKey);
+      const validation = await this.apiKeyService.validateApiKey(apiKey);
       
-      if (!validation.valid) {
+      if (!validation.isValid) {
         throw new UnauthorizedException('Invalid or expired API key');
       }
 

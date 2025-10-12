@@ -30,12 +30,8 @@ export class RedisCacheService {
       database: this.configService.get('redis.db', 1), // Используем БД 1 для billing
       socket: {
         connectTimeout: 10000,
-        lazyConnect: true,
       },
       // Connection pooling settings
-      retryDelayOnFailover: 100,
-      maxRetriesPerRequest: 3,
-      lazyConnect: true,
     });
 
     this.redisClient.on('error', (err) => {
@@ -182,7 +178,7 @@ export class RedisCacheService {
     try {
       const [pattern, info] = await Promise.all([
         this.redisClient.keys(`${this.keyPrefix}*`),
-        this.redisClient.memory('USAGE')
+        this.redisClient.info('memory')
       ]);
 
       return {

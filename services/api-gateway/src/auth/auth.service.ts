@@ -1,7 +1,7 @@
 import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
-import { RegisterDto, LoginDto, AuthResponseDto } from '@ai-aggregator/shared';
+import { RegisterDto, LoginDto, AuthResponseDto, CreateApiKeyDto } from '@ai-aggregator/shared';
 import { firstValueFrom } from 'rxjs';
 import { AxiosResponse } from 'axios';
 
@@ -99,10 +99,21 @@ export class AuthService {
     }
   }
 
-  async createApiKey(createApiKeyDto: any): Promise<any> {
+
+  async createApiKey(createApiKeyDto: CreateApiKeyDto, user: any, req?: any): Promise<any> {
     try {
+      // Get token from Authorization header
+      const authHeader = req?.headers?.authorization;
+      if (!authHeader) {
+        throw new HttpException('Authorization header missing', HttpStatus.UNAUTHORIZED);
+      }
+
       const response = await firstValueFrom(
-        this.httpService.post(`${this.authServiceUrl}/auth/api-keys`, createApiKeyDto)
+        this.httpService.post(`${this.authServiceUrl}/auth/api-keys`, createApiKeyDto, {
+          headers: {
+            'Authorization': authHeader
+          }
+        })
       );
       return response.data;
     } catch (error: any) {
@@ -113,11 +124,19 @@ export class AuthService {
     }
   }
 
-  async getApiKeys(getApiKeysDto: any): Promise<any> {
+  async getApiKeys(user: any, req?: any): Promise<any> {
     try {
+      // Get token from Authorization header
+      const authHeader = req?.headers?.authorization;
+      if (!authHeader) {
+        throw new HttpException('Authorization header missing', HttpStatus.UNAUTHORIZED);
+      }
+
       const response = await firstValueFrom(
         this.httpService.get(`${this.authServiceUrl}/auth/api-keys`, {
-          params: { userId: getApiKeysDto.userId }
+          headers: {
+            'Authorization': authHeader
+          }
         })
       );
       return response.data;

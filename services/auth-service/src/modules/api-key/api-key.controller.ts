@@ -17,6 +17,12 @@ export class ApiKeyController {
   @ApiResponse({ status: 201, description: 'API key created successfully', type: ApiKeyResponseDto })
   @ApiResponse({ status: 400, description: 'Invalid input' })
   async createApiKey(@Body() createApiKeyDto: CreateApiKeyDto, @Req() req: Request) {
+    console.log('=== ApiKeyController.createApiKey called ===');
+    console.log('createApiKeyDto:', createApiKeyDto);
+    console.log('name:', createApiKeyDto.name);
+    console.log('name type:', typeof createApiKeyDto.name);
+    console.log('name length:', createApiKeyDto.name?.length);
+    
     const userId = (req.user as any).sub;
     return this.apiKeyService.createApiKey(userId, createApiKeyDto);
   }
@@ -25,12 +31,14 @@ export class ApiKeyController {
   @ApiOperation({ summary: 'List user API keys' })
   @ApiResponse({ status: 200, description: 'API keys retrieved successfully' })
   async listApiKeys(
-    @Query('page') page: number = 1,
-    @Query('limit') limit: number = 10,
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '10',
     @Req() req: Request
   ) {
     const userId = (req.user as any).sub;
-    return this.apiKeyService.listApiKeys(userId, page, limit);
+    const pageNum = parseInt(page, 10) || 1;
+    const limitNum = parseInt(limit, 10) || 10;
+    return this.apiKeyService.listApiKeys(userId, pageNum, limitNum);
   }
 
   @Get(':id')

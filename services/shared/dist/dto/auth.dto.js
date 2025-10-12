@@ -92,6 +92,31 @@ class CreateApiKeyDto {
     expiresAt;
 }
 exports.CreateApiKeyDto = CreateApiKeyDto;
+__decorate([
+    (0, class_validator_1.IsNotEmpty)({ message: 'Name is required' }),
+    (0, class_validator_1.IsString)({ message: 'Name must be a string' }),
+    (0, class_validator_1.MinLength)(1, { message: 'Name cannot be empty' }),
+    (0, class_validator_1.MaxLength)(100, { message: 'Name cannot exceed 100 characters' }),
+    __metadata("design:type", String)
+], CreateApiKeyDto.prototype, "name", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)({ message: 'Description must be a string' }),
+    (0, class_validator_1.MaxLength)(500, { message: 'Description cannot exceed 500 characters' }),
+    __metadata("design:type", String)
+], CreateApiKeyDto.prototype, "description", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsArray)({ message: 'Permissions must be an array' }),
+    (0, class_validator_1.IsString)({ each: true, message: 'Each permission must be a string' }),
+    __metadata("design:type", Array)
+], CreateApiKeyDto.prototype, "permissions", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)({ message: 'ExpiresAt must be a string' }),
+    (0, class_validator_1.IsISO8601)({}, { message: 'ExpiresAt must be a valid ISO 8601 date' }),
+    __metadata("design:type", String)
+], CreateApiKeyDto.prototype, "expiresAt", void 0);
 class UpdateApiKeyDto {
     name;
     description;

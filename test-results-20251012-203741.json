@@ -1,0 +1,135 @@
+﻿[
+    {
+        "Status":  "PASS",
+        "Url":  "http://localhost:3002/health",
+        "StatusCode":  200,
+        "Service":  "Provider Orchestrator",
+        "Test":  "Health Check"
+    },
+    {
+        "Status":  "PASS",
+        "Url":  "http://localhost:3003/health",
+        "StatusCode":  200,
+        "Service":  "Proxy Service",
+        "Test":  "Health Check"
+    },
+    {
+        "Status":  "PASS",
+        "Url":  "http://localhost:3004/health",
+        "StatusCode":  200,
+        "Service":  "Billing Service",
+        "Test":  "Health Check"
+    },
+    {
+        "Status":  "PASS",
+        "Url":  "http://localhost:3005/health",
+        "StatusCode":  200,
+        "Service":  "Analytics Service",
+        "Test":  "Health Check"
+    },
+    {
+        "Status":  "PASS",
+        "Url":  "http://localhost:3006/api/v1/health",
+        "StatusCode":  200,
+        "Service":  "Payment Service",
+        "Test":  "Health Check"
+    },
+    {
+        "Status":  "PASS",
+        "Url":  "http://localhost:3007/health",
+        "StatusCode":  200,
+        "Service":  "AI Certification",
+        "Test":  "Health Check"
+    },
+    {
+        "Status":  "PASS",
+        "Url":  "http://localhost:3009/api/redis/health",
+        "StatusCode":  200,
+        "Service":  "Redis Service",
+        "Test":  "Health Check"
+    },
+    {
+        "Status":  "PASS",
+        "Url":  "http://localhost:3000/v1/models",
+        "StatusCode":  200,
+        "Service":  "API Gateway",
+        "Test":  "Get All Models"
+    },
+    {
+        "Status":  "PASS",
+        "Url":  "http://localhost:3000/v1/models/providers",
+        "StatusCode":  200,
+        "Service":  "API Gateway",
+        "Test":  "Get Providers"
+    },
+    {
+        "Status":  "PASS",
+        "Url":  "http://localhost:3000/v1/models/categories",
+        "StatusCode":  200,
+        "Service":  "API Gateway",
+        "Test":  "Get Categories"
+    },
+    {
+        "Status":  "PASS",
+        "Url":  "http://localhost:3000/v1/auth/login",
+        "StatusCode":  201,
+        "Service":  "API Gateway",
+        "Test":  "Login"
+    },
+    {
+        "Status":  "PASS",
+        "Url":  "http://localhost:3000/v1/billing/balance",
+        "StatusCode":  200,
+        "Service":  "API Gateway",
+        "Test":  "Get Balance"
+    },
+    {
+        "Status":  "PASS",
+        "Url":  "http://localhost:3000/v1/billing/transactions",
+        "StatusCode":  200,
+        "Service":  "API Gateway",
+        "Test":  "Get Transactions"
+    },
+    {
+        "Status":  "PASS",
+        "Url":  "http://localhost:3001/auth/profile",
+        "StatusCode":  200,
+        "Service":  "Auth Service",
+        "Test":  "Get Profile"
+    },
+    {
+        "Status":  "PASS",
+        "Url":  "http://localhost:3001/api-keys",
+        "StatusCode":  200,
+        "Service":  "Auth Service",
+        "Test":  "List API Keys"
+    },
+    {
+        "Status":  "PASS",
+        "Url":  "http://localhost:3001/api-keys",
+        "StatusCode":  201,
+        "Service":  "Auth Service",
+        "Test":  "Create API Key"
+    },
+    {
+        "Status":  "PASS",
+        "Url":  "http://localhost:3002/orchestrator/models",
+        "StatusCode":  200,
+        "Service":  "Provider Orchestrator",
+        "Test":  "Get Models"
+    },
+    {
+        "Status":  "PASS",
+        "Url":  "http://localhost:3004/billing/balance/test-company",
+        "StatusCode":  200,
+        "Service":  "Billing Service",
+        "Test":  "Get Balance"
+    },
+    {
+        "Status":  "PASS",
+        "Url":  "http://localhost:3009/api/redis/status",
+        "StatusCode":  200,
+        "Service":  "Redis Service",
+        "Test":  "Get Status"
+    }
+]

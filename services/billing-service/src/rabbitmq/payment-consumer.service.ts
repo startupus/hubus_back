@@ -103,6 +103,21 @@ export class PaymentConsumerService implements OnModuleInit, OnModuleDestroy {
       }
     });
 
+    // Очередь для событий использования ИИ (биллинг)
+    await this.channel.assertQueue('billing.usage', { durable: true });
+    await this.channel.consume('billing.usage', async (msg) => {
+      if (msg) {
+        try {
+          const message = JSON.parse(msg.content.toString());
+          await this.handleBillingUsage(message);
+          this.channel!.ack(msg);
+        } catch (error) {
+          LoggerUtil.error('billing-service', 'Error processing billing usage message', error as Error);
+          this.channel!.nack(msg, false, false);
+        }
+      }
+    });
+
     LoggerUtil.info('billing-service', 'Payment consumers setup completed');
   }
 
@@ -292,6 +307,68 @@ export class PaymentConsumerService implements OnModuleInit, OnModuleDestroy {
       });
     } catch (error) {
       LoggerUtil.error('billing-service', 'Failed to publish balance updated message', error as Error);
+    }
+  }
+
+  /**
+   * Обработка события использования ИИ (биллинг)
+   */
+  private async handleBillingUsage(message: any) {
+    try {
+      LoggerUtil.info('billing-service', 'Processing billing usage event', {
+        userId: message.userId,
+        service: message.service,
+        resource: message.resource,
+        tokens: message.tokens,
+        cost: message.cost,
+        provider: message.provider,
+        model: message.model
+      });
+
+      // Проверяем идемпотентность по timestamp и userId
+      const idempotencyKey = `${message.userId}-${message.timestamp}`;
+      if (this.processedMessages.has(idempotencyKey)) {
+        LoggerUtil.warn('billing-service', 'Duplicate billing usage message ignored', { idempotencyKey });
+        return;
+      }
+
+      // Списываем средства с баланса пользователя
+      const debitResult = await this.balanceSecurity.secureDebitBalance({
+        companyId: message.userId,
+        amount: message.cost,
+        currency: message.metadata?.currency || 'USD',
+        description: `AI usage: ${message.model} - ${message.tokens} tokens`,
+        metadata: {
+          service: message.service,
+          resource: message.resource,
+          tokens: message.tokens,
+          provider: message.provider,
+          model: message.model,
+          timestamp: message.timestamp,
+        },
+      });
+
+      if (!debitResult.success) {
+        LoggerUtil.error('billing-service', 'Failed to debit balance', new Error(debitResult.error || 'Unknown error'), {
+          userId: message.userId,
+          cost: message.cost,
+        });
+        throw new Error(debitResult.error || 'Failed to debit balance');
+      }
+
+      // Сохраняем в кэш для идемпотентности
+      this.processedMessages.add(idempotencyKey);
+
+      LoggerUtil.info('billing-service', 'Billing usage event processed successfully', {
+        userId: message.userId,
+        tokens: message.tokens,
+        cost: message.cost,
+        newBalance: debitResult.balance,
+        transactionId: debitResult.transactionId,
+      });
+    } catch (error) {
+      LoggerUtil.error('billing-service', 'Failed to process billing usage event', error as Error);
+      throw error;
     }
   }
 }

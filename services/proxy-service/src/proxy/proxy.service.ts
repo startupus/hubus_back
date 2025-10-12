@@ -8,6 +8,7 @@ import {
   ChatCompletionResponse, 
   LoggerUtil
 } from '@ai-aggregator/shared';
+import * as amqp from 'amqplib';
 // import { AnonymizedData, RabbitMQService } from '@ai-aggregator/shared'; // Removed - using local implementations
 import { AnonymizationService } from '../anonymization/anonymization.service';
 
@@ -20,6 +21,9 @@ export class ProxyService {
   private readonly openaiBaseUrl: string;
   private readonly openrouterBaseUrl: string;
   private readonly yandexBaseUrl: string;
+  private readonly rabbitmqUrl: string;
+  private connection: any = null;
+  private channel: any = null;
 
   constructor(
     private readonly httpService: HttpService,
@@ -33,6 +37,7 @@ export class ProxyService {
     this.openaiBaseUrl = this.configService.get('OPENAI_BASE_URL', 'https://api.openai.com/v1');
     this.openrouterBaseUrl = this.configService.get('OPENROUTER_BASE_URL', 'https://openrouter.ai/api/v1');
     this.yandexBaseUrl = this.configService.get('YANDEX_BASE_URL', 'https://llm.api.cloud.yandex.net/foundationModels/v1');
+    this.rabbitmqUrl = this.configService.get('RABBITMQ_URL', 'amqp://guest:guest@rabbitmq:5672');
   }
 
   /**
@@ -69,7 +74,12 @@ export class ProxyService {
       // Шаг 2: Отправляем запрос к провайдеру с fallback логикой
       let response;
       try {
-        response = await this.sendToProvider(anonymizedRequest, provider);
+        // Применяем маппинг модели для провайдера
+        const mappedRequest = {
+          ...anonymizedRequest,
+          model: this.mapModelForProvider(anonymizedRequest.model, provider)
+        };
+        response = await this.sendToProvider(mappedRequest, provider);
       } catch (error: any) {
         // Если OpenAI недоступен (квота, регион), пробуем OpenRouter или Yandex
         if (provider === 'openai' && this.openrouterApiKey && 
@@ -82,10 +92,10 @@ export class ProxyService {
             model: request.model
           });
           
-          // Переключаем модель для OpenRouter
+          // Переключаем модель для OpenRouter с правильным маппингом
           const openrouterRequest = {
             ...anonymizedRequest,
-            model: `openai/${anonymizedRequest.model}`
+            model: this.mapModelForProvider(anonymizedRequest.model, 'openrouter')
           };
           
           response = await this.sendToProvider(openrouterRequest, 'openrouter');
@@ -107,6 +117,26 @@ export class ProxyService {
         inputTokens: deanonymizedResponse.usage.prompt_tokens,
         outputTokens: deanonymizedResponse.usage.completion_tokens
       });
+
+      // Отправляем событие биллинга
+      try {
+        await this.sendBillingEvent({
+          userId,
+          service: 'ai-chat',
+          resource: 'tokens',
+          tokens: deanonymizedResponse.usage.total_tokens,
+          cost: this.calculateCost(deanonymizedResponse.usage, request.model),
+          provider: provider === 'openrouter' ? 'openrouter' : provider,
+          model: request.model,
+          timestamp: new Date().toISOString()
+        });
+      } catch (billingError) {
+        LoggerUtil.warn('proxy-service', 'Failed to send billing event', {
+          error: (billingError as Error).message,
+          userId,
+          model: request.model
+        });
+      }
 
       return {
         ...deanonymizedResponse,
@@ -294,22 +324,28 @@ export class ProxyService {
    */
   async sendBillingEvent(billingData: any): Promise<void> {
     try {
-      // TODO: Re-enable RabbitMQ integration
-      // await this.rabbitmq.publishCriticalMessage('billing.usage', {
-      //   eventType: 'ai_usage',
-      //   userId: billingData.userId,
-      //   service: billingData.service,
-      //   resource: billingData.resource,
-      //   tokens: billingData.tokens,
-      //   cost: billingData.cost,
-      //   provider: billingData.provider,
-      //   model: billingData.model,
-      //   timestamp: billingData.timestamp,
-      //   metadata: {
-      //     service: 'proxy-service',
-      //     currency: 'USD'
-      //   }
-      // });
+      await this.ensureRabbitMQConnection();
+      
+      const message = {
+        eventType: 'ai_usage',
+        userId: billingData.userId,
+        service: billingData.service,
+        resource: billingData.resource,
+        tokens: billingData.tokens,
+        cost: billingData.cost,
+        provider: billingData.provider,
+        model: billingData.model,
+        timestamp: billingData.timestamp,
+        metadata: {
+          service: 'proxy-service',
+          currency: 'USD'
+        }
+      };
+
+      await this.channel.assertQueue('billing.usage', { durable: true });
+      await this.channel.sendToQueue('billing.usage', Buffer.from(JSON.stringify(message)), {
+        persistent: true
+      });
       
       LoggerUtil.debug('proxy-service', 'Billing event sent successfully', {
         userId: billingData.userId,
@@ -318,7 +354,24 @@ export class ProxyService {
       });
     } catch (error) {
       LoggerUtil.error('proxy-service', 'Failed to send billing event', error as Error);
-      throw error;
+      // Не бросаем ошибку, чтобы не прерывать основной процесс
+    }
+  }
+
+  /**
+   * Устанавливает соединение с RabbitMQ
+   */
+  private async ensureRabbitMQConnection(): Promise<void> {
+    if (!this.connection) {
+      try {
+        this.connection = await amqp.connect(this.rabbitmqUrl);
+        this.channel = await this.connection.createChannel();
+        
+        LoggerUtil.debug('proxy-service', 'RabbitMQ connection established');
+      } catch (error) {
+        LoggerUtil.error('proxy-service', 'Failed to connect to RabbitMQ', error as Error);
+        throw error;
+      }
     }
   }
 
@@ -655,5 +708,63 @@ The anonymization system replaced personal information with placeholders before 
       provider,
       processing_time_ms: 100
     };
+  }
+
+  /**
+   * Маппинг моделей для разных провайдеров
+   */
+  private mapModelForProvider(model: string, provider: 'openai' | 'openrouter' | 'yandex'): string {
+    // Маппинг моделей для OpenRouter
+    if (provider === 'openrouter') {
+      const modelMapping: Record<string, string> = {
+        // OpenAI модели
+        'gpt-4o': 'openai/gpt-4o',
+        'gpt-4o-mini': 'openai/gpt-4o-mini',
+        'gpt-4-turbo': 'openai/gpt-4-turbo',
+        'gpt-3.5-turbo': 'openai/gpt-3.5-turbo',
+        
+        // Claude модели
+        'claude-3-5-sonnet-20241022': 'anthropic/claude-3.5-sonnet-20241022',
+        'claude-3-5-haiku-20241022': 'anthropic/claude-3.5-haiku-20241022',
+        'claude-3-opus-20240229': 'anthropic/claude-3-opus-20240229',
+        
+        // Gemini модели
+        'gemini-1.5-pro': 'google/gemini-1.5-pro',
+        'gemini-1.5-flash': 'google/gemini-1.5-flash',
+        
+        // Yandex модели
+        'yandexgpt': 'yandex/yandexgpt',
+        'gigachat': 'sber/gigachat'
+      };
+      
+      return modelMapping[model] || `openai/${model}`;
+    }
+    
+    // Для других провайдеров возвращаем модель как есть
+    return model;
+  }
+
+  /**
+   * Рассчитывает стоимость запроса
+   */
+  private calculateCost(usage: any, model: string): number {
+    // Примерные цены за токен (в долларах)
+    const pricing: Record<string, { input: number; output: number }> = {
+      'gpt-4o': { input: 0.005, output: 0.015 },
+      'gpt-4o-mini': { input: 0.00015, output: 0.0006 },
+      'gpt-4-turbo': { input: 0.01, output: 0.03 },
+      'gpt-3.5-turbo': { input: 0.0005, output: 0.0015 },
+      'claude-3-5-sonnet-20241022': { input: 0.003, output: 0.015 },
+      'claude-3-5-haiku-20241022': { input: 0.00025, output: 0.00125 },
+      'claude-3-opus-20240229': { input: 0.015, output: 0.075 },
+      'gemini-1.5-pro': { input: 0.00125, output: 0.005 },
+      'gemini-1.5-flash': { input: 0.000075, output: 0.0003 }
+    };
+
+    const modelPricing = pricing[model] || { input: 0.001, output: 0.002 };
+    const inputCost = (usage.prompt_tokens || 0) * modelPricing.input;
+    const outputCost = (usage.completion_tokens || 0) * modelPricing.output;
+    
+    return inputCost + outputCost;
   }
 }

@@ -13,6 +13,27 @@ export class ApiKeyService {
    */
   async createApiKey(companyId: string, createApiKeyDto: CreateApiKeyDto): Promise<ApiKey> {
     try {
+      LoggerUtil.warn('auth-service', 'ApiKeyService.createApiKey called', { 
+        createApiKeyDto, 
+        name: createApiKeyDto.name,
+        nameType: typeof createApiKeyDto.name,
+        nameLength: createApiKeyDto.name?.length,
+        nameTrimmedLength: createApiKeyDto.name?.trim().length,
+        nameIsEmpty: !createApiKeyDto.name,
+        nameTrimIsEmpty: createApiKeyDto.name?.trim().length === 0
+      });
+      
+      // Validate name
+      if (!createApiKeyDto.name || typeof createApiKeyDto.name !== 'string' || createApiKeyDto.name.trim().length === 0) {
+        LoggerUtil.error('auth-service', 'Validation failed: empty name', new Error('Empty name'), { name: createApiKeyDto.name });
+        throw new BadRequestException('Name is required and cannot be empty');
+      }
+      if (createApiKeyDto.name.length > 100) {
+        LoggerUtil.error('auth-service', 'Validation failed: name too long', new Error('Name too long'), { nameLength: createApiKeyDto.name.length });
+        throw new BadRequestException('Name cannot exceed 100 characters');
+      }
+      LoggerUtil.warn('auth-service', 'Validation passed');
+      
       // Generate API key
       const key = CryptoUtil.generateApiKey();
 
@@ -40,6 +61,27 @@ export class ApiKeyService {
       return this.mapApiKeyToDto(apiKey);
     } catch (error) {
       LoggerUtil.error('auth-service', 'Failed to create API key', error as Error, { companyId });
+      throw error;
+    }
+  }
+
+  /**
+   * Get API keys by company ID
+   */
+  async getApiKeysByCompanyId(companyId: string): Promise<ApiKey[]> {
+    try {
+      const apiKeys = await this.prisma.apiKey.findMany({
+        where: {
+          companyId: companyId,
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+      });
+
+      return apiKeys.map(key => this.mapApiKeyToDto(key));
+    } catch (error) {
+      LoggerUtil.error('auth-service', 'Failed to get API keys', error as Error, { companyId });
       throw error;
     }
   }

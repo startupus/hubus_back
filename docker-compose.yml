@@ -487,6 +487,8 @@ services:
       - HOST=0.0.0.0
       - PORT=3006
       - PAYMENT_DATABASE_URL=postgresql://postgres:password@payment-db:5432/payment_db?schema=public
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
       - JWT_SECRET=your-super-secret-jwt-key-here
       - YOOKASSA_SHOP_ID=your_shop_id
       - YOOKASSA_SECRET_KEY=your_secret_key

@@ -1,0 +1,29 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model AnonymizationSettings {
+  id                    String   @id @default(uuid())
+  userId                String   @unique
+  enabled               Boolean  @default(true)
+  anonymizeEmails       Boolean  @default(true)
+  anonymizePhones       Boolean  @default(true)
+  anonymizeNames        Boolean  @default(true)
+  anonymizeAddresses    Boolean  @default(true)
+  anonymizePersonalNumbers Boolean @default(true)
+  anonymizeIPs          Boolean  @default(true)
+  anonymizeURLs         Boolean  @default(true)
+  customPatterns        String[]
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@map("anonymization_settings")
+}

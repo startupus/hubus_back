@@ -1,0 +1,37 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Provider {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  type      String   // OPENAI, OPENROUTER, etc.
+  config    Json
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("providers")
+}
+
+model RoutingRule {
+  id         String   @id @default(uuid())
+  condition  Json
+  providerId String
+  priority   Int
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  provider Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@map("routing_rules")
+}

@@ -30,7 +30,7 @@
     "@nestjs/core": "^10.0.0",
     "@nestjs/platform-express": "^10.0.0",
     "@nestjs/swagger": "^7.1.17",
-    "@prisma/client": "^5.7.1",
+    "@prisma/client": "^5.22.0",
     "amqplib": "^0.10.3",
     "axios": "^1.6.0",
     "class-transformer": "^0.5.1",
@@ -38,7 +38,7 @@
     "cors": "^2.8.5",
     "express": "^4.18.2",
     "joi": "^18.0.1",
-    "prisma": "^5.7.1",
+    "prisma": "^5.22.0",
     "redis": "^4.6.10",
     "reflect-metadata": "^0.1.13",
     "rxjs": "^7.8.1"

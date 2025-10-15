@@ -14,7 +14,7 @@ export class ProxyController {
   async chatCompletions(
     @Body() request: any,
     @Query('user_id') userId: string,
-    @Query('provider') provider: 'openai' | 'openrouter' | 'yandex' = 'openai'
+    @Query('provider') provider: 'openai' | 'openrouter' | 'github' | 'yandex' = 'openai'
   ): Promise<any> {
     try {
       // Валидация входных данных
@@ -48,7 +48,7 @@ export class ProxyController {
   @ApiOperation({ summary: 'Get available models' })
   @ApiResponse({ status: 200, description: 'Models retrieved successfully' })
   async getModels(
-    @Query('provider') provider?: 'openai' | 'openrouter' | 'yandex',
+    @Query('provider') provider?: 'openai' | 'openrouter' | 'github' | 'yandex',
     @Query('category') category?: string
   ) {
     try {
@@ -75,7 +75,7 @@ export class ProxyController {
   @ApiOperation({ summary: 'Get model information' })
   @ApiResponse({ status: 200, description: 'Model info retrieved successfully' })
   async getModelInfo(
-    @Param('provider') provider: 'openai' | 'openrouter' | 'yandex',
+    @Param('provider') provider: 'openai' | 'openrouter' | 'github' | 'yandex',
     @Param('model') model: string
   ) {
     try {
@@ -104,6 +104,30 @@ export class ProxyController {
         message: error instanceof Error ? error.message : 'Unknown error',
         model: null,
       };
+    }
+  }
+
+  @Post('github/chat/completions')
+  @ApiOperation({ summary: 'Process GitHub Models chat completion' })
+  @ApiResponse({ status: 200, description: 'GitHub chat completion processed successfully' })
+  async githubChatCompletions(
+    @Body() request: any,
+    @Query('user_id') userId: string
+  ): Promise<any> {
+    try {
+      LoggerUtil.debug('proxy-service', 'GitHub chat completions request', { 
+        userId,
+        model: request.model,
+        messageCount: request.messages?.length || 0
+      });
+      
+      return await this.proxyService.processChatCompletion(request, userId, 'github');
+    } catch (error) {
+      LoggerUtil.error('proxy-service', 'GitHub chat completions failed', error as Error, {
+        userId,
+        model: request.model
+      });
+      throw error;
     }
   }
 

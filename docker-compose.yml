@@ -323,6 +323,7 @@ services:
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - GITHUB_API_KEY=${GITHUB_API_KEY}
       - YANDEX_API_KEY=${YANDEX_API_KEY}
       - YANDEX_FOLDER_ID=${YANDEX_FOLDER_ID}
     depends_on:
@@ -504,6 +505,21 @@ services:
     depends_on:
       payment-db:
         condition: service_healthy
+    networks:
+      - ai-aggregator
+    restart: unless-stopped
+
+  # Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+    environment:
+      - NODE_ENV=production
+    depends_on:
+      - api-gateway
     networks:
       - ai-aggregator
     restart: unless-stopped

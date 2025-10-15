@@ -16,10 +16,12 @@ import { AnonymizationService } from '../anonymization/anonymization.service';
 export class ProxyService {
   private readonly openaiApiKey: string;
   private readonly openrouterApiKey: string;
+  private readonly githubApiKey: string;
   private readonly yandexApiKey: string;
   private readonly yandexFolderId: string;
   private readonly openaiBaseUrl: string;
   private readonly openrouterBaseUrl: string;
+  private readonly githubBaseUrl: string;
   private readonly yandexBaseUrl: string;
   private readonly rabbitmqUrl: string;
   private connection: any = null;
@@ -32,10 +34,12 @@ export class ProxyService {
   ) {
     this.openaiApiKey = this.configService.get('OPENAI_API_KEY', '');
     this.openrouterApiKey = this.configService.get('OPENROUTER_API_KEY', '');
+    this.githubApiKey = this.configService.get('GITHUB_API_KEY', '');
     this.yandexApiKey = this.configService.get('YANDEX_API_KEY', '');
     this.yandexFolderId = this.configService.get('YANDEX_FOLDER_ID', '');
     this.openaiBaseUrl = this.configService.get('OPENAI_BASE_URL', 'https://api.openai.com/v1');
     this.openrouterBaseUrl = this.configService.get('OPENROUTER_BASE_URL', 'https://openrouter.ai/api/v1');
+    this.githubBaseUrl = this.configService.get('GITHUB_BASE_URL', 'https://api.github.com');
     this.yandexBaseUrl = this.configService.get('YANDEX_BASE_URL', 'https://llm.api.cloud.yandex.net/foundationModels/v1');
     this.rabbitmqUrl = this.configService.get('RABBITMQ_URL', 'amqp://guest:guest@rabbitmq:5672');
   }
@@ -46,7 +50,7 @@ export class ProxyService {
   async processChatCompletion(
     request: any,
     userId: string,
-    provider: 'openai' | 'openrouter' | 'yandex' = 'openai'
+    provider: 'openai' | 'openrouter' | 'github' | 'yandex' = 'openai'
   ): Promise<any> {
     const startTime = Date.now();
     
@@ -125,6 +129,8 @@ export class ProxyService {
           service: 'ai-chat',
           resource: 'tokens',
           tokens: deanonymizedResponse.usage.total_tokens,
+          inputTokens: deanonymizedResponse.usage.prompt_tokens,
+          outputTokens: deanonymizedResponse.usage.completion_tokens,
           cost: this.calculateCost(deanonymizedResponse.usage, request.model),
           provider: provider === 'openrouter' ? 'openrouter' : provider,
           model: request.model,
@@ -166,16 +172,18 @@ export class ProxyService {
    */
   private async sendToProvider(
     request: ChatCompletionRequest, 
-    provider: 'openai' | 'openrouter' | 'yandex'
+    provider: 'openai' | 'openrouter' | 'github' | 'yandex'
   ): Promise<ChatCompletionResponse> {
     // Проверяем API ключи
     LoggerUtil.debug('proxy-service', 'Checking API keys', {
       openaiKey: this.openaiApiKey ? 'set' : 'not set',
       openrouterKey: this.openrouterApiKey ? 'set' : 'not set',
+      githubKey: this.githubApiKey ? 'set' : 'not set',
       yandexKey: this.yandexApiKey ? 'set' : 'not set',
       yandexFolderId: this.yandexFolderId ? 'set' : 'not set',
       openaiKeyValue: this.openaiApiKey,
       openrouterKeyValue: this.openrouterApiKey,
+      githubKeyValue: this.githubApiKey,
       yandexKeyValue: this.yandexApiKey
     });
 
@@ -189,12 +197,15 @@ export class ProxyService {
     } else if (provider === 'openrouter') {
       apiKey = this.openrouterApiKey;
       baseUrl = this.openrouterBaseUrl;
+    } else if (provider === 'github') {
+      apiKey = this.githubApiKey;
+      baseUrl = this.githubBaseUrl;
     } else if (provider === 'yandex') {
       apiKey = this.yandexApiKey;
       baseUrl = this.yandexBaseUrl;
     }
 
-    if (!apiKey || apiKey.includes('your-') || apiKey.includes('sk-your-') || apiKey.includes('sk-or-your-')) {
+    if (!apiKey || apiKey.includes('your-') || apiKey.includes('sk-your-') || apiKey.includes('sk-or-your-') || apiKey.includes('github_pat_')) {
       LoggerUtil.info('proxy-service', 'Using mock mode - no valid API key provided');
       return this.createMockResponse(request, provider);
     }
@@ -206,6 +217,8 @@ export class ProxyService {
 
     // Добавляем специфичные заголовки для разных провайдеров
     if (provider === 'openai' || provider === 'openrouter') {
+      headers['Authorization'] = `Bearer ${apiKey}`;
+    } else if (provider === 'github') {
       headers['Authorization'] = `Bearer ${apiKey}`;
     } else if (provider === 'yandex') {
       headers['Authorization'] = `Api-Key ${apiKey}`;
@@ -234,6 +247,13 @@ export class ProxyService {
             role: msg.role === 'assistant' ? 'assistant' : 'user',
             text: msg.content
           }))
+        };
+      } else if (provider === 'github') {
+        // GitHub Models использует другой формат
+        url = `${baseUrl}/chat/completions`;
+        requestBody = {
+          ...request,
+          model: this.mapModelForProvider(request.model, 'github')
         };
       } else {
         // OpenAI и OpenRouter используют стандартный формат
@@ -332,6 +352,8 @@ export class ProxyService {
         service: billingData.service,
         resource: billingData.resource,
         tokens: billingData.tokens,
+        inputTokens: billingData.inputTokens,
+        outputTokens: billingData.outputTokens,
         cost: billingData.cost,
         provider: billingData.provider,
         model: billingData.model,
@@ -350,6 +372,8 @@ export class ProxyService {
       LoggerUtil.debug('proxy-service', 'Billing event sent successfully', {
         userId: billingData.userId,
         tokens: billingData.tokens,
+        inputTokens: billingData.inputTokens,
+        outputTokens: billingData.outputTokens,
         cost: billingData.cost
       });
     } catch (error) {
@@ -378,7 +402,7 @@ export class ProxyService {
   /**
    * Получает список доступных моделей
    */
-  async getAvailableModels(provider?: 'openai' | 'openrouter' | 'yandex'): Promise<any[]> {
+  async getAvailableModels(provider?: 'openai' | 'openrouter' | 'github' | 'yandex'): Promise<any[]> {
     const models = [];
 
     if (!provider || provider === 'openai') {
@@ -387,6 +411,10 @@ export class ProxyService {
 
     if (!provider || provider === 'openrouter') {
       models.push(...this.getOpenRouterModels());
+    }
+
+    if (!provider || provider === 'github') {
+      models.push(...this.getGitHubModels());
     }
 
     if (!provider || provider === 'yandex') {
@@ -543,6 +571,59 @@ export class ProxyService {
         capabilities: ['chat', 'completion'],
         created_at: '2024-01-29T00:00:00Z',
         updated_at: '2024-01-29T00:00:00Z',
+      },
+      {
+        id: 'deepseek/deepseek-r1-0528',
+        name: 'DeepSeek R1 0528',
+        provider: 'openrouter',
+        category: 'chat',
+        description: 'DeepSeek R1 0528 model - free and powerful reasoning model',
+        max_tokens: 128000,
+        cost_per_input_token: 0,
+        cost_per_output_token: 0,
+        currency: 'USD',
+        is_available: true,
+        capabilities: ['chat', 'completion', 'reasoning'],
+        created_at: '2024-05-28T00:00:00Z',
+        updated_at: '2024-05-28T00:00:00Z',
+      }
+    ];
+  }
+
+  /**
+   * Получает модели GitHub
+   */
+  private getGitHubModels(): any[] {
+    return [
+      {
+        id: 'github/github-copilot-chat',
+        name: 'GitHub Copilot Chat',
+        provider: 'github',
+        category: 'chat',
+        description: 'GitHub Copilot Chat model for code assistance',
+        max_tokens: 4096,
+        cost_per_input_token: 0.0001,
+        cost_per_output_token: 0.0001,
+        currency: 'USD',
+        is_available: true,
+        capabilities: ['chat', 'completion', 'code'],
+        created_at: '2023-10-01T00:00:00Z',
+        updated_at: '2023-10-01T00:00:00Z',
+      },
+      {
+        id: 'github/github-copilot-codex',
+        name: 'GitHub Copilot Codex',
+        provider: 'github',
+        category: 'completion',
+        description: 'GitHub Copilot Codex model for code completion',
+        max_tokens: 2048,
+        cost_per_input_token: 0.00005,
+        cost_per_output_token: 0.00005,
+        currency: 'USD',
+        is_available: true,
+        capabilities: ['completion', 'code'],
+        created_at: '2023-10-01T00:00:00Z',
+        updated_at: '2023-10-01T00:00:00Z',
       }
     ];
   }
@@ -667,7 +748,7 @@ export class ProxyService {
    */
   private createMockResponse(
     request: ChatCompletionRequest, 
-    provider: 'openai' | 'openrouter' | 'yandex'
+    provider: 'openai' | 'openrouter' | 'github' | 'yandex'
   ): ChatCompletionResponse {
     // Показываем, что данные были обезличены
     const messages = request.messages || [];
@@ -713,7 +794,7 @@ The anonymization system replaced personal information with placeholders before 
   /**
    * Маппинг моделей для разных провайдеров
    */
-  private mapModelForProvider(model: string, provider: 'openai' | 'openrouter' | 'yandex'): string {
+  private mapModelForProvider(model: string, provider: 'openai' | 'openrouter' | 'github' | 'yandex'): string {
     // Маппинг моделей для OpenRouter
     if (provider === 'openrouter') {
       const modelMapping: Record<string, string> = {
@@ -737,7 +818,19 @@ The anonymization system replaced personal information with placeholders before 
         'gigachat': 'sber/gigachat'
       };
       
-      return modelMapping[model] || `openai/${model}`;
+      return modelMapping[model] || model; // Для OpenRouter возвращаем модель как есть
+    }
+    
+    // Маппинг моделей для GitHub
+    if (provider === 'github') {
+      const modelMapping: Record<string, string> = {
+        'github-copilot-chat': 'github/github-copilot-chat',
+        'github-copilot-codex': 'github/github-copilot-codex',
+        'copilot-chat': 'github/github-copilot-chat',
+        'copilot-codex': 'github/github-copilot-codex'
+      };
+      
+      return modelMapping[model] || `github/${model}`;
     }
     
     // Для других провайдеров возвращаем модель как есть

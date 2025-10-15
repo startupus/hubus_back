@@ -1,0 +1,11 @@
+{
+  "model": "github-copilot-chat",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Write a simple Python function to calculate the factorial of a number. Make it efficient and include error handling."
+    }
+  ],
+  "max_tokens": 200,
+  "temperature": 0.7
+}

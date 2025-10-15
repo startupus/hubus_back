@@ -33,11 +33,16 @@ export class ChatController {
   async createCompletion(
     @Body() request: any,
     @Request() req: any,
-    @Query('provider') provider: 'openai' | 'openrouter' | 'yandex' = 'openai'
+    @Query('provider') provider?: 'openai' | 'openrouter' | 'yandex'
   ): Promise<any> {
     const userId = req.user.id;
     const sessionId = req.user.sessionId || null;
     const startTime = Date.now();
+    
+    // Определяем провайдера по модели, если не указан явно
+    if (!provider) {
+      provider = this.determineProviderByModel(request.model || 'gpt-3.5-turbo');
+    }
     
     console.log('Chat completion request received:', JSON.stringify(request, null, 2));
     
@@ -368,5 +373,40 @@ export class ChatController {
         data: []
       };
     }
+  }
+
+  /**
+   * Определяет провайдера по модели
+   */
+  private determineProviderByModel(model: string): 'openai' | 'openrouter' | 'yandex' {
+    const modelLower = model.toLowerCase();
+    
+    // OpenRouter модели
+    if (modelLower.includes('deepseek/') || 
+        modelLower.includes('anthropic/') || 
+        modelLower.includes('google/') ||
+        modelLower.includes('meta/') ||
+        modelLower.includes('mistral/') ||
+        modelLower.includes('openai/gpt-4o') ||
+        modelLower.includes('openai/gpt-4o-mini')) {
+      return 'openrouter';
+    }
+    
+    // Yandex модели
+    if (modelLower.includes('yandex') || 
+        modelLower.includes('gigachat') ||
+        modelLower.includes('kandinsky')) {
+      return 'yandex';
+    }
+    
+    // OpenAI модели (по умолчанию)
+    if (modelLower.includes('gpt-3.5') || 
+        modelLower.includes('gpt-4') ||
+        modelLower.includes('dall-e')) {
+      return 'openai';
+    }
+    
+    // По умолчанию OpenRouter для неизвестных моделей
+    return 'openrouter';
   }
 }

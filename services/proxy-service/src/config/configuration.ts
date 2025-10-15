@@ -23,5 +23,9 @@ export default () => ({
     openrouter: {
       apiKey: process.env.OPENROUTER_API_KEY,
     },
+    github: {
+      apiKey: process.env.GITHUB_API_KEY,
+      baseUrl: process.env.GITHUB_BASE_URL || 'https://api.github.com/copilot_internal/v1',
+    },
   },
 });

@@ -1,0 +1,11 @@
+{
+  "model": "github-copilot-chat",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Hello, can you help me write a simple Python function?"
+    }
+  ],
+  "max_tokens": 100,
+  "temperature": 0.7
+}

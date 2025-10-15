@@ -44,7 +44,11 @@ export class SubscriptionBillingService {
       LoggerUtil.info('billing-service', 'Processing AI request billing', {
         companyId: request.companyId,
         inputTokens: request.inputTokens,
-        outputTokens: request.outputTokens
+        outputTokens: request.outputTokens,
+        inputTokenPrice: request.inputTokenPrice,
+        outputTokenPrice: request.outputTokenPrice,
+        provider: request.provider,
+        model: request.model
       });
 
       // Check if company has active subscription
@@ -91,7 +95,17 @@ export class SubscriptionBillingService {
         LoggerUtil.info('billing-service', 'Subscription tokens used', {
           subscriptionId: subscription.id,
           inputTokensUsed: inputTokensFromSubscription,
-          outputTokensUsed: outputTokensFromSubscription
+          outputTokensUsed: outputTokensFromSubscription,
+          inputTokensRemaining: inputTokensRemaining,
+          outputTokensRemaining: outputTokensRemaining,
+          inputTokensLimit: subscription.inputTokensLimit,
+          outputTokensLimit: subscription.outputTokensLimit,
+          inputTokensUsedBefore: subscription.inputTokensUsed,
+          outputTokensUsedBefore: subscription.outputTokensUsed,
+          inputTokensUsedAfter: subscription.inputTokensUsed + inputTokensFromSubscription,
+          outputTokensUsedAfter: subscription.outputTokensUsed + outputTokensFromSubscription,
+          inputTokensPercentage: subscription.inputTokensLimit > 0 ? ((subscription.inputTokensUsed + inputTokensFromSubscription) / subscription.inputTokensLimit) * 100 : 0,
+          outputTokensPercentage: subscription.outputTokensLimit > 0 ? ((subscription.outputTokensUsed + outputTokensFromSubscription) / subscription.outputTokensLimit) * 100 : 0
         });
       }
 
@@ -116,6 +130,12 @@ export class SubscriptionBillingService {
       LoggerUtil.info('billing-service', 'AI request processed with subscription', {
         companyId: request.companyId,
         subscriptionId: subscription.id,
+        inputTokens,
+        outputTokens,
+        inputTokensFromSubscription,
+        outputTokensFromSubscription,
+        inputTokensToPay,
+        outputTokensToPay,
         totalAmountCharged: totalAmountCharged.toString(),
         inputTokensRemaining: inputTokensRemainingAfter,
         outputTokensRemaining: outputTokensRemainingAfter
@@ -200,6 +220,10 @@ export class SubscriptionBillingService {
 
       LoggerUtil.info('billing-service', 'Pay-as-you-go billing processed', {
         companyId,
+        inputTokens,
+        outputTokens,
+        inputCost: inputCost.toString(),
+        outputCost: outputCost.toString(),
         amountCharged: totalCost.toString(),
         transactionId: transaction.id
       });
@@ -225,8 +249,8 @@ export class SubscriptionBillingService {
   /**
    * Get active subscription for company
    */
-  private async getActiveSubscription(companyId: string) {
-    return await this.prisma.subscription.findFirst({
+  async getActiveSubscription(companyId: string) {
+    const subscription = await this.prisma.subscription.findFirst({
       where: {
         companyId,
         status: 'ACTIVE',
@@ -236,6 +260,22 @@ export class SubscriptionBillingService {
         plan: true
       }
     });
+
+    if (subscription) {
+      LoggerUtil.debug('billing-service', 'Active subscription found', {
+        companyId,
+        subscriptionId: subscription.id,
+        planName: subscription.plan.name,
+        inputTokensUsed: subscription.inputTokensUsed,
+        outputTokensUsed: subscription.outputTokensUsed,
+        inputTokensLimit: subscription.inputTokensLimit,
+        outputTokensLimit: subscription.outputTokensLimit
+      });
+    } else {
+      LoggerUtil.debug('billing-service', 'No active subscription found', { companyId });
+    }
+
+    return subscription;
   }
 
   /**
@@ -252,6 +292,12 @@ export class SubscriptionBillingService {
           increment: outputTokens
         }
       }
+    });
+
+    LoggerUtil.info('billing-service', 'Subscription usage updated', {
+      subscriptionId,
+      inputTokensAdded: inputTokens,
+      outputTokensAdded: outputTokens
     });
   }
 

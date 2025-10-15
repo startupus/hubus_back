@@ -18,24 +18,23 @@ class GetBalanceDto {
 }
 exports.GetBalanceDto = GetBalanceDto;
 __decorate([
-    (0, swagger_1.ApiProperty)({ description: 'ID пользователя', example: 'user123' }),
+    (0, swagger_1.ApiProperty)({ description: 'ID компании', example: 'company123' }),
     (0, class_validator_1.IsString)(),
     (0, class_validator_1.IsNotEmpty)(),
     __metadata("design:type", String)
-], GetBalanceDto.prototype, "userId", void 0);
+], GetBalanceDto.prototype, "companyId", void 0);
 class UpdateBalanceDto {
 }
 exports.UpdateBalanceDto = UpdateBalanceDto;
 __decorate([
-    (0, swagger_1.ApiProperty)({ description: 'ID пользователя', example: 'user123' }),
+    (0, swagger_1.ApiProperty)({ description: 'ID компании', example: 'company123' }),
     (0, class_validator_1.IsString)(),
     (0, class_validator_1.IsNotEmpty)(),
     __metadata("design:type", String)
-], UpdateBalanceDto.prototype, "userId", void 0);
+], UpdateBalanceDto.prototype, "companyId", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)({ description: 'Сумма для изменения', example: 100.50 }),
     (0, class_validator_1.IsNumber)(),
-    (0, class_validator_1.IsPositive)(),
     (0, class_validator_1.Min)(0.01),
     (0, class_validator_1.Max)(1000000),
     (0, class_transformer_1.Transform)(({ value }) => parseFloat(value)),
@@ -62,15 +61,27 @@ __decorate([
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], UpdateBalanceDto.prototype, "reference", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ description: 'Валюта', example: 'USD', default: 'USD' }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], UpdateBalanceDto.prototype, "currency", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ description: 'Метаданные', example: { source: 'api' } }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsObject)(),
+    __metadata("design:type", Object)
+], UpdateBalanceDto.prototype, "metadata", void 0);
 class CreateTransactionDto {
 }
 exports.CreateTransactionDto = CreateTransactionDto;
 __decorate([
-    (0, swagger_1.ApiProperty)({ description: 'ID пользователя', example: 'user123' }),
+    (0, swagger_1.ApiProperty)({ description: 'ID компании', example: 'company123' }),
     (0, class_validator_1.IsString)(),
     (0, class_validator_1.IsNotEmpty)(),
     __metadata("design:type", String)
-], CreateTransactionDto.prototype, "userId", void 0);
+], CreateTransactionDto.prototype, "companyId", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)({
         description: 'Тип транзакции',
@@ -123,11 +134,11 @@ class TrackUsageDto {
 }
 exports.TrackUsageDto = TrackUsageDto;
 __decorate([
-    (0, swagger_1.ApiProperty)({ description: 'ID пользователя', example: 'user123' }),
+    (0, swagger_1.ApiProperty)({ description: 'ID компании', example: 'company123' }),
     (0, class_validator_1.IsString)(),
     (0, class_validator_1.IsNotEmpty)(),
     __metadata("design:type", String)
-], TrackUsageDto.prototype, "userId", void 0);
+], TrackUsageDto.prototype, "companyId", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)({ description: 'Сервис', example: 'ai-chat' }),
     (0, class_validator_1.IsString)(),
@@ -166,11 +177,11 @@ class CalculateCostDto {
 }
 exports.CalculateCostDto = CalculateCostDto;
 __decorate([
-    (0, swagger_1.ApiProperty)({ description: 'ID пользователя', example: 'user123' }),
+    (0, swagger_1.ApiProperty)({ description: 'ID компании', example: 'company123' }),
     (0, class_validator_1.IsString)(),
     (0, class_validator_1.IsNotEmpty)(),
     __metadata("design:type", String)
-], CalculateCostDto.prototype, "userId", void 0);
+], CalculateCostDto.prototype, "companyId", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)({ description: 'Сервис', example: 'ai-chat' }),
     (0, class_validator_1.IsString)(),
@@ -202,11 +213,11 @@ class ProcessPaymentDto {
 }
 exports.ProcessPaymentDto = ProcessPaymentDto;
 __decorate([
-    (0, swagger_1.ApiProperty)({ description: 'ID пользователя', example: 'user123' }),
+    (0, swagger_1.ApiProperty)({ description: 'ID компании', example: 'company123' }),
     (0, class_validator_1.IsString)(),
     (0, class_validator_1.IsNotEmpty)(),
     __metadata("design:type", String)
-], ProcessPaymentDto.prototype, "userId", void 0);
+], ProcessPaymentDto.prototype, "companyId", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)({ description: 'Сумма платежа', example: 100.50 }),
     (0, class_validator_1.IsNumber)(),
@@ -244,11 +255,11 @@ class BillingReportDto {
 }
 exports.BillingReportDto = BillingReportDto;
 __decorate([
-    (0, swagger_1.ApiProperty)({ description: 'ID пользователя', example: 'user123' }),
+    (0, swagger_1.ApiProperty)({ description: 'ID компании', example: 'company123' }),
     (0, class_validator_1.IsString)(),
     (0, class_validator_1.IsNotEmpty)(),
     __metadata("design:type", String)
-], BillingReportDto.prototype, "userId", void 0);
+], BillingReportDto.prototype, "companyId", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)({ description: 'Дата начала периода', example: '2024-01-01' }),
     (0, class_validator_1.IsString)(),

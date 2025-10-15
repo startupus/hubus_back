@@ -1,40 +1,45 @@
-import { Controller, Get, Post, Body, Param, Query, Request } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
-import { ReferralService, CreateReferralTransactionDto } from '../billing/referral.service';
+import { Controller, Get, Query, Param, UseGuards } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { ReferralService } from '../billing/referral.service';
+import { RateLimitGuard } from '../common/guards/rate-limit.guard';
 
-@ApiTags('Referral Billing')
-@Controller('referral')
+@ApiTags('Referral')
+@Controller('billing/referral')
+@UseGuards(RateLimitGuard)
+@ApiBearerAuth()
 export class ReferralController {
   constructor(private readonly referralService: ReferralService) {}
 
-  @Get('stats')
-  @ApiOperation({ summary: 'Get referral statistics for the company' })
-  @ApiResponse({ status: 200, description: 'Referral statistics retrieved successfully' })
-  async getReferralStats(@Request() req: any) {
-    const companyId = req.user.companyId || req.user.sub;
-    return this.referralService.getReferralStats(companyId);
-  }
-
-  @Get('transactions')
-  @ApiOperation({ summary: 'Get referral transactions for the company' })
-  @ApiResponse({ status: 200, description: 'Referral transactions retrieved successfully' })
-  async getReferralTransactions(
-    @Request() req: any,
-    @Query('limit') limit?: string,
-    @Query('offset') offset?: string,
+  @Get('earnings/:companyId')
+  @ApiOperation({ summary: 'Get referral earnings for a company' })
+  @ApiResponse({ status: 200, description: 'Referral earnings retrieved successfully' })
+  async getReferralEarnings(
+    @Param('companyId') companyId: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('limit') limit?: string
   ) {
-    const companyId = req.user.companyId || req.user.sub;
-    const limitNum = limit ? parseInt(limit, 10) : 50;
-    const offsetNum = offset ? parseInt(offset, 10) : 0;
-    
-    return this.referralService.getReferralTransactions(companyId, limitNum, offsetNum);
+    return this.referralService.getReferralEarnings(companyId, startDate, endDate, limit);
   }
 
-  @Post('process')
-  @ApiOperation({ summary: 'Process referral bonus for a transaction (internal use)' })
-  @ApiResponse({ status: 201, description: 'Referral bonus processed successfully' })
-  async processReferralBonus(@Body() dto: CreateReferralTransactionDto) {
-    await this.referralService.createReferralTransaction(dto);
-    return { message: 'Referral bonus processed successfully' };
+  @Get('earnings/summary/:companyId')
+  @ApiOperation({ summary: 'Get referral earnings summary for a company' })
+  @ApiResponse({ status: 200, description: 'Referral earnings summary retrieved successfully' })
+  async getReferralEarningsSummary(
+    @Param('companyId') companyId: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string
+  ) {
+    return this.referralService.getReferralEarningsSummary(companyId, startDate, endDate);
+  }
+
+  @Get('referrals/:companyId')
+  @ApiOperation({ summary: 'Get referred companies for a company' })
+  @ApiResponse({ status: 200, description: 'Referred companies retrieved successfully' })
+  async getReferredCompanies(
+    @Param('companyId') companyId: string,
+    @Query('limit') limit?: string
+  ) {
+    return this.referralService.getReferredCompanies(companyId, limit);
   }
 }

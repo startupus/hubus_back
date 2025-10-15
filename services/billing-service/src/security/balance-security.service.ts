@@ -325,10 +325,38 @@ export class BalanceSecurityService {
         };
       }
 
-      const currentBalance = balance.balance.toNumber();
-      const newBalance = currentBalance - data.amount;
+      // Используем Decimal для точных вычислений
+      // Убеждаемся, что currentBalance является Decimal объектом
+      const currentBalance = balance.balance instanceof Decimal ? balance.balance : new Decimal(balance.balance);
+      const amountToDebit = new Decimal(data.amount);
+      
+      // Отладочная информация
+      LoggerUtil.info('billing-service', 'Balance calculation', {
+        companyId: data.companyId,
+        currentBalance: currentBalance.toString(),
+        amountToDebit: amountToDebit.toString(),
+        currentBalanceType: typeof currentBalance,
+        isDecimal: currentBalance instanceof Decimal
+      });
+      
+      const newBalance = currentBalance.minus(amountToDebit);
 
-      if (newBalance < 0) {
+      // Отладочная информация
+      LoggerUtil.debug('billing-service', 'Balance check debug', {
+        companyId: data.companyId,
+        currentBalance: currentBalance.toString(),
+        amountToDebit: amountToDebit.toString(),
+        newBalance: newBalance.toString(),
+        isNegative: newBalance.lt(0)
+      });
+
+      if (newBalance.lt(0)) {
+        LoggerUtil.error('billing-service', 'Insufficient balance detected', new Error('Insufficient balance'), {
+          companyId: data.companyId,
+          currentBalance: currentBalance.toString(),
+          amountToDebit: amountToDebit.toString(),
+          newBalance: newBalance.toString()
+        });
         return {
           success: false,
           error: 'Недостаточно средств на балансе'
@@ -356,7 +384,7 @@ export class BalanceSecurityService {
       await this.prisma.companyBalance.update({
         where: { companyId: data.companyId },
         data: {
-          balance: new Decimal(newBalance),
+          balance: newBalance,
         }
       });
 
@@ -370,7 +398,7 @@ export class BalanceSecurityService {
       return {
         success: true,
         transactionId: transaction.id,
-        balance: newBalance,
+        balance: newBalance.toNumber(),
       };
 
     } catch (error) {

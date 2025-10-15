@@ -12,9 +12,9 @@ export declare class CacheService {
         keys: string[];
     };
     cleanup(): void;
-    cacheUserBalance(userId: string, balance: any): void;
-    getCachedUserBalance(userId: string): any | null;
-    invalidateUserBalance(userId: string): void;
+    cacheCompanyBalance(companyId: string, balance: any): void;
+    getCachedCompanyBalance(companyId: string): any | null;
+    invalidateCompanyBalance(companyId: string): void;
     cachePricingRules(service: string, resource: string, rules: any[]): void;
     getCachedPricingRules(service: string, resource: string): any[] | null;
     cacheCurrencyRate(from: string, to: string, rate: number): void;

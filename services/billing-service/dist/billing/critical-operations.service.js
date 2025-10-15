@@ -38,7 +38,7 @@ let CriticalOperationsService = CriticalOperationsService_1 = class CriticalOper
     async publishDebitBalance(data) {
         try {
             shared_1.LoggerUtil.info('billing-service', 'Publishing debit balance request', {
-                userId: data.userId,
+                companyId: data.companyId,
                 amount: data.amount
             });
             return await this.rabbitmqService.publishCriticalMessage('billing.debit.balance', {
@@ -54,7 +54,7 @@ let CriticalOperationsService = CriticalOperationsService_1 = class CriticalOper
         }
         catch (error) {
             shared_1.LoggerUtil.error('billing-service', 'Failed to publish debit balance', error, {
-                userId: data.userId
+                companyId: data.companyId
             });
             return false;
         }
@@ -62,7 +62,7 @@ let CriticalOperationsService = CriticalOperationsService_1 = class CriticalOper
     async publishCreateTransaction(data) {
         try {
             shared_1.LoggerUtil.info('billing-service', 'Publishing create transaction request', {
-                userId: data.userId,
+                companyId: data.companyId,
                 type: data.type,
                 amount: data.amount
             });
@@ -79,7 +79,7 @@ let CriticalOperationsService = CriticalOperationsService_1 = class CriticalOper
         }
         catch (error) {
             shared_1.LoggerUtil.error('billing-service', 'Failed to publish create transaction', error, {
-                userId: data.userId
+                companyId: data.companyId
             });
             return false;
         }
@@ -87,7 +87,7 @@ let CriticalOperationsService = CriticalOperationsService_1 = class CriticalOper
     async publishProcessPayment(data) {
         try {
             shared_1.LoggerUtil.info('billing-service', 'Publishing process payment request', {
-                userId: data.userId,
+                companyId: data.companyId,
                 paymentId: data.paymentId,
                 amount: data.amount
             });
@@ -104,7 +104,7 @@ let CriticalOperationsService = CriticalOperationsService_1 = class CriticalOper
         }
         catch (error) {
             shared_1.LoggerUtil.error('billing-service', 'Failed to publish process payment', error, {
-                userId: data.userId
+                companyId: data.companyId
             });
             return false;
         }
@@ -113,21 +113,21 @@ let CriticalOperationsService = CriticalOperationsService_1 = class CriticalOper
         try {
             shared_1.LoggerUtil.info('billing-service', 'Processing debit balance', {
                 messageId: message.messageId,
-                userId: message.userId,
+                companyId: message.companyId,
                 amount: message.amount
             });
             const company = await this.prisma.company.findUnique({
-                where: { id: message.userId },
+                where: { id: message.companyId },
                 include: { balance: true }
             });
             if (!company || !company.balance) {
-                shared_1.LoggerUtil.error('billing-service', 'Company balance not found', null, { companyId: message.userId });
+                shared_1.LoggerUtil.error('billing-service', 'Company balance not found', null, { companyId: message.companyId });
                 return false;
             }
             const balance = company.balance;
             if (balance.balance < message.amount) {
                 shared_1.LoggerUtil.error('billing-service', 'Insufficient balance', null, {
-                    userId: message.userId,
+                    companyId: message.companyId,
                     currentBalance: balance.balance,
                     requestedAmount: message.amount
                 });
@@ -151,7 +151,7 @@ let CriticalOperationsService = CriticalOperationsService_1 = class CriticalOper
             });
             shared_1.LoggerUtil.info('billing-service', 'Debit balance processed successfully', {
                 messageId: message.messageId,
-                userId: message.userId,
+                companyId: message.companyId,
                 newBalance: updatedBalance.balance
             });
             return true;
@@ -159,7 +159,7 @@ let CriticalOperationsService = CriticalOperationsService_1 = class CriticalOper
         catch (error) {
             shared_1.LoggerUtil.error('billing-service', 'Failed to process debit balance', error, {
                 messageId: message.messageId,
-                userId: message.userId
+                companyId: message.companyId
             });
             return false;
         }
@@ -168,11 +168,11 @@ let CriticalOperationsService = CriticalOperationsService_1 = class CriticalOper
         try {
             shared_1.LoggerUtil.info('billing-service', 'Processing create transaction', {
                 messageId: message.messageId,
-                userId: message.userId,
+                companyId: message.companyId,
                 type: message.type,
                 amount: message.amount
             });
-            const companyId = message.userId;
+            const companyId = message.companyId;
             const transaction = await this.prisma.transaction.create({
                 data: {
                     companyId: companyId,
@@ -186,14 +186,14 @@ let CriticalOperationsService = CriticalOperationsService_1 = class CriticalOper
             shared_1.LoggerUtil.info('billing-service', 'Transaction created successfully', {
                 messageId: message.messageId,
                 transactionId: transaction.id,
-                userId: message.userId
+                companyId: message.companyId
             });
             return true;
         }
         catch (error) {
             shared_1.LoggerUtil.error('billing-service', 'Failed to create transaction', error, {
                 messageId: message.messageId,
-                userId: message.userId
+                companyId: message.companyId
             });
             return false;
         }
@@ -202,7 +202,7 @@ let CriticalOperationsService = CriticalOperationsService_1 = class CriticalOper
         try {
             shared_1.LoggerUtil.info('billing-service', 'Processing payment', {
                 messageId: message.messageId,
-                userId: message.userId,
+                companyId: message.companyId,
                 paymentId: message.paymentId,
                 amount: message.amount
             });
@@ -222,12 +222,12 @@ let CriticalOperationsService = CriticalOperationsService_1 = class CriticalOper
                 return true;
             }
             const company = await this.prisma.company.findUnique({
-                where: { id: message.userId },
+                where: { id: message.companyId },
                 include: { balance: true }
             });
             if (!company || !company.balance) {
                 shared_1.LoggerUtil.error('billing-service', 'Company balance not found for payment', null, {
-                    companyId: message.userId
+                    companyId: message.companyId
                 });
                 return false;
             }
@@ -254,7 +254,7 @@ let CriticalOperationsService = CriticalOperationsService_1 = class CriticalOper
             });
             shared_1.LoggerUtil.info('billing-service', 'Payment processed successfully', {
                 messageId: message.messageId,
-                userId: message.userId,
+                companyId: message.companyId,
                 newBalance: updatedBalance.balance
             });
             return true;
@@ -262,7 +262,7 @@ let CriticalOperationsService = CriticalOperationsService_1 = class CriticalOper
         catch (error) {
             shared_1.LoggerUtil.error('billing-service', 'Failed to process payment', error, {
                 messageId: message.messageId,
-                userId: message.userId
+                companyId: message.companyId
             });
             return false;
         }

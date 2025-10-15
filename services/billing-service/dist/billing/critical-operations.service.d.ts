@@ -9,14 +9,14 @@ export declare class CriticalOperationsService {
     constructor(rabbitmqService: RabbitMQClient, billingService: BillingService, prisma: PrismaService);
     initializeCriticalHandlers(): Promise<void>;
     publishDebitBalance(data: {
-        userId: string;
+        companyId: string;
         amount: number;
         currency: string;
         reason: string;
         metadata?: Record<string, any>;
     }): Promise<boolean>;
     publishCreateTransaction(data: {
-        userId: string;
+        companyId: string;
         type: 'DEBIT' | 'CREDIT';
         amount: number;
         currency: string;
@@ -25,7 +25,7 @@ export declare class CriticalOperationsService {
         metadata?: Record<string, any>;
     }): Promise<boolean>;
     publishProcessPayment(data: {
-        userId: string;
+        companyId: string;
         paymentMethod: string;
         amount: number;
         currency: string;

@@ -14,6 +14,12 @@ import { PrismaModule } from './prisma/prisma.module';
 import { FsbModule } from './fsb/fsb.module';
 import { AnonymizationModule } from './anonymization/anonymization.module';
 import { ModelsModule } from './models/models.module';
+import { ReferralModule } from './referral/referral.module';
+import { SubscriptionModule } from './subscription/subscription.module';
+import { EmployeeModule } from './employee/employee.module';
+import { EmployeeStatsModule } from './employee-stats/employee-stats.module';
+import { SyncModule } from './sync/sync.module';
+import { JwtStrategy } from './auth/jwt.strategy';
 import { configuration } from './config/configuration';
 import { validationSchema } from './config/validation.schema';
 
@@ -44,6 +50,12 @@ import { validationSchema } from './config/validation.schema';
     FsbModule,
     AnonymizationModule,
     ModelsModule,
+    ReferralModule,
+    SubscriptionModule,
+    EmployeeModule,
+    EmployeeStatsModule,
+    SyncModule,
   ],
+  providers: [JwtStrategy],
 })
 export class AppModule {}

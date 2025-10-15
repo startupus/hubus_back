@@ -1,16 +1,16 @@
 export declare class BillingController {
     constructor();
-    getBalance(userId: string): Promise<{
+    getBalance(companyId: string): Promise<{
         success: boolean;
         message: string;
         balance: {
-            user_id: string;
+            company_id: string;
             balance: number;
             currency: string;
             updated_at: string;
         };
     }>;
-    updateBalance(userId: string, body: {
+    updateBalance(companyId: string, body: {
         amount: number;
         operation: string;
         description?: string;
@@ -18,7 +18,7 @@ export declare class BillingController {
         success: boolean;
         message: string;
         balance: {
-            user_id: string;
+            company_id: string;
             balance: number;
             currency: string;
             updated_at: string;
@@ -45,7 +45,7 @@ export declare class BillingController {
             metadata: {};
         };
     }>;
-    getTransactionHistory(userId: string, page?: number, limit?: number): Promise<{
+    getTransactionHistory(companyId: string, page?: number, limit?: number): Promise<{
         success: boolean;
         message: string;
         transactions: any[];

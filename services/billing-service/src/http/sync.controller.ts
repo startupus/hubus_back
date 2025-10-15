@@ -1,104 +1,200 @@
-import { Controller, Post, Body, HttpStatus, HttpException } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { Controller, Post, Body, HttpCode, HttpStatus } from '@nestjs/common';
+// import { LoggerUtil } from '@ai-aggregator/shared';
 import { PrismaService } from '../common/prisma/prisma.service';
-import { LoggerUtil } from '@ai-aggregator/shared';
+import { Decimal } from '@prisma/client/runtime/library';
 
-interface SyncCompanyDto {
-  id: string;
-  name: string;
-  email: string;
-  parentCompanyId?: string;
-  billingMode?: 'SELF_PAID' | 'PARENT_PAID';
-  position?: string;
-  department?: string;
-  referredBy?: string;
-  referralCodeId?: string;
-}
-
-@ApiTags('sync')
 @Controller('sync')
 export class SyncController {
   constructor(private readonly prisma: PrismaService) {}
 
   @Post('company')
-  @ApiOperation({ summary: 'Sync company from auth-service' })
-  @ApiResponse({ status: 200, description: 'Company synced successfully' })
-  @ApiResponse({ status: 400, description: 'Invalid request' })
-  async syncCompany(@Body() dto: SyncCompanyDto) {
+  @HttpCode(HttpStatus.CREATED)
+  async syncCompany(@Body() data: {
+    id: string;
+    name: string;
+    email: string;
+    isActive?: boolean;
+    billingMode?: 'SELF_PAID' | 'PARENT_PAID';
+    initialBalance?: number;
+    currency?: string;
+    referredBy?: string;
+    referralCodeId?: string;
+  }) {
     try {
-      LoggerUtil.info('billing-service', 'Syncing company', { companyId: dto.id });
+      console.log('Syncing company from auth-service', {
+        companyId: data.id,
+        email: data.email
+      });
 
-      // Check if company already exists
+      // Проверяем, существует ли компания
       const existingCompany = await this.prisma.company.findUnique({
-        where: { id: dto.id }
+        where: { id: data.id }
       });
 
       if (existingCompany) {
-        // Update existing company
-        const updatedCompany = await this.prisma.company.update({
-          where: { id: dto.id },
-          data: {
-            name: dto.name,
-            email: dto.email,
-            parentCompanyId: dto.parentCompanyId,
-            billingMode: dto.billingMode || 'SELF_PAID',
-            position: dto.position,
-            department: dto.department,
-            referredBy: dto.referredBy,
-            referralCodeId: dto.referralCodeId,
-            updatedAt: new Date()
-          }
-        });
-
-        LoggerUtil.info('billing-service', 'Company updated', { companyId: dto.id });
-
+        console.warn('Company already exists', { companyId: data.id });
         return {
           success: true,
-          message: 'Company updated successfully',
-          company: updatedCompany
+          message: 'Company already exists',
+          companyId: data.id
         };
       }
 
-      // Create new company
-      const newCompany = await this.prisma.company.create({
+      // Создаем компанию
+      const company = await this.prisma.company.create({
         data: {
-          id: dto.id,
-          name: dto.name,
-          email: dto.email,
-          parentCompanyId: dto.parentCompanyId,
-          billingMode: dto.billingMode || 'SELF_PAID',
-          position: dto.position,
-          department: dto.department,
-          referredBy: dto.referredBy,
-          referralCodeId: dto.referralCodeId,
-          isActive: true
+          id: data.id,
+          name: data.name,
+          email: data.email,
+          isActive: data.isActive ?? true,
+          billingMode: data.billingMode ?? 'SELF_PAID',
+          referredBy: data.referredBy,
+          referralCodeId: data.referralCodeId
         }
       });
 
-      // Create initial balance for the company
-      await this.prisma.companyBalance.create({
+      // Создаем баланс для компании
+      const balance = await this.prisma.companyBalance.create({
         data: {
-          companyId: newCompany.id,
-          balance: 0,
-          currency: 'USD',
-          creditLimit: 0
+          companyId: data.id,
+          balance: new Decimal(data.initialBalance ?? 100.0),
+          currency: data.currency ?? 'USD',
+          creditLimit: new Decimal(0)
         }
       });
 
-      LoggerUtil.info('billing-service', 'Company created and balance initialized', { companyId: dto.id });
+      console.log('Company synced successfully', {
+        companyId: data.id,
+        balance: balance.balance.toString()
+      });
 
       return {
         success: true,
-        message: 'Company created successfully',
-        company: newCompany
+        message: 'Company synced successfully',
+        company: {
+          id: company.id,
+          name: company.name,
+          email: company.email,
+          balance: balance.balance.toString(),
+          currency: balance.currency
+        }
       };
     } catch (error) {
-      LoggerUtil.error('billing-service', 'Failed to sync company', error as Error, { companyId: dto.id });
-      throw new HttpException(
-        error instanceof Error ? error.message : 'Failed to sync company',
-        HttpStatus.INTERNAL_SERVER_ERROR
-      );
+      console.error('Failed to sync company', error, {
+        companyId: data.id
+      });
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  @Post('employee')
+  @HttpCode(HttpStatus.CREATED)
+  async syncEmployee(@Body() data: {
+    id: string;
+    name: string;
+    email: string;
+    parentCompanyId: string;
+    billingMode?: 'SELF_PAID' | 'PARENT_PAID';
+    isActive?: boolean;
+    initialBalance?: number;
+    currency?: string;
+  }) {
+    try {
+      console.log('Syncing employee from auth-service', {
+        employeeId: data.id,
+        email: data.email,
+        parentCompanyId: data.parentCompanyId
+      });
+
+      // Проверяем, существует ли сотрудник
+      const existingEmployee = await this.prisma.company.findUnique({
+        where: { id: data.id }
+      });
+
+      if (existingEmployee) {
+        // Обновляем существующего сотрудника
+        const updatedEmployee = await this.prisma.company.update({
+          where: { id: data.id },
+          data: {
+            name: data.name,
+            email: data.email,
+            parentCompanyId: data.parentCompanyId,
+            billingMode: data.billingMode ?? 'PARENT_PAID',
+            isActive: data.isActive ?? true
+          }
+        });
+
+        console.log('Employee updated successfully', {
+          employeeId: data.id,
+          parentCompanyId: data.parentCompanyId
+        });
+
+        return {
+          success: true,
+          message: 'Employee updated successfully',
+          employee: {
+            id: updatedEmployee.id,
+            name: updatedEmployee.name,
+            email: updatedEmployee.email,
+            parentCompanyId: updatedEmployee.parentCompanyId,
+            billingMode: updatedEmployee.billingMode
+          }
+        };
+      } else {
+        // Создаем нового сотрудника
+        const employee = await this.prisma.company.create({
+          data: {
+            id: data.id,
+            name: data.name,
+            email: data.email,
+            parentCompanyId: data.parentCompanyId,
+            billingMode: data.billingMode ?? 'PARENT_PAID',
+            isActive: data.isActive ?? true
+          }
+        });
+
+        // Создаем баланс для сотрудника
+        const balance = await this.prisma.companyBalance.create({
+          data: {
+            companyId: data.id,
+            balance: new Decimal(data.initialBalance ?? 0.0),
+            currency: data.currency ?? 'USD',
+            creditLimit: new Decimal(0)
+          }
+        });
+
+        console.log('Employee created successfully', {
+          employeeId: data.id,
+          parentCompanyId: data.parentCompanyId,
+          balance: balance.balance.toString()
+        });
+
+        return {
+          success: true,
+          message: 'Employee created successfully',
+          employee: {
+            id: employee.id,
+            name: employee.name,
+            email: employee.email,
+            parentCompanyId: employee.parentCompanyId,
+            billingMode: employee.billingMode,
+            balance: balance.balance.toString(),
+            currency: balance.currency
+          }
+        };
+      }
+    } catch (error) {
+      console.error('Failed to sync employee', error, {
+        employeeId: data.id,
+        parentCompanyId: data.parentCompanyId
+      });
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Unknown error'
+      };
     }
   }
 }
-

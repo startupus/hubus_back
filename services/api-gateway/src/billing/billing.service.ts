@@ -1,4 +1,4 @@
-import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
+import { Injectable, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
@@ -7,6 +7,7 @@ import { UserBalanceDto } from '@ai-aggregator/shared';
 @Injectable()
 export class BillingService {
   private readonly billingServiceUrl: string;
+  private readonly logger = new Logger(BillingService.name);
 
   constructor(
     private readonly httpService: HttpService,
@@ -16,17 +17,45 @@ export class BillingService {
   }
 
   async getBalance(userId: string): Promise<UserBalanceDto> {
+    this.logger.debug('Getting balance for user', { userId, userIdType: typeof userId });
+    
     try {
+      const url = `${this.billingServiceUrl}/billing/company/${userId}/balance`;
+      this.logger.debug('Making request to billing service', { url });
+      
       const response = await firstValueFrom(
-        this.httpService.get(`${this.billingServiceUrl}/billing/balance/${userId}`)
+        this.httpService.get(url, {
+          headers: {
+            'Authorization': `Bearer ${this.getAuthToken()}`
+          }
+        })
       );
+      
+      this.logger.debug('Billing service response', { 
+        status: response.status,
+        data: response.data 
+      });
+      
       return response.data;
     } catch (error: any) {
+      this.logger.error('Failed to get balance', { 
+        userId, 
+        error: error.message,
+        status: error.response?.status,
+        data: error.response?.data
+      });
+      
       if (error.response?.status === 404) {
         throw new HttpException('User balance not found', HttpStatus.NOT_FOUND);
       }
       throw new HttpException('Failed to get balance', HttpStatus.INTERNAL_SERVER_ERROR);
     }
+  }
+
+  private getAuthToken(): string {
+    // Для внутренних вызовов используем сервисный токен
+    // В реальном приложении это должен быть сервисный токен
+    return 'service-token';
   }
 
   async trackUsage(data: any): Promise<any> {
@@ -92,6 +121,21 @@ export class BillingService {
       return response.data;
     } catch (error: any) {
       throw new HttpException('Failed to refund payment', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  async topUpBalance(userId: string, amount: number, currency?: string): Promise<any> {
+    try {
+      const response = await firstValueFrom(
+        this.httpService.post(`${this.billingServiceUrl}/billing/top-up`, {
+          companyId: userId,
+          amount: amount,
+          currency: currency || 'USD'
+        })
+      );
+      return response.data;
+    } catch (error: any) {
+      throw new HttpException('Failed to top up balance', HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
 }

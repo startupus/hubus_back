@@ -27,7 +27,7 @@ let ConcurrentBillingService = ConcurrentBillingService_1 = class ConcurrentBill
         this.totalRevenue = new shared_2.AtomicCounter(0);
         this.activeUsers = new shared_2.AtomicCounter(0);
         this.transactionQueue = new shared_2.ConcurrentQueue();
-        this.userLocks = new shared_2.ConcurrentMap();
+        this.companyLocks = new shared_2.ConcurrentMap();
         this.startTransactionProcessor();
     }
     async getBalance(companyId) {
@@ -37,8 +37,8 @@ let ConcurrentBillingService = ConcurrentBillingService_1 = class ConcurrentBill
                 shared_1.LoggerUtil.debug('billing-service', 'Balance retrieved from cache', { companyId });
                 return { balance: cached.balance, currency: cached.currency };
             }
-            const userLock = this.getUserLock(companyId);
-            await this.acquireLock(userLock);
+            const companyLock = this.getCompanyLock(companyId);
+            await this.acquireLock(companyLock);
             try {
                 const balance = await this.prisma.companyBalance.findUnique({
                     where: { companyId: companyId }
@@ -71,7 +71,7 @@ let ConcurrentBillingService = ConcurrentBillingService_1 = class ConcurrentBill
                 return { balance: balance.balance, currency: balance.currency };
             }
             finally {
-                this.releaseLock(userLock);
+                this.releaseLock(companyLock);
             }
         }
         catch (error) {
@@ -81,8 +81,8 @@ let ConcurrentBillingService = ConcurrentBillingService_1 = class ConcurrentBill
     }
     async updateBalance(companyId, amount, type, description, metadata) {
         try {
-            const userLock = this.getUserLock(companyId);
-            await this.acquireLock(userLock);
+            const companyLock = this.getCompanyLock(companyId);
+            await this.acquireLock(companyLock);
             try {
                 const currentBalance = await this.prisma.companyBalance.findUnique({
                     where: { companyId: companyId }
@@ -137,7 +137,7 @@ let ConcurrentBillingService = ConcurrentBillingService_1 = class ConcurrentBill
                 };
             }
             finally {
-                this.releaseLock(userLock);
+                this.releaseLock(companyLock);
             }
         }
         catch (error) {
@@ -173,7 +173,7 @@ let ConcurrentBillingService = ConcurrentBillingService_1 = class ConcurrentBill
     }
     async processBatchTransactions(transactions) {
         try {
-            const tasks = transactions.map(transaction => () => this.updateBalance(transaction.userId, transaction.amount, transaction.type, transaction.description, transaction.metadata));
+            const tasks = transactions.map(transaction => () => this.updateBalance(transaction.companyId, transaction.amount, transaction.type, transaction.description, transaction.metadata));
             const results = await Promise.all(tasks.map(task => task()));
             return results.map(result => ({
                 success: result.success,
@@ -291,11 +291,11 @@ let ConcurrentBillingService = ConcurrentBillingService_1 = class ConcurrentBill
         };
         setImmediate(processTransactions);
     }
-    getUserLock(userId) {
-        if (!this.userLocks.has(userId)) {
-            this.userLocks.set(userId, new Int32Array(new SharedArrayBuffer(4)));
+    getCompanyLock(companyId) {
+        if (!this.companyLocks.has(companyId)) {
+            this.companyLocks.set(companyId, new Int32Array(new SharedArrayBuffer(4)));
         }
-        return this.userLocks.get(userId);
+        return this.companyLocks.get(companyId);
     }
     async acquireLock(lock) {
         while (!Atomics.compareExchange(lock, 0, 0, 1)) {

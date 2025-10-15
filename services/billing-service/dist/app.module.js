@@ -18,6 +18,8 @@ const billing_module_1 = require("./billing/billing.module");
 const http_module_1 = require("./http/http.module");
 const health_module_1 = require("./health/health.module");
 const prisma_module_1 = require("./common/prisma/prisma.module");
+const pricing_module_1 = require("./pricing/pricing.module");
+const rabbitmq_module_1 = require("./rabbitmq/rabbitmq.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -35,6 +37,8 @@ exports.AppModule = AppModule = __decorate([
             billing_module_1.BillingModule,
             http_module_1.BillingHttpModule,
             health_module_1.HealthModule,
+            pricing_module_1.PricingModule,
+            rabbitmq_module_1.RabbitMQModule,
         ],
     })
 ], AppModule);

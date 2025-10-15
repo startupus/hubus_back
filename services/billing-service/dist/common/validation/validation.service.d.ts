@@ -6,10 +6,10 @@ export declare class ValidationService {
     private readonly maxAmount;
     validateAmount(amount: number, currency?: string): void;
     validateCurrency(currency: string): void;
-    validateUser(userId: string, prisma: any): Promise<void>;
-    validatePaymentMethod(paymentMethodId: string, userId: string, prisma: any): Promise<void>;
+    validateCompany(companyId: string, prisma: any): Promise<void>;
+    validatePaymentMethod(paymentMethodId: string, companyId: string, prisma: any): Promise<void>;
     validateBalanceForOperation(currentBalance: Decimal, amount: number, operation: 'add' | 'subtract', creditLimit?: Decimal): void;
-    validateTransaction(type: string, amount: number, currency: string, userId: string): void;
+    validateTransaction(type: string, amount: number, currency: string, companyId: string): void;
     validateUsage(service: string, resource: string, quantity: number): void;
     validateReportPeriod(startDate: Date, endDate: Date): void;
     validateMetadata(metadata: any): void;

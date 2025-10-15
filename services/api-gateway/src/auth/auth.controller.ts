@@ -12,8 +12,10 @@ export class AuthController {
   @Post('register')
   @ApiOperation({ summary: 'Register a new user' })
   @ApiResponse({ status: 201, description: 'User registered successfully', type: AuthResponseDto })
-  async register(@Body() registerDto: RegisterDto, @Query('ref') referralCode?: string) {
-    return this.authService.register(registerDto, referralCode);
+  async register(@Body() registerDto: RegisterDto & { referralCode?: string }, @Query('ref') referralCode?: string) {
+    // Приоритет: query параметр ref, затем referralCode из тела запроса
+    const finalReferralCode = referralCode || registerDto.referralCode;
+    return this.authService.register(registerDto, finalReferralCode);
   }
 
   @Post('login')

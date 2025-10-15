@@ -18,14 +18,14 @@ const swagger_1 = require("@nestjs/swagger");
 const shared_1 = require("@ai-aggregator/shared");
 let BillingController = class BillingController {
     constructor() { }
-    async getBalance(userId) {
+    async getBalance(companyId) {
         try {
-            shared_1.LoggerUtil.debug('billing-service', 'HTTP GetBalance called', { userId });
+            shared_1.LoggerUtil.debug('billing-service', 'HTTP GetBalance called', { companyId });
             return {
                 success: true,
                 message: 'Balance retrieved successfully',
                 balance: {
-                    user_id: userId,
+                    company_id: companyId,
                     balance: 100.0,
                     currency: 'USD',
                     updated_at: new Date().toISOString(),
@@ -41,10 +41,10 @@ let BillingController = class BillingController {
             };
         }
     }
-    async updateBalance(userId, body) {
+    async updateBalance(companyId, body) {
         try {
             shared_1.LoggerUtil.debug('billing-service', 'HTTP UpdateBalance called', {
-                userId,
+                companyId,
                 amount: body.amount,
                 operation: body.operation
             });
@@ -52,7 +52,7 @@ let BillingController = class BillingController {
                 success: true,
                 message: 'Balance updated successfully',
                 balance: {
-                    user_id: userId,
+                    company_id: companyId,
                     balance: 100.0 + (body.operation === 'add' ? body.amount : -body.amount),
                     currency: 'USD',
                     updated_at: new Date().toISOString(),
@@ -100,10 +100,10 @@ let BillingController = class BillingController {
             };
         }
     }
-    async getTransactionHistory(userId, page = 1, limit = 10) {
+    async getTransactionHistory(companyId, page = 1, limit = 10) {
         try {
             shared_1.LoggerUtil.debug('billing-service', 'HTTP GetTransactionHistory called', {
-                userId,
+                companyId,
                 page,
                 limit
             });
@@ -199,19 +199,19 @@ let BillingController = class BillingController {
 };
 exports.BillingController = BillingController;
 __decorate([
-    (0, common_1.Get)('balance/:userId'),
-    (0, swagger_1.ApiOperation)({ summary: 'Get user balance' }),
+    (0, common_1.Get)('balance/:companyId'),
+    (0, swagger_1.ApiOperation)({ summary: 'Get company balance' }),
     (0, swagger_1.ApiResponse)({ status: 200, description: 'Balance retrieved successfully' }),
-    __param(0, (0, common_1.Param)('userId')),
+    __param(0, (0, common_1.Param)('companyId')),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", Promise)
 ], BillingController.prototype, "getBalance", null);
 __decorate([
-    (0, common_1.Post)('balance/:userId/update'),
-    (0, swagger_1.ApiOperation)({ summary: 'Update user balance' }),
+    (0, common_1.Post)('balance/:companyId/update'),
+    (0, swagger_1.ApiOperation)({ summary: 'Update company balance' }),
     (0, swagger_1.ApiResponse)({ status: 200, description: 'Balance updated successfully' }),
-    __param(0, (0, common_1.Param)('userId')),
+    __param(0, (0, common_1.Param)('companyId')),
     __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String, Object]),
@@ -227,10 +227,10 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], BillingController.prototype, "createTransaction", null);
 __decorate([
-    (0, common_1.Get)('transactions/:userId'),
-    (0, swagger_1.ApiOperation)({ summary: 'Get transaction history' }),
+    (0, common_1.Get)('transactions/:companyId'),
+    (0, swagger_1.ApiOperation)({ summary: 'Get company transaction history' }),
     (0, swagger_1.ApiResponse)({ status: 200, description: 'Transaction history retrieved successfully' }),
-    __param(0, (0, common_1.Param)('userId')),
+    __param(0, (0, common_1.Param)('companyId')),
     __param(1, (0, common_1.Query)('page')),
     __param(2, (0, common_1.Query)('limit')),
     __metadata("design:type", Function),

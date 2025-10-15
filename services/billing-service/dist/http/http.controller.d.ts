@@ -2,7 +2,7 @@ import { BillingService } from '../billing/billing.service';
 import { PricingService } from '../billing/pricing.service';
 import { PaymentGatewayService } from '../billing/payment-gateway.service';
 import { GetBalanceDto, UpdateBalanceDto, TrackUsageDto } from '../dto/billing.dto';
-import { CreateTransactionRequest, CalculateCostRequest, ProcessPaymentRequest } from '../types/billing.types';
+import { CalculateCostRequest, ProcessPaymentRequest } from '../types/billing.types';
 export declare class HttpController {
     private readonly billingService;
     private readonly pricingService;
@@ -11,7 +11,15 @@ export declare class HttpController {
     getBalance(params: GetBalanceDto): Promise<{
         success: boolean;
         message: string;
-        balance: import("../types/billing.types").UserBalance;
+        balance: any;
+        currency?: undefined;
+        creditLimit?: undefined;
+    } | {
+        success: boolean;
+        message: string;
+        balance: import("@prisma/client/runtime/library").Decimal;
+        currency: string;
+        creditLimit: import("@prisma/client/runtime/library").Decimal;
     }>;
     updateBalance(data: UpdateBalanceDto): Promise<{
         success: boolean;
@@ -24,12 +32,12 @@ export declare class HttpController {
         balance: import("../types/billing.types").UserBalance;
         transaction: import("../types/billing.types").Transaction;
     }>;
-    createTransaction(data: CreateTransactionRequest): Promise<{
+    createTransaction(data: any): Promise<{
         success: boolean;
         message: string;
         transaction: import("../types/billing.types").Transaction;
     }>;
-    getTransactionHistory(userId: string, page?: number, limit?: number): Promise<{
+    getTransactionHistory(companyId: string, page?: number, limit?: number): Promise<{
         success: boolean;
         message: string;
         transactions: any[];
@@ -74,7 +82,7 @@ export declare class HttpController {
         usageEvent: import("../types/billing.types").UsageEvent;
         cost: number;
     }>;
-    getBillingReport(userId: string, startDate: string, endDate: string): Promise<{
+    getBillingReport(companyId: string, startDate: string, endDate: string): Promise<{
         success: boolean;
         message: string;
         report: import("../types/billing.types").BillingReport;
@@ -82,7 +90,15 @@ export declare class HttpController {
     getCompanyBalance(companyId: string): Promise<{
         success: boolean;
         message: string;
-        balance: import("../types/billing.types").UserBalance;
+        balance: any;
+        currency?: undefined;
+        creditLimit?: undefined;
+    } | {
+        success: boolean;
+        message: string;
+        balance: import("@prisma/client/runtime/library").Decimal;
+        currency: string;
+        creditLimit: import("@prisma/client/runtime/library").Decimal;
     }>;
     getCompanyTransactions(companyId: string, limit?: number, offset?: number): Promise<{
         success: boolean;
@@ -129,5 +145,17 @@ export declare class HttpController {
         success: boolean;
         message: string;
         report: import("../types/billing.types").BillingReport;
+    }>;
+    topUpBalance(data: {
+        companyId: string;
+        amount: number;
+        currency?: string;
+    }): Promise<{
+        success: boolean;
+        message: string;
+        balance: {
+            balance: number;
+            currency: string;
+        };
     }>;
 }

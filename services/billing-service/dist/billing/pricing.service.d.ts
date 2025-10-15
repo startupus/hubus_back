@@ -6,7 +6,7 @@ export declare class PricingService {
     private readonly providerClassification;
     private readonly logger;
     constructor(prisma: PrismaService, providerClassification: ProviderClassificationService);
-    calculateCost(service: string, resource: string, quantity: number, userId?: string, metadata?: {
+    calculateCost(service: string, resource: string, quantity: number, companyId?: string, metadata?: {
         provider?: string;
         model?: string;
         tokens?: {
@@ -16,7 +16,7 @@ export declare class PricingService {
         };
         [key: string]: any;
     }): Promise<number>;
-    calculateUsageCost(service: string, resource: string, quantity: number, userId?: string, metadata?: {
+    calculateUsageCost(service: string, resource: string, quantity: number, companyId?: string, metadata?: {
         provider?: string;
         model?: string;
         tokens?: {
@@ -34,7 +34,7 @@ export declare class PricingService {
         error?: string;
     }>;
     getPricingRulesForProvider(service: string, resource: string, provider: string, model: string): Promise<PricingRule[]>;
-    getApplicableDiscounts(userId?: string, amount?: number, quantity?: number, providerType?: ProviderType): Promise<DiscountRule[]>;
+    getApplicableDiscounts(companyId?: string, amount?: number, quantity?: number, providerType?: ProviderType): Promise<DiscountRule[]>;
     getTaxRate(providerType?: ProviderType): number;
     getDefaultPricing(service: string, resource: string): number;
     createPricingRule(rule: {

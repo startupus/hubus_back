@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ReportGenerationException = exports.CostCalculationException = exports.PaymentProviderException = exports.PaymentMethodNotFoundException = exports.UserNotFoundException = exports.InvalidTransactionStatusException = exports.InvalidTransactionTypeException = exports.InvalidAmountException = exports.InvalidCurrencyException = exports.CreditLimitExceededException = exports.InsufficientBalanceException = exports.BillingException = void 0;
+exports.ReportGenerationException = exports.CostCalculationException = exports.PaymentProviderException = exports.PaymentMethodNotFoundException = exports.CompanyNotFoundException = exports.InvalidTransactionStatusException = exports.InvalidTransactionTypeException = exports.InvalidAmountException = exports.InvalidCurrencyException = exports.CreditLimitExceededException = exports.InsufficientBalanceException = exports.BillingException = void 0;
 const common_1 = require("@nestjs/common");
 class BillingException extends common_1.HttpException {
     constructor(message, status = common_1.HttpStatus.BAD_REQUEST) {
@@ -44,12 +44,12 @@ class InvalidTransactionStatusException extends BillingException {
     }
 }
 exports.InvalidTransactionStatusException = InvalidTransactionStatusException;
-class UserNotFoundException extends BillingException {
-    constructor(userId) {
-        super(`User not found: ${userId}`, common_1.HttpStatus.NOT_FOUND);
+class CompanyNotFoundException extends BillingException {
+    constructor(companyId) {
+        super(`Company not found: ${companyId}`, common_1.HttpStatus.NOT_FOUND);
     }
 }
-exports.UserNotFoundException = UserNotFoundException;
+exports.CompanyNotFoundException = CompanyNotFoundException;
 class PaymentMethodNotFoundException extends BillingException {
     constructor(paymentMethodId) {
         super(`Payment method not found: ${paymentMethodId}`, common_1.HttpStatus.NOT_FOUND);
@@ -69,8 +69,8 @@ class CostCalculationException extends BillingException {
 }
 exports.CostCalculationException = CostCalculationException;
 class ReportGenerationException extends BillingException {
-    constructor(userId, message) {
-        super(`Report generation error for user ${userId}: ${message}`, common_1.HttpStatus.INTERNAL_SERVER_ERROR);
+    constructor(companyId, message) {
+        super(`Report generation error for company ${companyId}: ${message}`, common_1.HttpStatus.INTERNAL_SERVER_ERROR);
     }
 }
 exports.ReportGenerationException = ReportGenerationException;

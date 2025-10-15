@@ -27,8 +27,8 @@ COPY . .
 # Build shared package
 RUN cd services/shared && npm run build
 
-# Build anonymization service
-RUN cd services/anonymization-service && npm run build
+# Install and build anonymization service
+RUN cd services/anonymization-service && npm install --legacy-peer-deps && npm run build
 
 # Expose port
 EXPOSE 3008

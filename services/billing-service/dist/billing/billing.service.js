@@ -17,54 +17,58 @@ const cache_service_1 = require("../common/cache/cache.service");
 const validation_service_1 = require("../common/validation/validation.service");
 const shared_1 = require("@ai-aggregator/shared");
 const shared_2 = require("@ai-aggregator/shared");
+const referral_service_1 = require("./referral.service");
 const billing_types_1 = require("../types/billing.types");
 const library_1 = require("@prisma/client/runtime/library");
 const billing_exceptions_1 = require("../exceptions/billing.exceptions");
 let BillingService = BillingService_1 = class BillingService {
-    constructor(prisma, cacheService, validationService, rabbitmq) {
+    constructor(prisma, cacheService, validationService, rabbitmq, referralService) {
         this.prisma = prisma;
         this.cacheService = cacheService;
         this.validationService = validationService;
         this.rabbitmq = rabbitmq;
+        this.referralService = referralService;
         this.logger = new common_1.Logger(BillingService_1.name);
         this.maxRetries = 3;
         this.retryDelay = 1000;
     }
     async getBalance(request) {
         try {
-            this.validationService.validateId(request.userId, 'User ID');
-            shared_1.LoggerUtil.debug('billing-service', 'Getting user balance', { userId: request.userId });
-            const cachedBalance = this.cacheService.getCachedUserBalance(request.userId);
+            shared_1.LoggerUtil.debug('billing-service', 'getBalance method called', { companyId: request.companyId });
+            this.validationService.validateId(request.companyId, 'User ID');
+            shared_1.LoggerUtil.debug('billing-service', 'Getting user balance', { companyId: request.companyId });
+            shared_1.LoggerUtil.debug('billing-service', 'Getting fresh balance from database', { companyId: request.companyId });
+            const cachedBalance = this.cacheService.getCachedCompanyBalance(request.companyId);
             if (cachedBalance) {
-                shared_1.LoggerUtil.debug('billing-service', 'Balance retrieved from cache', { userId: request.userId });
-                return {
-                    success: true,
-                    balance: cachedBalance
-                };
+                shared_1.LoggerUtil.debug('billing-service', 'Found cached balance but ignoring it', {
+                    companyId: request.companyId,
+                    cachedBalance: cachedBalance.balance.toString()
+                });
             }
-            await this.validationService.validateUser(request.userId, this.prisma);
+            await this.validationService.validateCompany(request.companyId, this.prisma);
             const balance = await this.prisma.companyBalance.findUnique({
-                where: { companyId: request.userId }
+                where: { companyId: request.companyId }
             });
             if (!balance) {
                 const newBalance = await this.prisma.companyBalance.create({
                     data: {
-                        companyId: request.userId,
+                        company: {
+                            connect: { id: request.companyId }
+                        },
                         balance: 0,
                         currency: 'USD',
                         creditLimit: 0
                     }
                 });
-                this.cacheService.cacheUserBalance(request.userId, newBalance);
-                shared_1.LoggerUtil.info('billing-service', 'New balance created', { userId: request.userId });
+                this.cacheService.cacheCompanyBalance(request.companyId, newBalance);
+                shared_1.LoggerUtil.info('billing-service', 'New balance created', { companyId: request.companyId });
                 return {
                     success: true,
                     balance: newBalance
                 };
             }
-            this.cacheService.cacheUserBalance(request.userId, balance);
             shared_1.LoggerUtil.info('billing-service', 'Balance retrieved successfully', {
-                userId: request.userId,
+                companyId: request.companyId,
                 balance: balance.balance.toString()
             });
             return {
@@ -73,8 +77,8 @@ let BillingService = BillingService_1 = class BillingService {
             };
         }
         catch (error) {
-            shared_1.LoggerUtil.error('billing-service', 'Failed to get balance', error, { userId: request.userId });
-            if (error instanceof billing_exceptions_1.UserNotFoundException) {
+            shared_1.LoggerUtil.error('billing-service', 'Failed to get balance', error, { companyId: request.companyId });
+            if (error instanceof billing_exceptions_1.CompanyNotFoundException) {
                 return {
                     success: false,
                     error: error.message
@@ -90,24 +94,24 @@ let BillingService = BillingService_1 = class BillingService {
         let lastError = null;
         for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
             try {
-                this.validationService.validateId(request.userId, 'User ID');
+                this.validationService.validateId(request.companyId, 'User ID');
                 this.validationService.validateAmount(request.amount);
                 this.validationService.validateMetadata(request.metadata);
                 shared_1.LoggerUtil.debug('billing-service', 'Updating user balance', {
-                    userId: request.userId,
+                    companyId: request.companyId,
                     amount: request.amount,
                     operation: request.operation,
                     attempt
                 });
-                await this.validationService.validateUser(request.userId, this.prisma);
+                await this.validationService.validateCompany(request.companyId, this.prisma);
                 const result = await this.prisma.$transaction(async (tx) => {
                     const currentBalance = await tx.companyBalance.findUnique({
-                        where: { companyId: request.userId }
+                        where: { companyId: request.companyId }
                     });
                     if (!currentBalance) {
                         throw new common_1.NotFoundException('User balance not found');
                     }
-                    this.validationService.validateBalanceForOperation(currentBalance.balance, request.amount, request.operation, currentBalance.creditLimit);
+                    this.validationService.validateBalanceForOperation(currentBalance.balance, request.amount, request.operation, currentBalance.creditLimit || new library_1.Decimal(0));
                     shared_1.LoggerUtil.debug('billing-service', 'Creating amount from request', {
                         originalAmount: request.amount,
                         amountType: typeof request.amount,
@@ -122,7 +126,7 @@ let BillingService = BillingService_1 = class BillingService {
                         ? currentBalance.balance.add(amount)
                         : currentBalance.balance.sub(amount);
                     const updatedBalance = await tx.companyBalance.update({
-                        where: { companyId: request.userId },
+                        where: { companyId: request.companyId },
                         data: {
                             balance: newBalance,
                             lastUpdated: new Date()
@@ -130,7 +134,9 @@ let BillingService = BillingService_1 = class BillingService {
                     });
                     const transaction = await tx.transaction.create({
                         data: {
-                            companyId: currentBalance.companyId,
+                            company: {
+                                connect: { id: currentBalance.companyId }
+                            },
                             type: request.operation === 'add' ? billing_types_1.TransactionType.CREDIT : billing_types_1.TransactionType.DEBIT,
                             amount: amount,
                             currency: currentBalance.currency,
@@ -143,9 +149,42 @@ let BillingService = BillingService_1 = class BillingService {
                     });
                     return { updatedBalance, transaction };
                 });
-                this.cacheService.invalidateUserBalance(request.userId);
+                this.cacheService.invalidateCompanyBalance(request.companyId);
+                shared_1.LoggerUtil.debug('billing-service', 'Checking referral bonus conditions', {
+                    operation: request.operation,
+                    hasInputTokens: !!request.metadata?.inputTokens,
+                    hasOutputTokens: !!request.metadata?.outputTokens,
+                    inputTokens: request.metadata?.inputTokens,
+                    outputTokens: request.metadata?.outputTokens,
+                    companyId: request.companyId,
+                    metadata: request.metadata
+                });
+                shared_1.LoggerUtil.debug('billing-service', 'Referral bonus condition check', {
+                    operationCheck: request.operation === 'subtract',
+                    inputTokensCheck: !!request.metadata?.inputTokens,
+                    inputTokensValue: request.metadata?.inputTokens,
+                    conditionResult: request.operation === 'subtract' && request.metadata?.inputTokens
+                });
+                if (request.operation === 'subtract' && request.metadata?.inputTokens) {
+                    shared_1.LoggerUtil.debug('billing-service', 'Processing referral bonus', {
+                        companyId: request.companyId,
+                        transactionId: result.transaction.id,
+                        inputTokens: request.metadata.inputTokens,
+                        outputTokens: request.metadata.outputTokens
+                    });
+                    try {
+                        await this.processReferralBonus(request.companyId, result.transaction.id, request.metadata.inputTokens, request.metadata.outputTokens, request.metadata.inputTokenPrice, request.metadata.outputTokenPrice);
+                    }
+                    catch (referralError) {
+                        shared_1.LoggerUtil.warn('billing-service', 'Failed to process referral bonus', {
+                            companyId: request.companyId,
+                            transactionId: result.transaction.id,
+                            error: referralError instanceof Error ? referralError.message : String(referralError),
+                        });
+                    }
+                }
                 shared_1.LoggerUtil.info('billing-service', 'Balance updated successfully', {
-                    userId: request.userId,
+                    companyId: request.companyId,
                     newBalance: result.updatedBalance.balance.toString(),
                     operation: request.operation,
                     attempt
@@ -163,14 +202,14 @@ let BillingService = BillingService_1 = class BillingService {
                 }
                 await this.delay(this.retryDelay * attempt);
                 shared_1.LoggerUtil.warn('billing-service', 'Balance update retry', {
-                    userId: request.userId,
+                    companyId: request.companyId,
                     attempt,
                     error: error instanceof Error ? error.message : 'Unknown error'
                 });
             }
         }
         shared_1.LoggerUtil.error('billing-service', 'Failed to update balance after retries', lastError, {
-            userId: request.userId,
+            companyId: request.companyId,
             attempts: this.maxRetries
         });
         return {
@@ -180,16 +219,24 @@ let BillingService = BillingService_1 = class BillingService {
     }
     async trackUsage(request) {
         try {
-            const initiatorCompanyId = request.userId;
+            const initiatorCompanyId = request.companyId;
             shared_1.LoggerUtil.debug('billing-service', 'Tracking usage', {
                 initiatorCompanyId,
                 service: request.service,
                 resource: request.resource,
                 quantity: request.quantity
             });
+            shared_1.LoggerUtil.debug('billing-service', 'Determining payer company', {
+                initiatorCompanyId
+            });
             const { payerId, initiatorId } = await this.determinePayerCompany(initiatorCompanyId);
+            shared_1.LoggerUtil.debug('billing-service', 'Payer determined', {
+                initiatorId,
+                payerId,
+                willChargeFrom: payerId
+            });
             const costCalculation = await this.calculateCost({
-                userId: payerId,
+                companyId: payerId,
                 service: request.service,
                 resource: request.resource,
                 quantity: request.quantity || 1,
@@ -200,8 +247,12 @@ let BillingService = BillingService_1 = class BillingService {
             }
             const usageEvent = await this.prisma.usageEvent.create({
                 data: {
-                    companyId: payerId,
-                    initiatorCompanyId: initiatorId,
+                    company: {
+                        connect: { id: payerId }
+                    },
+                    initiatorCompany: initiatorId ? {
+                        connect: { id: initiatorId }
+                    } : undefined,
                     service: request.service,
                     resource: request.resource,
                     quantity: request.quantity || 1,
@@ -212,22 +263,33 @@ let BillingService = BillingService_1 = class BillingService {
                 }
             });
             await this.updateBalance({
-                userId: payerId,
+                companyId: payerId,
                 amount: costCalculation.cost,
                 operation: 'subtract',
                 description: `Usage by ${initiatorId === payerId ? 'self' : initiatorId}: ${request.service}/${request.resource}`,
-                reference: usageEvent.id
+                reference: usageEvent.id,
+                metadata: {
+                    ...request.metadata,
+                    inputTokens: request.quantity || 0,
+                    outputTokens: 0,
+                    inputTokenPrice: new library_1.Decimal(costCalculation.cost).div(request.quantity || 1),
+                    outputTokenPrice: new library_1.Decimal(0)
+                }
             });
             await this.prisma.transaction.create({
                 data: {
-                    companyId: payerId,
-                    initiatorCompanyId: initiatorId === payerId ? null : initiatorId,
+                    company: {
+                        connect: { id: payerId }
+                    },
+                    initiatorCompany: initiatorId && initiatorId !== payerId ? {
+                        connect: { id: initiatorId }
+                    } : undefined,
                     type: 'DEBIT',
                     amount: new library_1.Decimal(costCalculation.cost),
                     currency: costCalculation.currency || 'USD',
                     description: `Usage: ${request.service}/${request.resource}`,
                     status: 'COMPLETED',
-                    reference: usageEvent.id,
+                    reference: `${usageEvent.id}-tx`,
                     processedAt: new Date()
                 }
             });
@@ -245,7 +307,7 @@ let BillingService = BillingService_1 = class BillingService {
             };
         }
         catch (error) {
-            shared_1.LoggerUtil.error('billing-service', 'Failed to track usage', error, { userId: request.userId });
+            shared_1.LoggerUtil.error('billing-service', 'Failed to track usage', error, { companyId: request.companyId });
             return {
                 success: false,
                 error: error instanceof Error ? error.message : 'Unknown error'
@@ -255,7 +317,7 @@ let BillingService = BillingService_1 = class BillingService {
     async calculateCost(request) {
         try {
             shared_1.LoggerUtil.debug('billing-service', 'Calculating cost', {
-                userId: request.userId,
+                companyId: request.companyId,
                 service: request.service,
                 resource: request.resource,
                 quantity: request.quantity
@@ -317,7 +379,7 @@ let BillingService = BillingService_1 = class BillingService {
             };
         }
         catch (error) {
-            shared_1.LoggerUtil.error('billing-service', 'Failed to calculate cost', error, { userId: request.userId });
+            shared_1.LoggerUtil.error('billing-service', 'Failed to calculate cost', error, { companyId: request.companyId });
             return {
                 success: false,
                 error: error instanceof Error ? error.message : 'Unknown error'
@@ -327,13 +389,19 @@ let BillingService = BillingService_1 = class BillingService {
     async createTransaction(request) {
         try {
             shared_1.LoggerUtil.debug('billing-service', 'Creating transaction', {
-                userId: request.userId,
+                companyId: request.companyId,
                 type: request.type,
-                amount: request.amount
+                amount: request.amount,
+                fullRequest: request
             });
+            if (!request.companyId) {
+                throw new Error('companyId is required');
+            }
             const transaction = await this.prisma.transaction.create({
                 data: {
-                    companyId: request.companyId || request.userId,
+                    company: {
+                        connect: { id: request.companyId }
+                    },
                     type: request.type,
                     amount: new library_1.Decimal(request.amount),
                     currency: request.currency || 'USD',
@@ -341,18 +409,20 @@ let BillingService = BillingService_1 = class BillingService {
                     reference: request.reference,
                     status: billing_types_1.TransactionStatus.PENDING,
                     metadata: request.metadata,
-                    paymentMethodId: request.paymentMethodId
+                    paymentMethod: request.paymentMethodId ? {
+                        connect: { id: request.paymentMethodId }
+                    } : undefined
                 }
             });
             shared_1.LoggerUtil.info('billing-service', 'Transaction created successfully', {
                 transactionId: transaction.id,
-                userId: request.userId,
+                companyId: request.companyId,
                 amount: request.amount
             });
             try {
                 await this.rabbitmq.publishCriticalMessage('analytics.events', {
                     eventType: 'transaction_created',
-                    userId: request.userId,
+                    companyId: request.companyId,
                     transactionId: transaction.id,
                     amount: request.amount,
                     type: request.type,
@@ -373,7 +443,7 @@ let BillingService = BillingService_1 = class BillingService {
             };
         }
         catch (error) {
-            shared_1.LoggerUtil.error('billing-service', 'Failed to create transaction', error, { userId: request.userId });
+            shared_1.LoggerUtil.error('billing-service', 'Failed to create transaction', error, { companyId: request.companyId });
             return {
                 success: false,
                 error: error instanceof Error ? error.message : 'Unknown error'
@@ -383,12 +453,12 @@ let BillingService = BillingService_1 = class BillingService {
     async processPayment(request) {
         try {
             shared_1.LoggerUtil.debug('billing-service', 'Processing payment', {
-                userId: request.userId,
+                companyId: request.companyId,
                 amount: request.amount,
                 paymentMethodId: request.paymentMethodId
             });
             const transactionResult = await this.createTransaction({
-                userId: request.userId,
+                companyId: request.companyId,
                 type: billing_types_1.TransactionType.CREDIT,
                 amount: request.amount,
                 currency: request.currency,
@@ -400,7 +470,7 @@ let BillingService = BillingService_1 = class BillingService {
                 throw new common_1.BadRequestException('Failed to create transaction');
             }
             const balanceResult = await this.updateBalance({
-                userId: request.userId,
+                companyId: request.companyId,
                 amount: request.amount,
                 operation: 'add',
                 description: 'Payment received',
@@ -418,7 +488,7 @@ let BillingService = BillingService_1 = class BillingService {
             });
             shared_1.LoggerUtil.info('billing-service', 'Payment processed successfully', {
                 transactionId: transactionResult.transaction.id,
-                userId: request.userId,
+                companyId: request.companyId,
                 amount: request.amount
             });
             return {
@@ -427,7 +497,7 @@ let BillingService = BillingService_1 = class BillingService {
             };
         }
         catch (error) {
-            shared_1.LoggerUtil.error('billing-service', 'Failed to process payment', error, { userId: request.userId });
+            shared_1.LoggerUtil.error('billing-service', 'Failed to process payment', error, { companyId: request.companyId });
             return {
                 success: false,
                 error: error instanceof Error ? error.message : 'Unknown error'
@@ -463,7 +533,7 @@ let BillingService = BillingService_1 = class BillingService {
                 byDay: this.groupByDay(usageEvents)
             };
             return {
-                userId: companyId,
+                companyId: companyId,
                 period: { start: startDate, end: endDate },
                 totalUsage,
                 totalCost,
@@ -623,6 +693,23 @@ let BillingService = BillingService_1 = class BillingService {
             throw error;
         }
     }
+    async getTransactionByPaymentId(paymentId) {
+        try {
+            const transaction = await this.prisma.transaction.findFirst({
+                where: {
+                    metadata: {
+                        path: ['paymentId'],
+                        equals: paymentId
+                    }
+                }
+            });
+            return transaction;
+        }
+        catch (error) {
+            shared_1.LoggerUtil.error('billing-service', 'Failed to get transaction by payment ID', error, { paymentId });
+            return null;
+        }
+    }
     async updateTransaction(transactionId, updateData) {
         try {
             const updatedTransaction = await this.prisma.transaction.update({
@@ -659,7 +746,7 @@ let BillingService = BillingService_1 = class BillingService {
                 }
             });
             if (!company) {
-                throw new billing_exceptions_1.UserNotFoundException(`Company not found: ${initiatorCompanyId}`);
+                throw new billing_exceptions_1.CompanyNotFoundException(`Company not found: ${initiatorCompanyId}`);
             }
             if (company.billingMode === 'PARENT_PAID' && company.parentCompany) {
                 shared_1.LoggerUtil.debug('billing-service', 'Billing mode: PARENT_PAID', {
@@ -803,6 +890,151 @@ let BillingService = BillingService_1 = class BillingService {
             throw error;
         }
     }
+    async processReferralBonus(companyId, transactionId, inputTokens, outputTokens, inputTokenPrice, outputTokenPrice) {
+        try {
+            shared_1.LoggerUtil.debug('billing-service', 'processReferralBonus called', {
+                companyId,
+                transactionId,
+                inputTokens,
+                outputTokens
+            });
+            const company = await this.prisma.company.findUnique({
+                where: { id: companyId },
+                select: { referredBy: true },
+            });
+            shared_1.LoggerUtil.debug('billing-service', 'Company found', {
+                companyId,
+                referredBy: company?.referredBy
+            });
+            if (!company?.referredBy) {
+                shared_1.LoggerUtil.debug('billing-service', 'Company is not a referral, skipping', { companyId });
+                return;
+            }
+            const defaultInputPrice = new library_1.Decimal('0.00003');
+            const defaultOutputPrice = new library_1.Decimal('0.00006');
+            const inputPrice = inputTokenPrice ? new library_1.Decimal(inputTokenPrice.toString()) : defaultInputPrice;
+            const outputPrice = outputTokenPrice ? new library_1.Decimal(outputTokenPrice.toString()) : defaultOutputPrice;
+            await this.referralService.createReferralTransaction({
+                referralOwnerId: company.referredBy,
+                originalTransactionId: transactionId,
+                inputTokens,
+                outputTokens,
+                inputTokenPrice: inputPrice,
+                outputTokenPrice: outputPrice,
+                description: `Referral bonus for AI request (${inputTokens} input + ${outputTokens} output tokens)`,
+                metadata: {
+                    transactionId,
+                    companyId,
+                    inputTokens,
+                    outputTokens,
+                },
+            });
+            shared_1.LoggerUtil.info('billing-service', 'Referral bonus processed', {
+                companyId,
+                referrerId: company.referredBy,
+                transactionId,
+                inputTokens,
+                outputTokens,
+            });
+        }
+        catch (error) {
+            shared_1.LoggerUtil.error('billing-service', 'Failed to process referral bonus', error, {
+                companyId,
+                transactionId,
+                inputTokens,
+                outputTokens,
+            });
+            throw error;
+        }
+    }
+    async topUpBalance(request) {
+        try {
+            shared_1.LoggerUtil.debug('billing-service', 'topUpBalance method called', {
+                companyId: request.companyId,
+                amount: request.amount
+            });
+            this.validationService.validateId(request.companyId, 'Company ID');
+            if (request.amount <= 0) {
+                throw new billing_exceptions_1.InvalidAmountException(request.amount);
+            }
+            const amount = new library_1.Decimal(request.amount);
+            const currentBalance = await this.prisma.companyBalance.findUnique({
+                where: { companyId: request.companyId }
+            });
+            if (!currentBalance) {
+                throw new billing_exceptions_1.CompanyNotFoundException(`Company with ID ${request.companyId} not found`);
+            }
+            const newBalance = currentBalance.balance.add(amount);
+            const updatedBalance = await this.prisma.companyBalance.update({
+                where: { companyId: request.companyId },
+                data: {
+                    balance: newBalance,
+                    lastUpdated: new Date()
+                }
+            });
+            await this.prisma.transaction.create({
+                data: {
+                    company: {
+                        connect: { id: request.companyId }
+                    },
+                    type: billing_types_1.TransactionType.CREDIT,
+                    amount: amount,
+                    currency: request.currency || 'USD',
+                    description: `Balance top-up: +$${request.amount}`,
+                    status: billing_types_1.TransactionStatus.COMPLETED,
+                    reference: `topup-${Date.now()}`,
+                    processedAt: new Date()
+                }
+            });
+            shared_1.LoggerUtil.info('billing-service', 'Balance topped up successfully', {
+                companyId: request.companyId,
+                amount: request.amount,
+                newBalance: newBalance.toString()
+            });
+            return {
+                success: true,
+                balance: newBalance.toNumber()
+            };
+        }
+        catch (error) {
+            shared_1.LoggerUtil.error('billing-service', 'Failed to top up balance', error, {
+                companyId: request.companyId,
+                amount: request.amount
+            });
+            return {
+                success: false,
+                error: error instanceof Error ? error.message : 'Unknown error'
+            };
+        }
+    }
+    async chargeForSubscription(companyId, amount, planId) {
+        this.logger.log(`Charging ${amount} for subscription plan ${planId} for company ${companyId}`);
+        const balance = await this.getBalance({ companyId });
+        if (new library_1.Decimal(balance.balance.toString()).lt(amount)) {
+            throw new common_1.BadRequestException('Insufficient balance for subscription');
+        }
+        await this.prisma.companyBalance.update({
+            where: { companyId },
+            data: {
+                balance: {
+                    decrement: amount
+                }
+            }
+        });
+        await this.prisma.transaction.create({
+            data: {
+                companyId,
+                type: 'DEBIT',
+                amount: amount.toNumber(),
+                description: `Subscription payment for plan ${planId}`,
+                metadata: {
+                    planId,
+                    type: 'subscription_payment'
+                }
+            }
+        });
+        this.logger.log(`Successfully charged ${amount} for subscription plan ${planId}`);
+    }
 };
 exports.BillingService = BillingService;
 exports.BillingService = BillingService = BillingService_1 = __decorate([
@@ -810,6 +1042,7 @@ exports.BillingService = BillingService = BillingService_1 = __decorate([
     __metadata("design:paramtypes", [prisma_service_1.PrismaService,
         cache_service_1.CacheService,
         validation_service_1.ValidationService,
-        shared_2.RabbitMQClient])
+        shared_2.RabbitMQClient,
+        referral_service_1.ReferralService])
 ], BillingService);
 //# sourceMappingURL=billing.service.js.map

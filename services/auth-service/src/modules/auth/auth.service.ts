@@ -1,10 +1,13 @@
 import { Injectable, UnauthorizedException, ConflictException, BadRequestException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { HttpService } from '@nestjs/axios';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { LoggerUtil, Company, AuthResult, JwtPayload } from '@ai-aggregator/shared';
 import { CryptoUtil } from '../../common/utils/crypto.util';
 import { RegisterDto, LoginDto, ChangePasswordDto, ResetPasswordRequestDto, ResetPasswordDto, VerifyEmailDto } from '@ai-aggregator/shared';
+import { firstValueFrom } from 'rxjs';
+import { ReferralService } from '../referral/referral.service';
 
 @Injectable()
 export class AuthService {
@@ -12,12 +15,14 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly httpService: HttpService,
+    private readonly referralService: ReferralService,
   ) {}
 
   /**
    * Register a new user
    */
-  async register(registerDto: RegisterDto): Promise<AuthResult> {
+  async register(registerDto: RegisterDto & { referralCode?: string; name?: string; description?: string }): Promise<AuthResult> {
     try {
       // Check if company already exists
       const existingCompany = await this.prisma.company.findUnique({
@@ -31,24 +36,83 @@ export class AuthService {
       // Hash password
       const passwordHash = await CryptoUtil.hashPassword(registerDto.password);
 
-      // Create company
-      const company = await this.prisma.company.create({
-        data: {
-          name: registerDto.firstName ? `${registerDto.firstName}'s Company` : 'Default Company',
-          email: registerDto.email,
-          passwordHash: passwordHash,
-          description: 'Default company for individual users',
-          isActive: true,
-          isVerified: !this.configService.get('REQUIRE_EMAIL_VERIFICATION', false),
-          role: 'company',
-        },
-      });
+      // Process referral code if provided
+      let referrerCompanyId: string | undefined;
+      let referralCodeId: string | undefined;
+      let company: any;
+      
+      if (registerDto.referralCode) {
+        try {
+          // First create the company to get the ID
+          const tempCompany = await this.prisma.company.create({
+            data: {
+              name: registerDto.name || (registerDto.firstName ? `${registerDto.firstName}'s Company` : 'Default Company'),
+              email: registerDto.email,
+              passwordHash: passwordHash,
+              description: registerDto.description || 'Default company for individual users',
+              isActive: true,
+              isVerified: !this.configService.get('REQUIRE_EMAIL_VERIFICATION', false),
+              role: 'company',
+            },
+          });
+
+          // Now process the referral code
+          const referralResult = await this.referralService.useReferralCode(registerDto.referralCode, tempCompany.id);
+          
+          if (referralResult.isValid) {
+            referrerCompanyId = referralResult.referrerCompanyId;
+            referralCodeId = referralResult.referralCodeId;
+            
+            // Update company with referral information
+            company = await this.prisma.company.update({
+              where: { id: tempCompany.id },
+              data: {
+                referredBy: referrerCompanyId,
+                referralCodeId: referralCodeId,
+              },
+            });
+            
+            LoggerUtil.info('auth-service', 'Company registered with referral code', {
+              companyId: company.id,
+              email: company.email,
+              referrerCompanyId,
+              referralCodeId,
+            });
+          } else {
+            // If referral code is invalid, delete the temporary company and throw error
+            await this.prisma.company.delete({ where: { id: tempCompany.id } });
+            throw new BadRequestException(referralResult.message || 'Invalid referral code');
+          }
+        } catch (error) {
+          LoggerUtil.error('auth-service', 'Failed to process referral code', error as Error, {
+            email: registerDto.email,
+            referralCode: registerDto.referralCode,
+          });
+          throw error;
+        }
+      } else {
+        // Create company without referral code
+        company = await this.prisma.company.create({
+          data: {
+            name: registerDto.name || (registerDto.firstName ? `${registerDto.firstName}'s Company` : 'Default Company'),
+            email: registerDto.email,
+            passwordHash: passwordHash,
+            description: registerDto.description || 'Default company for individual users',
+            isActive: true,
+            isVerified: !this.configService.get('REQUIRE_EMAIL_VERIFICATION', false),
+            role: 'company',
+          },
+        });
+      }
 
       // Generate tokens
       const tokens = await this.generateTokens(company as any);
 
       // Log security event
       await this.logSecurityEvent(company.id, 'USER_CREATED', 'LOW', 'Company account created');
+
+      // Sync with billing service
+      await this.syncWithBillingService(company);
 
       LoggerUtil.info('auth-service', 'Company registered successfully', { companyId: company.id, email: company.email });
 
@@ -465,5 +529,39 @@ export class AuthService {
     }
   }
 
+  /**
+   * Sync company with billing service
+   */
+  private async syncWithBillingService(company: any) {
+    try {
+      const billingServiceUrl = this.configService.get('BILLING_SERVICE_URL', 'http://billing-service:3004');
+      
+      const syncData = {
+        id: company.id,
+        name: company.name,
+        email: company.email,
+        isActive: company.isActive,
+        billingMode: 'SELF_PAID',
+        initialBalance: 0.0,
+        currency: 'USD',
+        referredBy: company.referredBy,
+        referralCodeId: company.referralCodeId
+      };
 
+      await firstValueFrom(
+        this.httpService.post(`${billingServiceUrl}/sync/company`, syncData)
+      );
+
+      LoggerUtil.info('auth-service', 'Company synced with billing service', {
+        companyId: company.id,
+        email: company.email
+      });
+    } catch (error) {
+      LoggerUtil.error('auth-service', 'Failed to sync with billing service', error as Error, {
+        companyId: company.id,
+        email: company.email
+      });
+      // Не прерываем регистрацию, если синхронизация не удалась
+    }
+  }
 }

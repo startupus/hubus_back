@@ -92,16 +92,16 @@ let CacheService = CacheService_1 = class CacheService {
             shared_1.LoggerUtil.error('billing-service', 'Cache cleanup error', error);
         }
     }
-    cacheUserBalance(userId, balance) {
-        const key = `balance:${userId}`;
+    cacheCompanyBalance(companyId, balance) {
+        const key = `balance:${companyId}`;
         this.set(key, balance, 2 * 60 * 1000);
     }
-    getCachedUserBalance(userId) {
-        const key = `balance:${userId}`;
+    getCachedCompanyBalance(companyId) {
+        const key = `balance:${companyId}`;
         return this.get(key);
     }
-    invalidateUserBalance(userId) {
-        const key = `balance:${userId}`;
+    invalidateCompanyBalance(companyId) {
+        const key = `balance:${companyId}`;
         this.delete(key);
     }
     cachePricingRules(service, resource, rules) {

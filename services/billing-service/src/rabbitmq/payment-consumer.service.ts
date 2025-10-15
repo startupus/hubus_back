@@ -108,11 +108,19 @@ export class PaymentConsumerService implements OnModuleInit, OnModuleDestroy {
     await this.channel.consume('billing.usage', async (msg) => {
       if (msg) {
         try {
+          LoggerUtil.debug('billing-service', 'Received billing usage message', {
+            content: msg.content.toString(),
+            contentLength: msg.content.length,
+            contentType: typeof msg.content
+          });
           const message = JSON.parse(msg.content.toString());
           await this.handleBillingUsage(message);
           this.channel!.ack(msg);
         } catch (error) {
-          LoggerUtil.error('billing-service', 'Error processing billing usage message', error as Error);
+          LoggerUtil.error('billing-service', 'Error processing billing usage message', error as Error, {
+            content: msg.content?.toString(),
+            contentLength: msg.content?.length
+          });
           this.channel!.nack(msg, false, false);
         }
       }
@@ -320,6 +328,8 @@ export class PaymentConsumerService implements OnModuleInit, OnModuleDestroy {
         service: message.service,
         resource: message.resource,
         tokens: message.tokens,
+        inputTokens: message.inputTokens,
+        outputTokens: message.outputTokens,
         cost: message.cost,
         provider: message.provider,
         model: message.model
@@ -332,28 +342,29 @@ export class PaymentConsumerService implements OnModuleInit, OnModuleDestroy {
         return;
       }
 
-      // Списываем средства с баланса пользователя
-      const debitResult = await this.balanceSecurity.secureDebitBalance({
+      // Используем trackUsage для правильного определения плательщика
+      const trackUsageResult = await this.billingService.trackUsage({
         companyId: message.userId,
-        amount: message.cost,
-        currency: message.metadata?.currency || 'USD',
-        description: `AI usage: ${message.model} - ${message.tokens} tokens`,
+        service: message.service,
+        resource: message.resource,
+        quantity: message.tokens,
+        inputTokens: message.inputTokens,
+        outputTokens: message.outputTokens,
+        unit: 'tokens',
         metadata: {
-          service: message.service,
-          resource: message.resource,
-          tokens: message.tokens,
           provider: message.provider,
           model: message.model,
           timestamp: message.timestamp,
-        },
+          currency: message.metadata?.currency || 'USD'
+        }
       });
 
-      if (!debitResult.success) {
-        LoggerUtil.error('billing-service', 'Failed to debit balance', new Error(debitResult.error || 'Unknown error'), {
+      if (!trackUsageResult.success) {
+        LoggerUtil.error('billing-service', 'Failed to track usage', new Error(trackUsageResult.error || 'Unknown error'), {
           userId: message.userId,
           cost: message.cost,
         });
-        throw new Error(debitResult.error || 'Failed to debit balance');
+        throw new Error(trackUsageResult.error || 'Failed to track usage');
       }
 
       // Сохраняем в кэш для идемпотентности
@@ -363,8 +374,8 @@ export class PaymentConsumerService implements OnModuleInit, OnModuleDestroy {
         userId: message.userId,
         tokens: message.tokens,
         cost: message.cost,
-        newBalance: debitResult.balance,
-        transactionId: debitResult.transactionId,
+        usageEventId: trackUsageResult.usageEvent?.id,
+        calculatedCost: trackUsageResult.cost,
       });
     } catch (error) {
       LoggerUtil.error('billing-service', 'Failed to process billing usage event', error as Error);

@@ -15,7 +15,7 @@ import { LoggerUtil } from '@ai-aggregator/shared';
 export class RateLimitGuard implements CanActivate {
   private readonly requestCounts = new Map<string, { count: number; resetTime: number }>();
   private readonly defaultLimits = {
-    'getBalance': { requests: 100, window: 60000 }, // 100 запросов в минуту
+    'getBalance': { requests: 1000, window: 60000 }, // 1000 запросов в минуту (увеличено для API Gateway)
     'updateBalance': { requests: 10, window: 60000 }, // 10 запросов в минуту
     'createTransaction': { requests: 20, window: 60000 }, // 20 запросов в минуту
     'processPayment': { requests: 5, window: 60000 }, // 5 запросов в минуту
@@ -29,6 +29,17 @@ export class RateLimitGuard implements CanActivate {
     const request = context.switchToHttp().getRequest();
     const handler = context.getHandler();
     const className = context.getClass().name;
+
+    // Пропускаем rate limiting для API Gateway (внутренние вызовы)
+    const userAgent = request.headers['user-agent'] || '';
+    const isApiGateway = userAgent.includes('axios') || 
+                        request.headers['x-internal-call'] === 'true' ||
+                        request.ip?.startsWith('172.') || // Docker internal network
+                        request.headers['x-forwarded-for']?.includes('172.');
+    
+    if (isApiGateway) {
+      return true;
+    }
 
     // Получаем лимиты из декоратора или используем дефолтные
     const rateLimit = this.reflector.get<{ requests: number; window: number }>('rateLimit', handler) ||

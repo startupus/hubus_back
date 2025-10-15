@@ -20,8 +20,8 @@ export declare class InvalidTransactionTypeException extends BillingException {
 export declare class InvalidTransactionStatusException extends BillingException {
     constructor(status: string);
 }
-export declare class UserNotFoundException extends BillingException {
-    constructor(userId: string);
+export declare class CompanyNotFoundException extends BillingException {
+    constructor(companyId: string);
 }
 export declare class PaymentMethodNotFoundException extends BillingException {
     constructor(paymentMethodId: string);
@@ -33,5 +33,5 @@ export declare class CostCalculationException extends BillingException {
     constructor(service: string, resource: string, message: string);
 }
 export declare class ReportGenerationException extends BillingException {
-    constructor(userId: string, message: string);
+    constructor(companyId: string, message: string);
 }

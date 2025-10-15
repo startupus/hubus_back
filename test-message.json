@@ -1,0 +1,13 @@
+{
+  "userId": "d8de2f09-48f9-4a7e-8a2d-d4ccd3c7b706",
+  "service": "ai-chat",
+  "resource": "tokens",
+  "tokens": 14,
+  "cost": 0.008,
+  "provider": "openai",
+  "model": "gpt-3.5-turbo",
+  "metadata": {
+    "currency": "USD",
+    "requestId": "test-direct-4"
+  }
+}

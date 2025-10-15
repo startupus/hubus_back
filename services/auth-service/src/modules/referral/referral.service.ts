@@ -46,6 +46,15 @@ export class ReferralService {
   }
 
   /**
+   * Generate referral link from code
+   */
+  private generateReferralLink(code: string): string {
+    // Use the API Gateway URL for registration
+    const baseUrl = process.env.API_GATEWAY_URL || 'http://localhost:3000';
+    return `${baseUrl}/v1/auth/register?ref=${code}`;
+  }
+
+  /**
    * Create a new referral code for a company
    */
   async createReferralCode(
@@ -98,11 +107,22 @@ export class ReferralService {
         code: referralCode.code,
       });
 
-      return {
-        ...referralCode,
-        metadata: referralCode.metadata as Record<string, any> || {},
-        referralLink: this.generateReferralLink(referralCode.code),
-      };
+      try {
+        const referralLink = this.generateReferralLink(referralCode.code);
+        LoggerUtil.info('auth-service', 'Generated referral link', { referralLink });
+        
+        const response = {
+          ...referralCode,
+          metadata: referralCode.metadata as Record<string, any> || {},
+          referralLink: referralLink,
+        };
+        
+        LoggerUtil.info('auth-service', 'Returning response', { response });
+        return response;
+      } catch (error) {
+        LoggerUtil.error('auth-service', 'Error generating response', error as Error);
+        throw error;
+      }
     } catch (error) {
       LoggerUtil.error('auth-service', 'Failed to create referral code', error as Error, {
         companyId,
@@ -241,14 +261,6 @@ export class ReferralService {
     }
   }
 
-  /**
-   * Generate referral link
-   */
-  private generateReferralLink(code: string): string {
-    // Use the API Gateway URL for registration
-    const baseUrl = process.env.API_GATEWAY_URL || 'http://localhost:3000';
-    return `${baseUrl}/v1/auth/register?ref=${code}`;
-  }
 
   /**
    * Deactivate referral code

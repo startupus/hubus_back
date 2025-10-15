@@ -1,16 +1,18 @@
 import { TransactionType } from '../types/billing.types';
 export declare class GetBalanceDto {
-    userId: string;
+    companyId: string;
 }
 export declare class UpdateBalanceDto {
-    userId: string;
+    companyId: string;
     amount: number;
     operation: 'add' | 'subtract';
     description?: string;
     reference?: string;
+    currency?: string;
+    metadata?: Record<string, any>;
 }
 export declare class CreateTransactionDto {
-    userId: string;
+    companyId: string;
     type: TransactionType;
     amount: number;
     currency?: string;
@@ -20,7 +22,7 @@ export declare class CreateTransactionDto {
     paymentMethodId?: string;
 }
 export declare class TrackUsageDto {
-    userId: string;
+    companyId: string;
     service: string;
     resource: string;
     quantity?: number;
@@ -28,14 +30,14 @@ export declare class TrackUsageDto {
     metadata?: Record<string, any>;
 }
 export declare class CalculateCostDto {
-    userId: string;
+    companyId: string;
     service: string;
     resource: string;
     quantity: number;
     metadata?: Record<string, any>;
 }
 export declare class ProcessPaymentDto {
-    userId: string;
+    companyId: string;
     amount: number;
     currency?: string;
     paymentMethodId?: string;
@@ -43,7 +45,7 @@ export declare class ProcessPaymentDto {
     metadata?: Record<string, any>;
 }
 export declare class BillingReportDto {
-    userId: string;
+    companyId: string;
     startDate: string;
     endDate: string;
 }

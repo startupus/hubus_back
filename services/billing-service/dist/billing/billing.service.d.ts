@@ -2,6 +2,7 @@ import { PrismaService } from '../common/prisma/prisma.service';
 import { CacheService } from '../common/cache/cache.service';
 import { ValidationService } from '../common/validation/validation.service';
 import { RabbitMQClient } from '@ai-aggregator/shared';
+import { ReferralService } from './referral.service';
 import { Transaction, CreateTransactionRequest, CreateTransactionResponse, TrackUsageRequest, TrackUsageResponse, GetBalanceRequest, GetBalanceResponse, UpdateBalanceRequest, UpdateBalanceResponse, CalculateCostRequest, CalculateCostResponse, ProcessPaymentRequest, ProcessPaymentResponse, TransactionStatus, BillingReport } from '../types/billing.types';
 import { Decimal } from '@prisma/client/runtime/library';
 export declare class BillingService {
@@ -9,10 +10,11 @@ export declare class BillingService {
     private readonly cacheService;
     private readonly validationService;
     private readonly rabbitmq;
+    private readonly referralService;
     private readonly logger;
     private readonly maxRetries;
     private readonly retryDelay;
-    constructor(prisma: PrismaService, cacheService: CacheService, validationService: ValidationService, rabbitmq: RabbitMQClient);
+    constructor(prisma: PrismaService, cacheService: CacheService, validationService: ValidationService, rabbitmq: RabbitMQClient, referralService: ReferralService);
     getBalance(request: GetBalanceRequest): Promise<GetBalanceResponse>;
     updateBalance(request: UpdateBalanceRequest): Promise<UpdateBalanceResponse>;
     trackUsage(request: TrackUsageRequest): Promise<TrackUsageResponse>;
@@ -36,6 +38,7 @@ export declare class BillingService {
     private auditOperation;
     getTransactions(companyId: string, limit?: number, offset?: number): Promise<Transaction[]>;
     getTransactionById(transactionId: string): Promise<Transaction | null>;
+    getTransactionByPaymentId(paymentId: string): Promise<Transaction | null>;
     updateTransaction(transactionId: string, updateData: Partial<Transaction>): Promise<Transaction>;
     deleteTransaction(transactionId: string): Promise<Transaction>;
     determinePayerCompany(initiatorCompanyId: string): Promise<{
@@ -84,4 +87,15 @@ export declare class BillingService {
             };
         }[];
     }>;
+    private processReferralBonus;
+    topUpBalance(request: {
+        companyId: string;
+        amount: number;
+        currency?: string;
+    }): Promise<{
+        success: boolean;
+        balance?: number;
+        error?: string;
+    }>;
+    chargeForSubscription(companyId: string, amount: Decimal, planId: string): Promise<void>;
 }

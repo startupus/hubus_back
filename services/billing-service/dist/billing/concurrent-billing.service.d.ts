@@ -10,7 +10,7 @@ export declare class ConcurrentBillingService {
     private readonly totalRevenue;
     private readonly activeUsers;
     private readonly transactionQueue;
-    private readonly userLocks;
+    private readonly companyLocks;
     constructor(prisma: PrismaService);
     getBalance(companyId: string): Promise<{
         balance: Decimal;
@@ -23,7 +23,7 @@ export declare class ConcurrentBillingService {
     }>;
     processTransactionAsync(companyId: string, amount: Decimal, type: 'DEBIT' | 'CREDIT', description: string, metadata?: any): Promise<boolean>;
     processBatchTransactions(transactions: Array<{
-        userId: string;
+        companyId: string;
         amount: Decimal;
         type: 'DEBIT' | 'CREDIT';
         description: string;
@@ -39,7 +39,7 @@ export declare class ConcurrentBillingService {
     }>;
     getCurrencyRate(fromCurrency: string, toCurrency: string): Promise<number>;
     private startTransactionProcessor;
-    private getUserLock;
+    private getCompanyLock;
     private acquireLock;
     private releaseLock;
     getStats(): {

@@ -43,7 +43,9 @@ export class HttpController {
     try {
       LoggerUtil.debug('billing-service', 'HTTP GetBalance called', { company_id: params.companyId });
       
+      LoggerUtil.debug('billing-service', 'About to call billingService.getBalance', { company_id: params.companyId });
       const result = await this.billingService.getBalance({ companyId: params.companyId });
+      LoggerUtil.debug('billing-service', 'billingService.getBalance returned', { company_id: params.companyId, success: result.success });
       
       if (!result.success) {
         return {
@@ -61,7 +63,11 @@ export class HttpController {
         creditLimit: result.balance.creditLimit,
       };
     } catch (error) {
-      LoggerUtil.error('billing-service', 'HTTP GetBalance failed', error as Error);
+      LoggerUtil.error('billing-service', 'HTTP GetBalance failed', error as Error, { company_id: params.companyId });
+      LoggerUtil.debug('billing-service', 'Error details', { 
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      });
       return {
         success: false,
         message: error instanceof Error ? error.message : 'Unknown error',
@@ -546,6 +552,48 @@ export class HttpController {
         success: false,
         message: error instanceof Error ? error.message : 'Unknown error',
         report: null,
+      };
+    }
+  }
+
+  @Post('top-up')
+  @ApiOperation({ summary: 'Top up company balance' })
+  @ApiResponse({ status: 200, description: 'Balance topped up successfully' })
+  async topUpBalance(@Body() data: { companyId: string; amount: number; currency?: string }) {
+    try {
+      LoggerUtil.debug('billing-service', 'HTTP TopUpBalance called', { 
+        companyId: data.companyId, 
+        amount: data.amount 
+      });
+
+      const result = await this.billingService.topUpBalance({
+        companyId: data.companyId,
+        amount: data.amount,
+        currency: data.currency || 'USD'
+      });
+
+      if (!result.success) {
+        return {
+          success: false,
+          message: result.error || 'Failed to top up balance',
+          balance: null,
+        };
+      }
+
+      return {
+        success: true,
+        message: 'Balance topped up successfully',
+        balance: {
+          balance: result.balance,
+          currency: data.currency || 'USD'
+        }
+      };
+    } catch (error) {
+      LoggerUtil.error('billing-service', 'HTTP TopUpBalance failed', error as Error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Unknown error',
+        balance: null,
       };
     }
   }

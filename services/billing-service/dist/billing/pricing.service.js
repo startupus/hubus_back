@@ -21,11 +21,11 @@ let PricingService = PricingService_1 = class PricingService {
         this.providerClassification = providerClassification;
         this.logger = new common_1.Logger(PricingService_1.name);
     }
-    async calculateCost(service, resource, quantity, userId, metadata) {
-        const result = await this.calculateUsageCost(service, resource, quantity, userId, metadata);
+    async calculateCost(service, resource, quantity, companyId, metadata) {
+        const result = await this.calculateUsageCost(service, resource, quantity, companyId, metadata);
         return result.cost || 0;
     }
-    async calculateUsageCost(service, resource, quantity, userId, metadata) {
+    async calculateUsageCost(service, resource, quantity, companyId, metadata) {
         try {
             const provider = metadata?.provider || 'unknown';
             const model = metadata?.model || 'unknown';
@@ -37,7 +37,7 @@ let PricingService = PricingService_1 = class PricingService {
                 provider,
                 model,
                 tokens,
-                userId
+                companyId
             });
             const providerType = this.providerClassification.classifyProvider(provider);
             const providerInfo = this.providerClassification.getProviderInfo(provider);
@@ -69,7 +69,7 @@ let PricingService = PricingService_1 = class PricingService {
                 }
                 currency = rule.currency;
             }
-            const discounts = await this.getApplicableDiscounts(userId, baseCost, quantity, providerType);
+            const discounts = await this.getApplicableDiscounts(companyId, baseCost, quantity, providerType);
             let discountAmount = 0;
             for (const discount of discounts) {
                 if (discount.type === 'percentage') {
@@ -99,7 +99,7 @@ let PricingService = PricingService_1 = class PricingService {
                 model,
                 providerType,
                 tokens,
-                userId,
+                companyId,
                 cost: totalCost,
                 currency,
                 breakdown
@@ -117,7 +117,7 @@ let PricingService = PricingService_1 = class PricingService {
                 service,
                 resource,
                 quantity,
-                userId,
+                companyId,
                 provider: metadata?.provider
             });
             return {
@@ -175,7 +175,7 @@ let PricingService = PricingService_1 = class PricingService {
             return [];
         }
     }
-    async getApplicableDiscounts(userId, amount, quantity, providerType) {
+    async getApplicableDiscounts(companyId, amount, quantity, providerType) {
         try {
             const now = new Date();
             const discounts = await this.prisma.discountRule.findMany({
@@ -231,7 +231,7 @@ let PricingService = PricingService_1 = class PricingService {
         }
         catch (error) {
             shared_1.LoggerUtil.error('billing-service', 'Failed to get applicable discounts', error, {
-                userId,
+                companyId,
                 amount,
                 quantity
             });

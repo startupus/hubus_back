@@ -9,14 +9,21 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.BillingHttpModule = void 0;
 const common_1 = require("@nestjs/common");
 const http_controller_1 = require("./http.controller");
+const sync_controller_1 = require("./sync.controller");
+const referral_controller_1 = require("./referral.controller");
+const subscription_controller_1 = require("./subscription.controller");
 const billing_module_1 = require("../billing/billing.module");
+const prisma_module_1 = require("../common/prisma/prisma.module");
+const referral_service_1 = require("../billing/referral.service");
+const subscription_service_1 = require("../billing/subscription.service");
 let BillingHttpModule = class BillingHttpModule {
 };
 exports.BillingHttpModule = BillingHttpModule;
 exports.BillingHttpModule = BillingHttpModule = __decorate([
     (0, common_1.Module)({
-        imports: [billing_module_1.BillingModule],
-        controllers: [http_controller_1.HttpController],
+        imports: [billing_module_1.BillingModule, prisma_module_1.PrismaModule],
+        controllers: [http_controller_1.HttpController, sync_controller_1.SyncController, referral_controller_1.ReferralController, subscription_controller_1.SubscriptionController],
+        providers: [referral_service_1.ReferralService, subscription_service_1.SubscriptionService],
     })
 ], BillingHttpModule);
 //# sourceMappingURL=http.module.js.map

@@ -21,6 +21,7 @@ const pricing_service_1 = require("../billing/pricing.service");
 const payment_gateway_service_1 = require("../billing/payment-gateway.service");
 const rate_limit_guard_1 = require("../common/guards/rate-limit.guard");
 const billing_dto_1 = require("../dto/billing.dto");
+const billing_types_1 = require("../types/billing.types");
 let HttpController = class HttpController {
     constructor(billingService, pricingService, paymentGatewayService) {
         this.billingService = billingService;
@@ -29,8 +30,10 @@ let HttpController = class HttpController {
     }
     async getBalance(params) {
         try {
-            shared_1.LoggerUtil.debug('billing-service', 'HTTP GetBalance called', { user_id: params.userId });
-            const result = await this.billingService.getBalance({ userId: params.userId });
+            shared_1.LoggerUtil.debug('billing-service', 'HTTP GetBalance called', { company_id: params.companyId });
+            shared_1.LoggerUtil.debug('billing-service', 'About to call billingService.getBalance', { company_id: params.companyId });
+            const result = await this.billingService.getBalance({ companyId: params.companyId });
+            shared_1.LoggerUtil.debug('billing-service', 'billingService.getBalance returned', { company_id: params.companyId, success: result.success });
             if (!result.success) {
                 return {
                     success: false,
@@ -41,11 +44,17 @@ let HttpController = class HttpController {
             return {
                 success: true,
                 message: 'Balance retrieved successfully',
-                balance: result.balance,
+                balance: result.balance.balance,
+                currency: result.balance.currency,
+                creditLimit: result.balance.creditLimit,
             };
         }
         catch (error) {
-            shared_1.LoggerUtil.error('billing-service', 'HTTP GetBalance failed', error);
+            shared_1.LoggerUtil.error('billing-service', 'HTTP GetBalance failed', error, { company_id: params.companyId });
+            shared_1.LoggerUtil.debug('billing-service', 'Error details', {
+                error: error instanceof Error ? error.message : String(error),
+                stack: error instanceof Error ? error.stack : undefined
+            });
             return {
                 success: false,
                 message: error instanceof Error ? error.message : 'Unknown error',
@@ -56,7 +65,7 @@ let HttpController = class HttpController {
     async updateBalance(data) {
         try {
             shared_1.LoggerUtil.debug('billing-service', 'HTTP UpdateBalance called', {
-                user_id: data.userId,
+                company_id: data.companyId,
                 amount: data.amount,
                 operation: data.operation
             });
@@ -86,12 +95,26 @@ let HttpController = class HttpController {
     }
     async createTransaction(data) {
         try {
+            const request = {
+                companyId: data.user_id || data.companyId,
+                type: data.type === 'credit' ? billing_types_1.TransactionType.CREDIT :
+                    data.type === 'debit' ? billing_types_1.TransactionType.DEBIT :
+                        data.type === 'refund' ? billing_types_1.TransactionType.REFUND :
+                            data.type === 'chargeback' ? billing_types_1.TransactionType.CHARGEBACK :
+                                data.type,
+                amount: data.amount,
+                currency: data.currency,
+                description: data.description,
+                reference: data.reference,
+                metadata: data.metadata,
+                paymentMethodId: data.paymentMethodId
+            };
             shared_1.LoggerUtil.debug('billing-service', 'HTTP CreateTransaction called', {
-                user_id: data.userId,
-                type: data.type,
-                amount: data.amount
+                company_id: request.companyId,
+                type: request.type,
+                amount: request.amount
             });
-            const result = await this.billingService.createTransaction(data);
+            const result = await this.billingService.createTransaction(request);
             if (!result.success) {
                 return {
                     success: false,
@@ -114,10 +137,10 @@ let HttpController = class HttpController {
             };
         }
     }
-    async getTransactionHistory(userId, page = 1, limit = 10) {
+    async getTransactionHistory(companyId, page = 1, limit = 10) {
         try {
             shared_1.LoggerUtil.debug('billing-service', 'HTTP GetTransactionHistory called', {
-                user_id: userId,
+                company_id: companyId,
                 page: page,
                 limit: limit
             });
@@ -146,7 +169,7 @@ let HttpController = class HttpController {
     async calculateCost(data) {
         try {
             shared_1.LoggerUtil.debug('billing-service', 'HTTP CalculateCost called', {
-                user_id: data.userId,
+                company_id: data.companyId,
                 service: data.service,
                 resource: data.resource,
                 quantity: data.quantity
@@ -184,7 +207,7 @@ let HttpController = class HttpController {
     async processPayment(data) {
         try {
             shared_1.LoggerUtil.debug('billing-service', 'HTTP ProcessPayment called', {
-                user_id: data.userId,
+                company_id: data.companyId,
                 amount: data.amount,
                 payment_method_id: data.paymentMethodId
             });
@@ -215,7 +238,7 @@ let HttpController = class HttpController {
     async trackUsage(data) {
         try {
             shared_1.LoggerUtil.debug('billing-service', 'HTTP TrackUsage called', {
-                user_id: data.userId,
+                company_id: data.companyId,
                 service: data.service,
                 resource: data.resource,
                 quantity: data.quantity
@@ -244,16 +267,16 @@ let HttpController = class HttpController {
             };
         }
     }
-    async getBillingReport(userId, startDate, endDate) {
+    async getBillingReport(companyId, startDate, endDate) {
         try {
             shared_1.LoggerUtil.debug('billing-service', 'HTTP GetBillingReport called', {
-                user_id: userId,
+                company_id: companyId,
                 start_date: startDate,
                 end_date: endDate
             });
             const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
             const end = endDate ? new Date(endDate) : new Date();
-            const report = await this.billingService.getBillingReport(userId, start, end);
+            const report = await this.billingService.getBillingReport(companyId, start, end);
             return {
                 success: true,
                 message: 'Billing report generated successfully',
@@ -272,7 +295,7 @@ let HttpController = class HttpController {
     async getCompanyBalance(companyId) {
         try {
             shared_1.LoggerUtil.debug('billing-service', 'HTTP GetCompanyBalance called', { company_id: companyId });
-            const result = await this.billingService.getBalance({ userId: companyId });
+            const result = await this.billingService.getBalance({ companyId: companyId });
             if (!result.success) {
                 return {
                     success: false,
@@ -283,7 +306,9 @@ let HttpController = class HttpController {
             return {
                 success: true,
                 message: 'Company balance retrieved successfully',
-                balance: result.balance,
+                balance: result.balance.balance,
+                currency: result.balance.currency,
+                creditLimit: result.balance.creditLimit,
             };
         }
         catch (error) {
@@ -368,11 +393,47 @@ let HttpController = class HttpController {
             };
         }
     }
+    async topUpBalance(data) {
+        try {
+            shared_1.LoggerUtil.debug('billing-service', 'HTTP TopUpBalance called', {
+                companyId: data.companyId,
+                amount: data.amount
+            });
+            const result = await this.billingService.topUpBalance({
+                companyId: data.companyId,
+                amount: data.amount,
+                currency: data.currency || 'USD'
+            });
+            if (!result.success) {
+                return {
+                    success: false,
+                    message: result.error || 'Failed to top up balance',
+                    balance: null,
+                };
+            }
+            return {
+                success: true,
+                message: 'Balance topped up successfully',
+                balance: {
+                    balance: result.balance,
+                    currency: data.currency || 'USD'
+                }
+            };
+        }
+        catch (error) {
+            shared_1.LoggerUtil.error('billing-service', 'HTTP TopUpBalance failed', error);
+            return {
+                success: false,
+                message: error instanceof Error ? error.message : 'Unknown error',
+                balance: null,
+            };
+        }
+    }
 };
 exports.HttpController = HttpController;
 __decorate([
-    (0, common_1.Get)('balance/:userId'),
-    (0, swagger_1.ApiOperation)({ summary: 'Get user balance' }),
+    (0, common_1.Get)('balance/:companyId'),
+    (0, swagger_1.ApiOperation)({ summary: 'Get company balance' }),
     (0, swagger_1.ApiResponse)({ status: 200, description: 'Balance retrieved successfully' }),
     __param(0, (0, common_1.Param)()),
     __metadata("design:type", Function),
@@ -396,7 +457,7 @@ __decorate([
         schema: {
             type: 'object',
             properties: {
-                userId: { type: 'string' },
+                companyId: { type: 'string' },
                 type: { type: 'string', enum: ['CREDIT', 'DEBIT', 'REFUND', 'CHARGEBACK'] },
                 amount: { type: 'number' },
                 currency: { type: 'string' },
@@ -405,7 +466,7 @@ __decorate([
                 metadata: { type: 'object' },
                 paymentMethodId: { type: 'string' }
             },
-            required: ['userId', 'type', 'amount']
+            required: ['companyId', 'type', 'amount']
         }
     }),
     (0, swagger_1.ApiResponse)({ status: 201, description: 'Transaction created successfully' }),
@@ -415,10 +476,10 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], HttpController.prototype, "createTransaction", null);
 __decorate([
-    (0, common_1.Get)('transactions/:userId'),
-    (0, swagger_1.ApiOperation)({ summary: 'Get transaction history' }),
+    (0, common_1.Get)('transactions/:companyId'),
+    (0, swagger_1.ApiOperation)({ summary: 'Get company transaction history' }),
     (0, swagger_1.ApiResponse)({ status: 200, description: 'Transaction history retrieved successfully' }),
-    __param(0, (0, common_1.Param)('userId')),
+    __param(0, (0, common_1.Param)('companyId')),
     __param(1, (0, common_1.Query)('page')),
     __param(2, (0, common_1.Query)('limit')),
     __metadata("design:type", Function),
@@ -432,13 +493,13 @@ __decorate([
         schema: {
             type: 'object',
             properties: {
-                userId: { type: 'string' },
+                companyId: { type: 'string' },
                 service: { type: 'string' },
                 resource: { type: 'string' },
                 quantity: { type: 'number' },
                 metadata: { type: 'object' }
             },
-            required: ['userId', 'service', 'resource', 'quantity']
+            required: ['companyId', 'service', 'resource', 'quantity']
         }
     }),
     (0, swagger_1.ApiResponse)({ status: 200, description: 'Cost calculated successfully' }),
@@ -454,14 +515,14 @@ __decorate([
         schema: {
             type: 'object',
             properties: {
-                userId: { type: 'string' },
+                companyId: { type: 'string' },
                 amount: { type: 'number' },
                 currency: { type: 'string' },
                 paymentMethodId: { type: 'string' },
                 description: { type: 'string' },
                 metadata: { type: 'object' }
             },
-            required: ['userId', 'amount']
+            required: ['companyId', 'amount']
         }
     }),
     (0, swagger_1.ApiResponse)({ status: 200, description: 'Payment processed successfully' }),
@@ -477,14 +538,14 @@ __decorate([
         schema: {
             type: 'object',
             properties: {
-                userId: { type: 'string' },
+                companyId: { type: 'string' },
                 service: { type: 'string' },
                 resource: { type: 'string' },
                 quantity: { type: 'number' },
                 unit: { type: 'string' },
                 metadata: { type: 'object' }
             },
-            required: ['userId', 'service', 'resource']
+            required: ['companyId', 'service', 'resource']
         }
     }),
     (0, swagger_1.ApiResponse)({ status: 200, description: 'Usage tracked successfully' }),
@@ -494,10 +555,10 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], HttpController.prototype, "trackUsage", null);
 __decorate([
-    (0, common_1.Get)('report/:userId'),
-    (0, swagger_1.ApiOperation)({ summary: 'Get billing report' }),
+    (0, common_1.Get)('report/:companyId'),
+    (0, swagger_1.ApiOperation)({ summary: 'Get company billing report' }),
     (0, swagger_1.ApiResponse)({ status: 200, description: 'Billing report generated successfully' }),
-    __param(0, (0, common_1.Param)('userId')),
+    __param(0, (0, common_1.Param)('companyId')),
     __param(1, (0, common_1.Query)('startDate')),
     __param(2, (0, common_1.Query)('endDate')),
     __metadata("design:type", Function),
@@ -546,6 +607,15 @@ __decorate([
     __metadata("design:paramtypes", [String, String, String]),
     __metadata("design:returntype", Promise)
 ], HttpController.prototype, "getCompanyBillingReport", null);
+__decorate([
+    (0, common_1.Post)('top-up'),
+    (0, swagger_1.ApiOperation)({ summary: 'Top up company balance' }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: 'Balance topped up successfully' }),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], HttpController.prototype, "topUpBalance", null);
 exports.HttpController = HttpController = __decorate([
     (0, swagger_1.ApiTags)('billing'),
     (0, common_1.Controller)('billing'),

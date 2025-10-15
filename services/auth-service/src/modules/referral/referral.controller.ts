@@ -18,15 +18,21 @@ export class ReferralController {
   ): Promise<ReferralCodeResponse> {
     // For testing, get companyId from the request body
     const companyId = createDto.companyId;
+    console.log('Auth service received companyId:', companyId);
+    console.log('Auth service received createDto:', createDto);
     return this.referralService.createReferralCode(companyId, createDto);
   }
 
   @Get('codes')
   @ApiOperation({ summary: 'Get all referral codes for the company' })
   @ApiResponse({ status: 200, description: 'Referral codes retrieved successfully', type: [ReferralCodeResponse] })
-  async getReferralCodes(@Request() req: any): Promise<ReferralCodeResponse[]> {
-    const companyId = req.user.companyId || req.user.sub;
-    return this.referralService.getReferralCodes(companyId);
+  async getReferralCodes(@Request() req: any, @Query('companyId') companyId?: string): Promise<ReferralCodeResponse[]> {
+    // For testing, get companyId from query parameter, otherwise from JWT token
+    const finalCompanyId = companyId || req.user?.companyId || req.user?.sub;
+    if (!finalCompanyId) {
+      throw new Error('Company ID is required');
+    }
+    return this.referralService.getReferralCodes(finalCompanyId);
   }
 
   @Get('stats')

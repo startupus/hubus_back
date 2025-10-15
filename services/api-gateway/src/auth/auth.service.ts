@@ -28,19 +28,19 @@ export class AuthService {
       };
 
       const response: AxiosResponse = await firstValueFrom(
-        this.httpService.post(`${this.authServiceUrl}/companies/register`, companyData)
+        this.httpService.post(`${this.authServiceUrl}/auth/register`, companyData)
       );
 
       // Auth-service returns company registration result
       const result = response.data;
       
-      // Auth-service returns { company, accessToken, refreshToken } on success
-      if (!result.company || !result.accessToken) {
+      // Auth-service returns { company, token, refreshToken } on success
+      if (!result.company || !result.token) {
         throw new HttpException('Registration failed - invalid response format', HttpStatus.INTERNAL_SERVER_ERROR);
       }
 
       return {
-        accessToken: result.accessToken,
+        accessToken: result.token,
         refreshToken: result.refreshToken,
         tokenType: 'Bearer',
         expiresIn: 3600,
@@ -65,19 +65,19 @@ export class AuthService {
   async login(loginDto: LoginDto): Promise<AuthResponseDto> {
     try {
       const response: AxiosResponse = await firstValueFrom(
-        this.httpService.post(`${this.authServiceUrl}/companies/login`, loginDto)
+        this.httpService.post(`${this.authServiceUrl}/auth/login`, loginDto)
       );
 
       // Auth-service returns company login result
       const result = response.data;
       
-      // Auth-service returns { company, accessToken, refreshToken } on success
-      if (!result.company || !result.accessToken) {
+      // Auth-service returns { company, token, refreshToken } on success
+      if (!result.company || !result.token) {
         throw new HttpException('Login failed - invalid credentials', HttpStatus.UNAUTHORIZED);
       }
 
       return {
-        accessToken: result.accessToken,
+        accessToken: result.token,
         refreshToken: result.refreshToken,
         tokenType: 'Bearer',
         expiresIn: 3600,

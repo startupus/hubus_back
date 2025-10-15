@@ -1,0 +1,15 @@
+{
+  "companyId": "1d9ea449-dc1f-47a3-9ba9-6f8e52ac9aac",
+  "service": "ai-chat",
+  "resource": "tokens",
+  "quantity": 1,
+  "inputTokens": 50,
+  "outputTokens": 30,
+  "unit": "tokens",
+  "metadata": {
+    "provider": "openai",
+    "model": "gpt-3.5-turbo",
+    "timestamp": "2025-10-15T17:55:00.000Z",
+    "currency": "USD"
+  }
+}

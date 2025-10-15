@@ -1,0 +1,11 @@
+{
+  "model": "gpt-3.5-turbo",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Hello! My name is Ivan Petrov, my email is ivan.petrov@example.com, and my phone is +7-999-123-45-67. Help me with a TypeScript programming task. Tell me how to properly type functions in TypeScript."
+    }
+  ],
+  "max_tokens": 100,
+  "temperature": 0.7
+}

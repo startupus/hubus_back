@@ -1,7 +1,6 @@
 import { Decimal } from '@prisma/client/runtime/library';
 export interface UserBalance {
     id: string;
-    userId: string;
     companyId: string;
     balance: Decimal;
     currency: string;
@@ -12,7 +11,6 @@ export interface UserBalance {
 }
 export interface Transaction {
     id: string;
-    userId: string;
     companyId: string;
     type: TransactionType;
     amount: Decimal;
@@ -27,7 +25,6 @@ export interface Transaction {
 }
 export interface UsageEvent {
     id: string;
-    userId: string;
     companyId: string;
     initiatorCompanyId?: string;
     service: string;
@@ -41,7 +38,7 @@ export interface UsageEvent {
 }
 export interface Invoice {
     id: string;
-    userId: string;
+    companyId: string;
     invoiceNumber: string;
     status: InvoiceStatus;
     subtotal: Decimal;
@@ -65,7 +62,7 @@ export interface InvoiceItem {
 }
 export interface Subscription {
     id: string;
-    userId: string;
+    companyId: string;
     planId: string;
     status: SubscriptionStatus;
     currentPeriodStart: Date;
@@ -77,7 +74,7 @@ export interface Subscription {
 }
 export interface PaymentMethod {
     id: string;
-    userId: string;
+    companyId: string;
     type: PaymentMethodType;
     provider: string;
     externalId: string;
@@ -147,8 +144,7 @@ export declare enum BillingCycle {
     YEARLY = "YEARLY"
 }
 export interface CreateTransactionRequest {
-    userId: string;
-    companyId?: string;
+    companyId: string;
     type: TransactionType;
     amount: number;
     currency?: string;
@@ -163,8 +159,7 @@ export interface CreateTransactionResponse {
     error?: string;
 }
 export interface TrackUsageRequest {
-    userId: string;
-    companyId?: string;
+    companyId: string;
     service: string;
     resource: string;
     quantity?: number;
@@ -178,7 +173,7 @@ export interface TrackUsageResponse {
     error?: string;
 }
 export interface GetBalanceRequest {
-    userId: string;
+    companyId: string;
 }
 export interface GetBalanceResponse {
     success: boolean;
@@ -186,7 +181,7 @@ export interface GetBalanceResponse {
     error?: string;
 }
 export interface UpdateBalanceRequest {
-    userId: string;
+    companyId: string;
     amount: number;
     operation: 'add' | 'subtract';
     description?: string;
@@ -200,7 +195,7 @@ export interface UpdateBalanceResponse {
     error?: string;
 }
 export interface CalculateCostRequest {
-    userId: string;
+    companyId: string;
     service: string;
     resource: string;
     quantity: number;
@@ -222,7 +217,7 @@ export interface CostBreakdown {
     currency: string;
 }
 export interface ProcessPaymentRequest {
-    userId: string;
+    companyId: string;
     amount: number;
     currency?: string;
     paymentMethodId?: string;
@@ -265,7 +260,7 @@ export interface DiscountRule {
     };
 }
 export interface UsageMetrics {
-    userId: string;
+    companyId: string;
     service: string;
     resource: string;
     quantity: number;
@@ -273,7 +268,7 @@ export interface UsageMetrics {
     metadata?: Record<string, any>;
 }
 export interface BillingReport {
-    userId: string;
+    companyId: string;
     period: {
         start: Date;
         end: Date;

@@ -193,6 +193,8 @@ export interface TrackUsageRequest {
   service: string;
   resource: string;
   quantity?: number;
+  inputTokens?: number;
+  outputTokens?: number;
   unit?: string;
   metadata?: Record<string, any>;
 }

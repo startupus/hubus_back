@@ -5,6 +5,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { ApiKeysModule } from './modules/api-keys/api-keys.module';
 import { ProviderPreferencesModule } from './modules/provider-preferences/provider-preferences.module';
 import { SecurityModule } from './modules/security/security.module';
+import { EmployeeModule } from './modules/employee/employee.module';
 import { AuthHttpModule } from './http/http.module';
 import { HttpModule } from '@nestjs/axios';
 import { HealthModule } from './health/health.module';
@@ -29,6 +30,7 @@ import { validationSchema } from './config/validation.schema';
         PrismaModule,
         AuthModule,
         ReferralModule,
+        EmployeeModule,
         ApiKeysModule,
         ProviderPreferencesModule,
         SecurityModule,

@@ -2,309 +2,251 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { Decimal } from '@prisma/client/runtime/library';
 
-export interface ReferralBonusCalculation {
-  inputTokens: number;
-  outputTokens: number;
-  inputTokenRate: number; // 10% = 0.1
-  outputTokenRate: number; // 5% = 0.05
-  inputBonus: Decimal;
-  outputBonus: Decimal;
-  totalBonus: Decimal;
-}
-
-export interface CreateReferralTransactionDto {
-  referralOwnerId: string; // Компания, которая получила реферала
-  originalTransactionId: string;
-  inputTokens: number;
-  outputTokens: number;
-  inputTokenPrice: Decimal; // Цена за входной токен
-  outputTokenPrice: Decimal; // Цена за выходной токен
-  description?: string;
-  metadata?: Record<string, any>;
-}
-
 @Injectable()
 export class ReferralService {
   private readonly logger = new Logger(ReferralService.name);
 
-  // Ставки реферальных бонусов
-  private readonly INPUT_TOKEN_RATE = 0.10; // 10%
-  private readonly OUTPUT_TOKEN_RATE = 0.05; // 5%
-
   constructor(private readonly prisma: PrismaService) {}
 
-  /**
-   * Calculate referral bonus for a transaction
-   */
-  calculateReferralBonus(
-    inputTokens: number,
-    outputTokens: number,
-    inputTokenPrice: Decimal,
-    outputTokenPrice: Decimal
-  ): ReferralBonusCalculation {
-    const inputBonus = new Decimal(inputTokens).mul(inputTokenPrice).mul(this.INPUT_TOKEN_RATE);
-    const outputBonus = new Decimal(outputTokens).mul(outputTokenPrice).mul(this.OUTPUT_TOKEN_RATE);
-    const totalBonus = inputBonus.add(outputBonus);
+  async getReferralEarnings(
+    companyId: string,
+    startDate?: string,
+    endDate?: string,
+    limit?: string
+  ) {
+    this.logger.log(`Getting referral earnings for company ${companyId}`);
+
+    const where: any = {
+      referralOwnerId: companyId,
+      status: 'COMPLETED'
+    };
+
+    if (startDate || endDate) {
+      where.createdAt = {};
+      if (startDate) where.createdAt.gte = new Date(startDate);
+      if (endDate) where.createdAt.lte = new Date(endDate);
+    }
+
+    const take = limit ? parseInt(limit) : 50;
+
+    const earnings = await this.prisma.referralTransaction.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take,
+      include: {
+        referralEarner: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
+        }
+      }
+    });
+
+    const totalEarnings = await this.prisma.referralTransaction.aggregate({
+      where,
+      _sum: { amount: true },
+      _count: { id: true }
+    });
 
     return {
-      inputTokens,
-      outputTokens,
-      inputTokenRate: this.INPUT_TOKEN_RATE,
-      outputTokenRate: this.OUTPUT_TOKEN_RATE,
-      inputBonus,
-      outputBonus,
-      totalBonus,
+      success: true,
+      data: earnings.map(earning => ({
+        id: earning.id,
+        amount: earning.amount.toString(),
+        currency: earning.currency,
+        inputTokens: earning.inputTokens,
+        outputTokens: earning.outputTokens,
+        inputTokenRate: earning.inputTokenRate.toString(),
+        outputTokenRate: earning.outputTokenRate.toString(),
+        description: earning.description,
+        status: earning.status,
+        createdAt: earning.createdAt,
+        referralEarner: earning.referralEarner
+      })),
+      summary: {
+        totalAmount: totalEarnings._sum.amount?.toString() || '0',
+        totalCount: totalEarnings._count.id || 0
+      }
     };
   }
 
-  /**
-   * Create referral transaction and process bonus
-   */
-  async createReferralTransaction(dto: CreateReferralTransactionDto): Promise<void> {
-    try {
-      // Find the referrer company
-      const referrerCompany = await this.prisma.company.findUnique({
-        where: { id: dto.referralOwnerId },
-        include: { referredCompanies: true },
-      });
+  async getReferralEarningsSummary(
+    companyId: string,
+    startDate?: string,
+    endDate?: string
+  ) {
+    this.logger.log(`Getting referral earnings summary for company ${companyId}`);
 
-      if (!referrerCompany) {
-        throw new NotFoundException('Referrer company not found');
-      }
+    const where: any = {
+      referralOwnerId: companyId,
+      status: 'COMPLETED'
+    };
 
-      // Find the company that made the original transaction
-      const originalTransaction = await this.prisma.transaction.findUnique({
-        where: { id: dto.originalTransactionId },
-        include: { company: true },
-      });
-
-      if (!originalTransaction) {
-        throw new NotFoundException('Original transaction not found');
-      }
-
-      // Check if the company that made the transaction is a referral of the referrer
-      const isReferral = referrerCompany.referredCompanies.some(
-        refCompany => refCompany.id === originalTransaction.companyId
-      );
-
-      if (!isReferral) {
-        this.logger.warn('Company is not a referral of the referrer', {
-          referrerId: dto.referralOwnerId,
-          transactionCompanyId: originalTransaction.companyId,
-        });
-        return;
-      }
-
-      // Calculate referral bonus
-      const bonusCalculation = this.calculateReferralBonus(
-        dto.inputTokens,
-        dto.outputTokens,
-        dto.inputTokenPrice,
-        dto.outputTokenPrice
-      );
-
-      // Skip if no bonus to award
-      if (bonusCalculation.totalBonus.lte(0)) {
-        this.logger.debug('No referral bonus to award', {
-          inputTokens: dto.inputTokens,
-          outputTokens: dto.outputTokens,
-        });
-        return;
-      }
-
-      // Create referral transaction
-      const referralTransaction = await this.prisma.referralTransaction.create({
-        data: {
-          referralOwnerId: dto.referralOwnerId,
-          referralEarnerId: dto.referralOwnerId, // The referrer earns the bonus
-          originalTransactionId: dto.originalTransactionId,
-          amount: bonusCalculation.totalBonus,
-          inputTokens: dto.inputTokens,
-          outputTokens: dto.outputTokens,
-          inputTokenRate: bonusCalculation.inputTokenRate,
-          outputTokenRate: bonusCalculation.outputTokenRate,
-          description: dto.description || `Referral bonus for ${dto.inputTokens} input + ${dto.outputTokens} output tokens`,
-          metadata: {
-            ...dto.metadata,
-            inputTokenPrice: dto.inputTokenPrice.toString(),
-            outputTokenPrice: dto.outputTokenPrice.toString(),
-            calculation: {
-              inputTokens: bonusCalculation.inputTokens,
-              outputTokens: bonusCalculation.outputTokens,
-              inputTokenRate: bonusCalculation.inputTokenRate,
-              outputTokenRate: bonusCalculation.outputTokenRate,
-              inputBonus: bonusCalculation.inputBonus.toString(),
-              outputBonus: bonusCalculation.outputBonus.toString(),
-              totalBonus: bonusCalculation.totalBonus.toString(),
-            },
-          },
-        },
-      });
-
-      // Process the bonus by adding it to the referrer's balance
-      await this.processReferralBonus(dto.referralOwnerId, bonusCalculation.totalBonus, referralTransaction.id);
-
-      this.logger.log('Referral transaction created and processed', {
-        referralTransactionId: referralTransaction.id,
-        referrerId: dto.referralOwnerId,
-        amount: bonusCalculation.totalBonus.toString(),
-        inputTokens: dto.inputTokens,
-        outputTokens: dto.outputTokens,
-      });
-    } catch (error) {
-      this.logger.error('Failed to create referral transaction', error, {
-        dto,
-      });
-      throw error;
+    if (startDate || endDate) {
+      where.createdAt = {};
+      if (startDate) where.createdAt.gte = new Date(startDate);
+      if (endDate) where.createdAt.lte = new Date(endDate);
     }
+
+    const [totalEarnings, monthlyEarnings, referredCompanies] = await Promise.all([
+      this.prisma.referralTransaction.aggregate({
+        where,
+        _sum: { amount: true },
+        _count: { id: true }
+      }),
+      this.prisma.referralTransaction.groupBy({
+        by: ['createdAt'],
+        where,
+        _sum: { amount: true },
+        _count: { id: true },
+        orderBy: { createdAt: 'desc' }
+      }),
+      this.prisma.referralTransaction.findMany({
+        where,
+        select: {
+          referralEarnerId: true,
+          referralEarner: {
+            select: {
+              id: true,
+              name: true,
+              email: true
+            }
+          }
+        },
+        distinct: ['referralEarnerId']
+      })
+    ]);
+
+    return {
+      success: true,
+      data: {
+        totalEarnings: totalEarnings._sum.amount?.toString() || '0',
+        totalTransactions: totalEarnings._count.id || 0,
+        referredCompaniesCount: referredCompanies.length,
+        monthlyBreakdown: monthlyEarnings.map(month => ({
+          month: month.createdAt,
+          amount: month._sum.amount?.toString() || '0',
+          transactions: month._count.id || 0
+        })),
+        referredCompanies: referredCompanies.map(ref => ref.referralEarner)
+      }
+    };
+  }
+
+  async getReferredCompanies(
+    companyId: string,
+    limit?: string
+  ) {
+    this.logger.log(`Getting referred companies for company ${companyId}`);
+
+    const take = limit ? parseInt(limit) : 50;
+
+    const referredCompanies = await this.prisma.company.findMany({
+      where: {
+        referredBy: companyId
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        createdAt: true,
+        isActive: true,
+        referralCodeId: true
+      },
+      orderBy: { createdAt: 'desc' },
+      take
+    });
+
+    return {
+      success: true,
+      data: referredCompanies
+    };
+  }
+
+  async createReferralTransaction(data: {
+    referralOwnerId: string;
+    originalTransactionId: string;
+    inputTokens: number;
+    outputTokens: number;
+    inputTokenPrice: Decimal;
+    outputTokenPrice: Decimal;
+    description: string;
+    metadata: any;
+  }) {
+    this.logger.log(`Creating referral transaction for owner ${data.referralOwnerId}`);
+
+    // Рассчитываем сумму реферального бонуса (10% от стоимости)
+    const inputPrice = data.inputTokenPrice instanceof Decimal ? data.inputTokenPrice : new Decimal(String(data.inputTokenPrice));
+    const outputPrice = data.outputTokenPrice instanceof Decimal ? data.outputTokenPrice : new Decimal(String(data.outputTokenPrice));
+    const referralBonus = inputPrice.mul(data.inputTokens).add(outputPrice.mul(data.outputTokens)).mul(0.1);
+
+    const referralTransaction = await this.prisma.referralTransaction.create({
+      data: {
+        referralOwnerId: data.referralOwnerId,
+        referralEarnerId: data.referralOwnerId, // В данном случае владелец и получатель - одно лицо
+        originalTransactionId: data.originalTransactionId,
+        amount: referralBonus,
+        inputTokens: data.inputTokens,
+        outputTokens: data.outputTokens,
+        inputTokenRate: data.inputTokenPrice,
+        outputTokenRate: data.outputTokenPrice,
+        description: data.description,
+        metadata: data.metadata,
+        status: 'COMPLETED'
+      }
+    });
+
+    // Начисляем бонус на баланс владельца реферала
+    await this.updateReferralOwnerBalance(data.referralOwnerId, referralBonus);
+
+    return referralTransaction;
   }
 
   /**
-   * Process referral bonus by updating company balance
+   * Обновить баланс владельца реферала
    */
-  private async processReferralBonus(
-    companyId: string,
-    amount: Decimal,
-    referralTransactionId: string
-  ): Promise<void> {
+  private async updateReferralOwnerBalance(ownerId: string, bonus: Decimal) {
     try {
-      // Update company balance
-      await this.prisma.companyBalance.update({
-        where: { companyId },
-        data: {
-          balance: {
-            increment: amount,
-          },
-          lastUpdated: new Date(),
-        },
+      // Находим баланс владельца реферала
+      const balance = await this.prisma.companyBalance.findUnique({
+        where: { companyId: ownerId }
       });
 
-      // Create a regular transaction for the bonus
+      if (!balance) {
+        this.logger.warn(`Balance not found for referral owner ${ownerId}`);
+        return;
+      }
+
+      // Обновляем баланс
+      await this.prisma.companyBalance.update({
+        where: { companyId: ownerId },
+        data: {
+          balance: balance.balance.add(bonus)
+        }
+      });
+
+      // Создаем транзакцию зачисления
       await this.prisma.transaction.create({
         data: {
-          companyId,
+          companyId: ownerId,
           type: 'CREDIT',
-          amount,
+          amount: bonus,
           currency: 'USD',
-          description: `Referral bonus - Transaction ID: ${referralTransactionId}`,
+          description: `Referral bonus: ${bonus.toString()} USD`,
           status: 'COMPLETED',
-          reference: `REF_BONUS_${referralTransactionId}`,
+          processedAt: new Date(),
           metadata: {
             type: 'referral_bonus',
-            referralTransactionId,
-          },
-          processedAt: new Date(),
-        },
+            source: 'referral_system'
+          }
+        }
       });
 
-      // Update referral transaction status
-      await this.prisma.referralTransaction.update({
-        where: { id: referralTransactionId },
-        data: {
-          status: 'COMPLETED',
-          processedAt: new Date(),
-        },
-      });
-
-      this.logger.log('Referral bonus processed', {
-        companyId,
-        amount: amount.toString(),
-        referralTransactionId,
-      });
+      this.logger.log(`Referral bonus credited to ${ownerId}: ${bonus.toString()} USD`);
     } catch (error) {
-      this.logger.error('Failed to process referral bonus', error, {
-        companyId,
-        amount: amount.toString(),
-        referralTransactionId,
-      });
-      throw error;
-    }
-  }
-
-  /**
-   * Get referral statistics for a company
-   */
-  async getReferralStats(companyId: string): Promise<{
-    totalReferrals: number;
-    totalEarnings: Decimal;
-    totalTransactions: number;
-    recentTransactions: any[];
-  }> {
-    try {
-      const [referralCount, earnings, transactions, recentTransactions] = await Promise.all([
-        // Count total referrals
-        this.prisma.company.count({
-          where: { referredBy: companyId },
-        }),
-        
-        // Sum total earnings from referral transactions
-        this.prisma.referralTransaction.aggregate({
-          where: { referralEarnerId: companyId, status: 'COMPLETED' },
-          _sum: { amount: true },
-        }),
-        
-        // Count total referral transactions
-        this.prisma.referralTransaction.count({
-          where: { referralEarnerId: companyId },
-        }),
-        
-        // Get recent referral transactions
-        this.prisma.referralTransaction.findMany({
-          where: { referralEarnerId: companyId },
-          include: {
-            referralOwner: {
-              select: { id: true, name: true, email: true },
-            },
-          },
-          orderBy: { createdAt: 'desc' },
-          take: 10,
-        }),
-      ]);
-
-      return {
-        totalReferrals: referralCount,
-        totalEarnings: earnings._sum.amount || new Decimal(0),
-        totalTransactions: transactions,
-        recentTransactions,
-      };
-    } catch (error) {
-      this.logger.error('Failed to get referral stats', error, { companyId });
-      throw error;
-    }
-  }
-
-  /**
-   * Get referral transactions for a company
-   */
-  async getReferralTransactions(
-    companyId: string,
-    limit: number = 50,
-    offset: number = 0
-  ): Promise<{
-    transactions: any[];
-    total: number;
-  }> {
-    try {
-      const [transactions, total] = await Promise.all([
-        this.prisma.referralTransaction.findMany({
-          where: { referralEarnerId: companyId },
-          include: {
-            referralOwner: {
-              select: { id: true, name: true, email: true },
-            },
-          },
-          orderBy: { createdAt: 'desc' },
-          take: limit,
-          skip: offset,
-        }),
-        this.prisma.referralTransaction.count({
-          where: { referralEarnerId: companyId },
-        }),
-      ]);
-
-      return { transactions, total };
-    } catch (error) {
-      this.logger.error('Failed to get referral transactions', error, { companyId });
+      this.logger.error(`Failed to update referral owner balance for ${ownerId}`, error);
       throw error;
     }
   }

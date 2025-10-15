@@ -24,7 +24,22 @@ export class BillingController {
   @ApiOperation({ summary: 'Get my company balance' })
   @ApiResponse({ status: 200, description: 'Company balance retrieved successfully', type: UserBalanceDto })
   async getMyBalance(@Request() req: any) {
-    return this.billingService.getBalance(req.user.id);
+    const response = await this.billingService.getBalance(req.user.id);
+    
+    // Преобразуем ответ billing service в формат, ожидаемый фронтендом
+    return {
+      success: true,
+      balance: {
+        balance: parseFloat(String(response.balance || '0')),
+        currency: response.currency || 'USD',
+        creditLimit: parseFloat(String((response as any).creditLimit || '0'))
+      },
+      user: {
+        id: req.user.id,
+        email: req.user.email,
+        role: req.user.role
+      }
+    };
   }
 
   @Post('usage/track')
@@ -107,6 +122,26 @@ export class BillingController {
   @ApiResponse({ status: 201, description: 'Payment refunded successfully' })
   async refundPayment(@Body() data: any) {
     return this.billingService.refundPayment(data);
+  }
+
+  @Post('top-up')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Top up my balance' })
+  @ApiResponse({ status: 200, description: 'Balance topped up successfully' })
+  async topUpBalance(@Request() req: any, @Body() data: { amount: number; currency?: string }) {
+    const response = await this.billingService.topUpBalance(req.user.id, data.amount, data.currency);
+    
+    // Преобразуем ответ billing service в формат, ожидаемый фронтендом
+    return {
+      success: true,
+      balance: {
+        balance: parseFloat(String(response.balance?.balance || '0')),
+        currency: response.balance?.currency || 'USD',
+        creditLimit: parseFloat(String((response.balance as any)?.creditLimit || '0'))
+      },
+      message: 'Balance topped up successfully'
+    };
   }
 }
 

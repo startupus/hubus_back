@@ -38,31 +38,31 @@ let ValidationService = ValidationService_1 = class ValidationService {
             throw new billing_exceptions_1.InvalidCurrencyException(currency);
         }
     }
-    async validateUser(userId, prisma) {
-        if (!userId || typeof userId !== 'string') {
-            throw new billing_exceptions_1.UserNotFoundException(userId);
+    async validateCompany(companyId, prisma) {
+        if (!companyId || typeof companyId !== 'string') {
+            throw new billing_exceptions_1.CompanyNotFoundException(companyId);
         }
         try {
-            const user = await prisma.user.findUnique({
-                where: { id: userId },
+            const company = await prisma.company.findUnique({
+                where: { id: companyId },
                 select: { id: true, isActive: true }
             });
-            if (!user) {
-                throw new billing_exceptions_1.UserNotFoundException(userId);
+            if (!company) {
+                throw new billing_exceptions_1.CompanyNotFoundException(companyId);
             }
-            if (!user.isActive) {
-                throw new billing_exceptions_1.UserNotFoundException(userId);
+            if (!company.isActive) {
+                throw new billing_exceptions_1.CompanyNotFoundException(companyId);
             }
         }
         catch (error) {
-            if (error instanceof billing_exceptions_1.UserNotFoundException) {
+            if (error instanceof billing_exceptions_1.CompanyNotFoundException) {
                 throw error;
             }
-            shared_1.LoggerUtil.error('billing-service', 'User validation error', error, { userId });
-            throw new billing_exceptions_1.UserNotFoundException(userId);
+            shared_1.LoggerUtil.error('billing-service', 'Company validation error', error, { companyId });
+            throw new billing_exceptions_1.CompanyNotFoundException(companyId);
         }
     }
-    async validatePaymentMethod(paymentMethodId, userId, prisma) {
+    async validatePaymentMethod(paymentMethodId, companyId, prisma) {
         if (!paymentMethodId) {
             return;
         }
@@ -70,7 +70,7 @@ let ValidationService = ValidationService_1 = class ValidationService {
             const paymentMethod = await prisma.paymentMethod.findFirst({
                 where: {
                     id: paymentMethodId,
-                    userId: userId
+                    companyId: companyId
                 },
                 select: { id: true, isActive: true }
             });
@@ -82,7 +82,7 @@ let ValidationService = ValidationService_1 = class ValidationService {
             if (error instanceof billing_exceptions_1.PaymentMethodNotFoundException) {
                 throw error;
             }
-            shared_1.LoggerUtil.error('billing-service', 'Payment method validation error', error, { paymentMethodId, userId });
+            shared_1.LoggerUtil.error('billing-service', 'Payment method validation error', error, { paymentMethodId, companyId });
             throw new billing_exceptions_1.PaymentMethodNotFoundException(paymentMethodId);
         }
     }
@@ -100,11 +100,11 @@ let ValidationService = ValidationService_1 = class ValidationService {
             throw new billing_exceptions_1.InvalidAmountException(amount);
         }
     }
-    validateTransaction(type, amount, currency, userId) {
+    validateTransaction(type, amount, currency, companyId) {
         this.validateAmount(amount, currency);
         this.validateCurrency(currency);
-        if (!userId || typeof userId !== 'string') {
-            throw new Error('Invalid user ID');
+        if (!companyId || typeof companyId !== 'string') {
+            throw new Error('Invalid company ID');
         }
         const validTypes = ['CREDIT', 'DEBIT', 'REFUND', 'CHARGEBACK'];
         if (!validTypes.includes(type)) {
@@ -152,7 +152,7 @@ let ValidationService = ValidationService_1 = class ValidationService {
         if (id.length < 1 || id.length > 100) {
             throw new Error(`Invalid ${fieldName} length`);
         }
-        if (!/^[a-zA-Z0-9_-]+$/.test(id)) {
+        if (!/^[a-zA-Z0-9_-]+$/.test(id) && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
             throw new Error(`Invalid ${fieldName} format`);
         }
     }

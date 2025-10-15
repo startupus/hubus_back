@@ -5,6 +5,8 @@ import { ValidationService } from '../common/validation/validation.service';
 import { LoggerUtil } from '@ai-aggregator/shared';
 import { RabbitMQClient } from '@ai-aggregator/shared';
 import { ReferralService } from './referral.service';
+import { SubscriptionBillingService } from './subscription-billing.service';
+import { Decimal } from '@prisma/client/runtime/library';
 import {
   UserBalance,
   Transaction,
@@ -27,7 +29,6 @@ import {
   CostBreakdown,
   BillingReport
 } from '../types/billing.types';
-import { Decimal } from '@prisma/client/runtime/library';
 import { 
   InsufficientBalanceException,
   InvalidAmountException,
@@ -59,6 +60,7 @@ export class BillingService {
     private readonly validationService: ValidationService,
     private readonly rabbitmq: RabbitMQClient,
     private readonly referralService: ReferralService,
+    private readonly subscriptionBillingService: SubscriptionBillingService,
   ) {}
 
   /**
@@ -236,10 +238,13 @@ export class BillingService {
             await this.processReferralBonus(
               request.companyId,
               result.transaction.id,
-              request.metadata.inputTokens,
-              request.metadata.outputTokens,
-              request.metadata.inputTokenPrice,
-              request.metadata.outputTokenPrice
+              {
+                companyId: request.companyId,
+                service: 'ai-chat',
+                resource: 'tokens',
+                quantity: request.metadata.inputTokens,
+                metadata: request.metadata
+              } as TrackUsageRequest
             );
           } catch (referralError) {
             // Логируем ошибку, но не прерываем основной процесс
@@ -299,92 +304,238 @@ export class BillingService {
    */
   async trackUsage(request: TrackUsageRequest): Promise<TrackUsageResponse> {
     try {
-      // companyId используется для идентификации компании
       const initiatorCompanyId = request.companyId;
       
       LoggerUtil.debug('billing-service', 'Tracking usage', {
         initiatorCompanyId,
         service: request.service,
         resource: request.resource,
-        quantity: request.quantity
+        quantity: request.quantity,
+        inputTokens: request.inputTokens,
+        outputTokens: request.outputTokens
       });
 
       // Определить кто платит
       const { payerId, initiatorId } = await this.determinePayerCompany(initiatorCompanyId);
 
-      // Calculate cost based on pricing rules
-      const costCalculation = await this.calculateCost({
-        companyId: payerId, // Расчет на основе плательщика
-        service: request.service,
-        resource: request.resource,
-        quantity: request.quantity || 1,
-        metadata: request.metadata
-      });
+      // Проверяем, является ли это AI запросом с токенами
+      if (request.service === 'ai-chat' && request.resource === 'tokens') {
+        // Сначала проверяем, есть ли активная подписка
+        const activeSubscription = await this.subscriptionBillingService.getActiveSubscription(payerId);
+        
+        if (activeSubscription) {
+          // Если есть подписка, используем subscription billing
+          const subscriptionResult = await this.subscriptionBillingService.processAIRequest({
+            companyId: payerId,
+            inputTokens: request.inputTokens || 0,
+            outputTokens: request.outputTokens || 0,
+            inputTokenPrice: 0.01, // Цена за входной токен
+            outputTokenPrice: 0.02, // Цена за выходной токен
+            provider: request.metadata?.provider || 'openai',
+            model: request.metadata?.model || 'gpt-3.5-turbo',
+            metadata: request.metadata
+          });
 
-      if (!costCalculation.success || !costCalculation.cost) {
-        throw new BadRequestException('Failed to calculate cost');
-      }
+          if (!subscriptionResult.success) {
+            throw new BadRequestException('Failed to process subscription billing');
+          }
 
-      // Create usage event
-      const usageEvent = await this.prisma.usageEvent.create({
-        data: {
-          company: {
-            connect: { id: payerId }
-          },
-          initiatorCompany: initiatorId ? {
-            connect: { id: initiatorId }
-          } : undefined,
+        // Создаем событие использования
+        const usageEvent = await this.prisma.usageEvent.create({
+          data: {
+            company: { connect: { id: payerId } },
+            initiatorCompany: initiatorId ? { connect: { id: initiatorId } } : undefined,
+            service: request.service,
+            resource: request.resource,
+            quantity: request.quantity || 1,
+            unit: request.unit || 'request',
+            cost: subscriptionResult.amountCharged,
+            currency: 'USD',
+            metadata: {
+              ...request.metadata,
+              billingMethod: subscriptionResult.billingMethod,
+              subscriptionId: subscriptionResult.subscriptionId,
+              transactionId: subscriptionResult.transactionId,
+              remainingTokens: subscriptionResult.remainingTokens
+            }
+          }
+        });
+
+        // Создаем транзакцию только если была списана сумма
+        if (subscriptionResult.amountCharged.greaterThan(0)) {
+          await this.prisma.transaction.create({
+            data: {
+              company: { connect: { id: payerId } },
+              initiatorCompany: initiatorId && initiatorId !== payerId ? { connect: { id: initiatorId } } : undefined,
+              type: 'DEBIT',
+              amount: subscriptionResult.amountCharged,
+              currency: 'USD',
+              description: `Usage: ${request.service}/${request.resource} (${subscriptionResult.billingMethod})`,
+              status: 'COMPLETED',
+              processedAt: new Date()
+            }
+          });
+        }
+
+        LoggerUtil.info('billing-service', 'AI request processed with subscription billing', {
+          payerId, 
+          initiatorId, 
+          service: request.service, 
+          resource: request.resource,
+          billingMethod: subscriptionResult.billingMethod,
+          amountCharged: subscriptionResult.amountCharged.toString(),
+          remainingTokens: subscriptionResult.remainingTokens
+        });
+
+        return { 
+          success: true, 
+          usageEvent: usageEvent as any, 
+          cost: subscriptionResult.amountCharged.toNumber() 
+        };
+        } else {
+          // Если нет подписки, используем обычную логику биллинга для AI запросов
+          const costCalculation = await this.calculateCost({
+            companyId: payerId,
+            service: request.service,
+            resource: request.resource,
+            quantity: request.quantity || 1,
+            metadata: request.metadata
+          });
+
+          if (!costCalculation.success) {
+            throw new BadRequestException(costCalculation.error || 'Failed to calculate cost');
+          }
+
+          // Проверяем достаточность средств
+          const currentBalance = await this.prisma.companyBalance.findUnique({
+            where: { companyId: payerId }
+          });
+          if (!currentBalance || currentBalance.balance.lessThan(costCalculation.cost)) {
+            throw new BadRequestException('Insufficient balance');
+          }
+
+          // Создаем событие использования
+          const usageEvent = await this.prisma.usageEvent.create({
+            data: {
+              company: { connect: { id: payerId } },
+              initiatorCompany: initiatorId ? { connect: { id: initiatorId } } : undefined,
+              service: request.service,
+              resource: request.resource,
+              quantity: request.quantity || 1,
+              unit: request.unit || 'request',
+              cost: new Decimal(costCalculation.cost),
+              currency: costCalculation.currency || 'USD',
+              metadata: request.metadata
+            }
+          });
+
+          // Обновляем баланс плательщика (списываем стоимость)
+          await this.updateBalance({
+            companyId: payerId,
+            amount: costCalculation.cost,
+            operation: 'subtract',
+            description: `Usage by ${initiatorId === payerId ? 'self' : initiatorId}: ${request.service}/${request.resource}`,
+            reference: usageEvent.id
+          });
+
+               // Создаем запись транзакции
+               const transaction = await this.prisma.transaction.create({
+                 data: {
+                   company: { connect: { id: payerId } },
+                   initiatorCompany: initiatorId && initiatorId !== payerId ? { connect: { id: initiatorId } } : undefined,
+                   type: 'DEBIT',
+                   amount: new Decimal(costCalculation.cost),
+                   currency: costCalculation.currency || 'USD',
+                   description: `Usage: ${request.service}/${request.resource}`,
+                   status: 'COMPLETED',
+                   processedAt: new Date()
+                 }
+               });
+
+               // Обрабатываем реферальный бонус, если есть реферер
+               await this.processReferralBonus(payerId, transaction.id, request);
+
+               LoggerUtil.info('billing-service', 'AI request processed with regular billing', {
+                 payerId,
+                 initiatorId,
+                 service: request.service,
+                 resource: request.resource,
+                 cost: costCalculation.cost
+               });
+
+               return {
+                 success: true,
+                 usageEvent: usageEvent as any,
+                 cost: costCalculation.cost
+               };
+        }
+      } else {
+        // Обычная логика для не-AI запросов
+        const costCalculation = await this.calculateCost({
+          companyId: payerId,
           service: request.service,
           resource: request.resource,
           quantity: request.quantity || 1,
-          unit: request.unit || 'request',
-          cost: new Decimal(costCalculation.cost),
-          currency: costCalculation.currency || 'USD',
           metadata: request.metadata
+        });
+
+        if (!costCalculation.success || !costCalculation.cost) {
+          throw new BadRequestException('Failed to calculate cost');
         }
-      });
 
-      // Update payer balance (subtract cost)
-      await this.updateBalance({
-        companyId: payerId,  // Списываем с плательщика
-        amount: costCalculation.cost,
-        operation: 'subtract',
-        description: `Usage by ${initiatorId === payerId ? 'self' : initiatorId}: ${request.service}/${request.resource}`,
-        reference: usageEvent.id
-      });
+        // Create usage event
+        const usageEvent = await this.prisma.usageEvent.create({
+          data: {
+            company: { connect: { id: payerId } },
+            initiatorCompany: initiatorId ? { connect: { id: initiatorId } } : undefined,
+            service: request.service,
+            resource: request.resource,
+            quantity: request.quantity || 1,
+            unit: request.unit || 'request',
+            cost: new Decimal(costCalculation.cost),
+            currency: costCalculation.currency || 'USD',
+            metadata: request.metadata
+          }
+        });
 
-      // Create transaction record
-      await this.prisma.transaction.create({
-        data: {
-          company: {
-            connect: { id: payerId }
-          },
-          initiatorCompany: initiatorId && initiatorId !== payerId ? {
-            connect: { id: initiatorId }
-          } : undefined,
-          type: 'DEBIT',
-          amount: new Decimal(costCalculation.cost),
-          currency: costCalculation.currency || 'USD',
-          description: `Usage: ${request.service}/${request.resource}`,
-          status: 'COMPLETED',
-          reference: usageEvent.id,
-          processedAt: new Date()
-        }
-      });
+        // Update payer balance (subtract cost)
+        await this.updateBalance({
+          companyId: payerId,
+          amount: costCalculation.cost,
+          operation: 'subtract',
+          description: `Usage by ${initiatorId === payerId ? 'self' : initiatorId}: ${request.service}/${request.resource}`,
+          reference: usageEvent.id
+        });
 
-      LoggerUtil.info('billing-service', 'Usage tracked successfully', {
-        payerId,
-        initiatorId,
-        service: request.service,
-        resource: request.resource,
-        cost: costCalculation.cost
-      });
+        // Create transaction record
+        await this.prisma.transaction.create({
+          data: {
+            company: { connect: { id: payerId } },
+            initiatorCompany: initiatorId && initiatorId !== payerId ? { connect: { id: initiatorId } } : undefined,
+            type: 'DEBIT',
+            amount: new Decimal(costCalculation.cost),
+            currency: costCalculation.currency || 'USD',
+            description: `Usage: ${request.service}/${request.resource}`,
+            status: 'COMPLETED',
+            reference: usageEvent.id,
+            processedAt: new Date()
+          }
+        });
 
-      return {
-        success: true,
-        usageEvent: usageEvent as any,
-        cost: costCalculation.cost
-      };
+        LoggerUtil.info('billing-service', 'Usage tracked successfully', {
+          payerId,
+          initiatorId,
+          service: request.service,
+          resource: request.resource,
+          cost: costCalculation.cost
+        });
+
+        return {
+          success: true,
+          usageEvent: usageEvent as any,
+          cost: costCalculation.cost
+        };
+      }
     } catch (error) {
       LoggerUtil.error('billing-service', 'Failed to track usage', error as Error, { companyId: request.companyId });
       return {
@@ -961,7 +1112,7 @@ export class BillingService {
         where: { id: initiatorCompanyId },
         include: { 
           parentCompany: {
-            select: { id: true }
+            select: { id: true, email: true }
           }
         }
       });
@@ -970,11 +1121,22 @@ export class BillingService {
         throw new CompanyNotFoundException(`Company not found: ${initiatorCompanyId}`);
       }
 
+      LoggerUtil.info('billing-service', 'Determining payer company', {
+        initiatorId: initiatorCompanyId,
+        initiatorEmail: company.email,
+        billingMode: company.billingMode,
+        hasParent: !!company.parentCompany,
+        parentId: company.parentCompany?.id,
+        parentEmail: company.parentCompany?.email
+      });
+
       // Если режим PARENT_PAID и есть родитель - платит родитель
       if (company.billingMode === 'PARENT_PAID' && company.parentCompany) {
-        LoggerUtil.debug('billing-service', 'Billing mode: PARENT_PAID', {
+        LoggerUtil.info('billing-service', 'Billing mode: PARENT_PAID - parent will pay', {
           initiatorId: initiatorCompanyId,
-          payerId: company.parentCompany.id
+          initiatorEmail: company.email,
+          payerId: company.parentCompany.id,
+          payerEmail: company.parentCompany.email
         });
         return {
           payerId: company.parentCompany.id,
@@ -983,8 +1145,10 @@ export class BillingService {
       }
 
       // Иначе платит сама
-      LoggerUtil.debug('billing-service', 'Billing mode: SELF_PAID', {
-        companyId: initiatorCompanyId
+      LoggerUtil.info('billing-service', 'Billing mode: SELF_PAID - self will pay', {
+        initiatorId: initiatorCompanyId,
+        initiatorEmail: company.email,
+        payerId: initiatorCompanyId
       });
       return {
         payerId: initiatorCompanyId,
@@ -1140,35 +1304,109 @@ export class BillingService {
     }
   }
 
+
   /**
-   * Process referral bonus for a transaction
+   * Top up user balance
    */
-  private async processReferralBonus(
-    companyId: string,
-    transactionId: string,
-    inputTokens: number,
-    outputTokens: number,
-    inputTokenPrice?: Decimal,
-    outputTokenPrice?: Decimal
-  ): Promise<void> {
+  async topUpBalance(request: { companyId: string; amount: number; currency?: string }): Promise<{ success: boolean; balance?: number; error?: string }> {
     try {
-      // Получаем информацию о компании
+      LoggerUtil.info('billing-service', 'Topping up balance', {
+        companyId: request.companyId,
+        amount: request.amount,
+        currency: request.currency || 'USD'
+      });
+
+      // Update balance
+      const result = await this.updateBalance({
+        companyId: request.companyId,
+        amount: request.amount,
+        operation: 'add',
+        description: 'Balance top-up',
+        reference: `topup-${Date.now()}`
+      });
+
+      if (!result.success) {
+        return {
+          success: false,
+          error: result.error || 'Failed to top up balance'
+        };
+      }
+
+      // Get updated balance
+      const balanceResponse = await this.getBalance({ companyId: request.companyId });
+      
+      return {
+        success: true,
+        balance: balanceResponse.balance?.balance.toNumber() || 0
+      };
+    } catch (error) {
+      LoggerUtil.error('billing-service', 'Failed to top up balance', error as Error, {
+        companyId: request.companyId,
+        amount: request.amount
+      });
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  /**
+   * Charge for subscription
+   */
+  async chargeForSubscription(companyId: string, amount: number, planId: string): Promise<void> {
+    this.logger.log(`Charging ${amount} for subscription plan ${planId} for company ${companyId}`);
+
+    // Check balance
+    const balanceResponse = await this.getBalance({ companyId });
+    
+    if (!balanceResponse.success || !balanceResponse.balance) {
+      throw new BadRequestException('Failed to get company balance');
+    }
+    
+    const currentBalance = balanceResponse.balance.balance.toNumber();
+    
+    if (currentBalance < amount) {
+      throw new BadRequestException('Insufficient balance for subscription');
+    }
+
+    // Update balance
+    await this.updateBalance({
+      companyId,
+      amount,
+      operation: 'subtract',
+      description: `Subscription payment for plan ${planId}`,
+      reference: `subscription-${planId}-${Date.now()}`
+    });
+  }
+
+  /**
+   * Обработать реферальный бонус
+   */
+  private async processReferralBonus(companyId: string, transactionId: string, request: TrackUsageRequest) {
+    try {
+      // Находим компанию и проверяем, есть ли у неё реферер
       const company = await this.prisma.company.findUnique({
         where: { id: companyId },
-        select: { referredBy: true },
+        select: { referredBy: true, referralCodeId: true }
       });
 
       if (!company?.referredBy) {
-        // Компания не является рефералом, пропускаем
+        LoggerUtil.debug('billing-service', 'No referrer found for company', { companyId });
         return;
       }
 
-      // Если цены токенов не переданы, используем стандартные значения
-      const defaultInputPrice = new Decimal('0.00003'); // $0.03 за 1K токенов
-      const defaultOutputPrice = new Decimal('0.00006'); // $0.06 за 1K токенов
+      LoggerUtil.info('billing-service', 'Processing referral bonus', {
+        companyId,
+        referrerId: company.referredBy,
+        transactionId
+      });
 
-      const inputPrice = inputTokenPrice || defaultInputPrice;
-      const outputPrice = outputTokenPrice || defaultOutputPrice;
+      // Получаем информацию о стоимости токенов из метаданных
+      const inputTokens = request.quantity || 0;
+      const outputTokens = 0; // Предполагаем, что выходные токены обрабатываются отдельно
+      const inputTokenPrice = new Decimal(0.01); // Цена за входной токен
+      const outputTokenPrice = new Decimal(0.02); // Цена за выходной токен
 
       // Создаем реферальную транзакцию
       await this.referralService.createReferralTransaction({
@@ -1176,32 +1414,28 @@ export class BillingService {
         originalTransactionId: transactionId,
         inputTokens,
         outputTokens,
-        inputTokenPrice: inputPrice,
-        outputTokenPrice: outputPrice,
-        description: `Referral bonus for AI request (${inputTokens} input + ${outputTokens} output tokens)`,
+        inputTokenPrice,
+        outputTokenPrice,
+        description: `Referral bonus for ${request.service}/${request.resource}`,
         metadata: {
-          transactionId,
-          companyId,
-          inputTokens,
-          outputTokens,
-        },
+          ...request.metadata,
+          originalCompanyId: companyId,
+          referralCodeId: company.referralCodeId
+        }
       });
 
-      LoggerUtil.info('billing-service', 'Referral bonus processed', {
+      LoggerUtil.info('billing-service', 'Referral bonus processed successfully', {
         companyId,
         referrerId: company.referredBy,
-        transactionId,
         inputTokens,
-        outputTokens,
+        outputTokens
       });
     } catch (error) {
-      LoggerUtil.error('billing-service', 'Failed to process referral bonus', error as Error, {
+      LoggerUtil.error('billing-service', 'Failed to process referral bonus', error, {
         companyId,
-        transactionId,
-        inputTokens,
-        outputTokens,
+        transactionId
       });
-      throw error;
+      // Не прерываем основной процесс, если реферальный бонус не удался
     }
   }
 }

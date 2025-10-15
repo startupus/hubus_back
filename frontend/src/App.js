@@ -362,6 +362,7 @@ function AIComponent({ user, onUserUpdate, onError, onSuccess }) {
         <option value="github/github-copilot-chat">GitHub Copilot Chat</option>
         <option value="github/github-copilot-codex">GitHub Copilot Codex</option>
         <option value="deepseek/deepseek-r1-0528">DeepSeek R1 0528 (Free)</option>
+        <option value="microsoft/phi-3-mini-4k-instruct">Phi-3 Mini (Free)</option>
       </select>
         </div>
         

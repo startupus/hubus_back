@@ -154,6 +154,14 @@ export class BillingService {
       try {
         // Валидация входных данных
         this.validationService.validateId(request.companyId, 'User ID');
+        
+        LoggerUtil.info('billing-service', 'Validating amount before updateBalance', {
+          companyId: request.companyId,
+          amount: request.amount,
+          amountType: typeof request.amount,
+          operation: request.operation
+        });
+        
         this.validationService.validateAmount(request.amount);
         this.validationService.validateMetadata(request.metadata);
 
@@ -399,6 +407,8 @@ export class BillingService {
             service: request.service,
             resource: request.resource,
             quantity: request.quantity || 1,
+            inputTokens: request.inputTokens,
+            outputTokens: request.outputTokens,
             metadata: request.metadata
           });
 
@@ -430,6 +440,13 @@ export class BillingService {
           });
 
           // Обновляем баланс плательщика (списываем стоимость)
+          LoggerUtil.info('billing-service', 'Updating balance with cost', {
+            companyId: payerId,
+            cost: costCalculation.cost,
+            costType: typeof costCalculation.cost,
+            operation: 'subtract'
+          });
+          
           await this.updateBalance({
             companyId: payerId,
             amount: costCalculation.cost,
@@ -554,8 +571,61 @@ export class BillingService {
         companyId: request.companyId,
         service: request.service,
         resource: request.resource,
-        quantity: request.quantity
+        quantity: request.quantity,
+        inputTokens: request.inputTokens,
+        outputTokens: request.outputTokens
       });
+
+      // Special handling for AI chat with token separation
+      if (request.service === 'ai-chat' && request.resource === 'tokens') {
+        const inputTokens = request.inputTokens || 0;
+        const outputTokens = request.outputTokens || 0;
+        
+        // Default pricing for tokens
+        const inputTokenPrice = 0.000001; // $0.000001 per input token
+        const outputTokenPrice = 0.000002; // $0.000002 per output token
+        
+        const inputCost = inputTokens * inputTokenPrice;
+        const outputCost = outputTokens * outputTokenPrice;
+        const totalCost = Math.round((inputCost + outputCost) * 1000000) / 1000000; // Округляем до 6 знаков после запятой
+
+        LoggerUtil.info('billing-service', 'AI token cost calculated', {
+          companyId: request.companyId,
+          inputTokens,
+          outputTokens,
+          inputCost,
+          outputCost,
+          totalCost
+        });
+
+        LoggerUtil.info('billing-service', 'Returning cost calculation result', {
+          companyId: request.companyId,
+          totalCost,
+          totalCostType: typeof totalCost,
+          inputTokens,
+          outputTokens
+        });
+
+        return {
+          success: true,
+          cost: totalCost,
+          currency: 'USD',
+          breakdown: {
+            baseCost: 0,
+            usageCost: totalCost,
+            inputTokens,
+            outputTokens,
+            inputTokenPrice,
+            outputTokenPrice,
+            inputCost,
+            outputCost,
+            tax: 0,
+            discounts: 0,
+            total: totalCost,
+            currency: 'USD'
+          }
+        };
+      }
 
       // Get pricing rules for the service/resource
       const pricingRules = await this.getPricingRules(request.service, request.resource);

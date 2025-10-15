@@ -237,6 +237,8 @@ export interface CalculateCostRequest {
   service: string;
   resource: string;
   quantity: number;
+  inputTokens?: number;
+  outputTokens?: number;
   metadata?: Record<string, any>;
 }
 
@@ -251,6 +253,12 @@ export interface CalculateCostResponse {
 export interface CostBreakdown {
   baseCost: number;
   usageCost: number;
+  inputTokens?: number;
+  outputTokens?: number;
+  inputTokenPrice?: number;
+  outputTokenPrice?: number;
+  inputCost?: number;
+  outputCost?: number;
   tax: number;
   discounts: number;
   total: number;

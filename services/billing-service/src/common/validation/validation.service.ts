@@ -22,18 +22,59 @@ import { Decimal } from '@prisma/client/runtime/library';
 export class ValidationService {
   private readonly logger = new Logger(ValidationService.name);
   private readonly supportedCurrencies = ['USD', 'EUR', 'RUB', 'BTC', 'ETH'];
-  private readonly minAmount = 0.001; // Минимальная сумма для AI токенов
+  private readonly minAmount = 0.00000001; // Минимальная сумма для AI токенов (0.01 микроцента)
   private readonly maxAmount = 1000000;
 
   /**
    * Валидация суммы
    */
   validateAmount(amount: number, currency: string = 'USD'): void {
+    this.logger.debug('Validating amount', {
+      amount,
+      amountType: typeof amount,
+      minAmount: this.minAmount,
+      currency
+    });
+
+    this.logger.debug('First validation check', {
+      amount,
+      amountType: typeof amount,
+      isZero: amount === 0,
+      isNull: amount === null,
+      isUndefined: amount === undefined,
+      isLessOrEqualZero: amount <= 0,
+      checkResult: !amount || amount <= 0
+    });
+
     if (!amount || amount <= 0) {
+      this.logger.error('Amount validation failed: amount is zero or negative', {
+        amount,
+        amountType: typeof amount
+      });
       throw new InvalidAmountException(amount);
     }
 
-    if (amount < this.minAmount) {
+    // Используем более точное сравнение для очень малых сумм
+    const minAmountRounded = Math.round(this.minAmount * 100000000) / 100000000;
+    const amountRounded = Math.round(amount * 100000000) / 100000000;
+    
+    this.logger.debug('Amount comparison details', {
+      amount,
+      amountRounded,
+      minAmount: this.minAmount,
+      minAmountRounded,
+      comparison: amountRounded < minAmountRounded,
+      difference: amountRounded - minAmountRounded
+    });
+    
+    if (amountRounded < minAmountRounded) {
+      this.logger.error('Amount validation failed: amount is less than minimum', {
+        amount,
+        amountRounded,
+        minAmount: this.minAmount,
+        minAmountRounded,
+        difference: amountRounded - minAmountRounded
+      });
       throw new InvalidAmountException(amount);
     }
 
@@ -43,7 +84,12 @@ export class ValidationService {
 
     // Проверяем, что сумма не содержит слишком много знаков после запятой
     const decimalPlaces = (amount.toString().split('.')[1] || '').length;
-    if (decimalPlaces > 4) {
+    if (decimalPlaces > 8) { // Увеличиваем до 8 знаков для AI токенов
+      this.logger.error('Amount validation failed: too many decimal places', {
+        amount,
+        decimalPlaces,
+        maxDecimalPlaces: 8
+      });
       throw new InvalidAmountException(amount);
     }
   }

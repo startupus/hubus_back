@@ -1,41 +1,126 @@
-# Dependencies - НЕ коммитим
-node_modules/
+# Environment variables and secrets
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+.env.staging
+*.env
+!env.example
+
+# API Keys and tokens
+token.txt
+fresh-token.txt
+*.key
+*.pem
+*.p12
+*.p8
+*.pem
+*.crt
+*.cer
+*.der
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+logs
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+lerna-debug.log*
 
-# Environment variables - .env включен для удобства развертывания
-# ВНИМАНИЕ: Не добавляйте сюда реальные production ключи!
-.env.test
-.env.local
-.env.production
-
-# Runtime data - НЕ коммитим
+# Runtime data
 pids
 *.pid
 *.seed
 *.pid.lock
 
-# Logs - НЕ коммитим
-logs
-*.log
-
-# Coverage - НЕ коммитим
+# Coverage directory used by tools like istanbul
 coverage/
 *.lcov
+
+# nyc test coverage
 .nyc_output
 
-# Cache directories - НЕ коммитим
+# Grunt intermediate storage (https://gruntjs.com/creating-plugins#storing-task-files)
+.grunt
+
+# Bower dependency directory (https://bower.io/)
+bower_components
+
+# node-waf configuration
+.lock-wscript
+
+# Compiled binary addons (https://nodejs.org/api/addons.html)
+build/Release
+
+# Dependency directories
+node_modules/
+jspm_packages/
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Optional npm cache directory
 .npm
+
+# Optional eslint cache
 .eslintcache
-.cache
-.parcel-cache
+
+# Microbundle cache
 .rpt2_cache/
 .rts2_cache_cjs/
 .rts2_cache_es/
 .rts2_cache_umd/
 
-# OS generated files - НЕ коммитим
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# dotenv environment variables file
+.env
+.env.test
+
+# parcel-bundler cache (https://parceljs.org/)
+.cache
+.parcel-cache
+
+# Next.js build output
+.next
+
+# Nuxt.js build / generate output
+.nuxt
+dist
+
+# Gatsby files
+.cache/
+public
+
+# Storybook build outputs
+.out
+.storybook-out
+
+# Temporary folders
+tmp/
+temp/
+
+# Editor directories and files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
 .DS_Store
 .DS_Store?
 ._*
@@ -44,32 +129,17 @@ coverage/
 ehthumbs.db
 Thumbs.db
 
-# IDE files - НЕ коммитим
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
+# Docker
+.dockerignore
 
-# Temporary folders - НЕ коммитим
-tmp/
-temp/
+# Test results
+test-results-*.json
+endpoint-test-results.json
 
-# Database files (только dev базы) - НЕ коммитим
-*.db
-*.sqlite
-*.sqlite3
-prisma/dev.db
+# Build outputs
+dist/
+build/
+*.map
 
-# Docker volumes data - НЕ коммитим
-docker-volumes/
-
-# Build artifacts that are regenerated - НЕ коммитим
-*.tsbuildinfo
-
-# Optional: Compiled output (закомментировано, т.к. нужен для Docker)
-# dist/
-# build/
-
-# Optional: Prisma migrations (закомментировано, т.к. нужны для деплоя)
-# prisma/migrations/
+# Prisma
+prisma/migrations/

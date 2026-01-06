@@ -55,7 +55,12 @@ COPY --from=development /app/dist ./dist
 COPY --from=development /app/shared ./shared
 COPY --from=development /app/prisma ./prisma
 
+# Установить зависимости для shared пакета в production
+WORKDIR /app/shared
+RUN npm install --legacy-peer-deps --only=production || npm install --legacy-peer-deps --only=production || npm install --legacy-peer-deps --only=production
+
 # Создать директорию для символической ссылки и создать ссылку на shared пакет
+WORKDIR /app
 RUN mkdir -p /app/node_modules/@ai-aggregator && \
     ln -sf /app/shared /app/node_modules/@ai-aggregator/shared
 

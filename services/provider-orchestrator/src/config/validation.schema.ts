@@ -16,10 +16,11 @@ export const validationSchema = Joi.object({
   RABBITMQ_URL: Joi.string().required(),
   
   // Providers
-  OPENAI_API_KEY: Joi.string().required(),
-  OPENROUTER_API_KEY: Joi.string().required(),
-  YANDEX_API_KEY: Joi.string().required(),
-  YANDEX_FOLDER_ID: Joi.string().required(),
+  // OpenAI и Yandex опциональны, так как сервис может работать только с OpenRouter
+  OPENAI_API_KEY: Joi.string().optional().allow(''),
+  OPENROUTER_API_KEY: Joi.string().default('mock_openrouter_key'),
+  YANDEX_API_KEY: Joi.string().optional().allow(''),
+  YANDEX_FOLDER_ID: Joi.string().optional().allow(''),
   
   // Monitoring
   LOG_LEVEL: Joi.string().valid('debug', 'info', 'warn', 'error').default('info'),

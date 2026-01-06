@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
@@ -54,9 +54,27 @@ export class EmployeeService {
       );
       this.logger.log(`Received employees data: ${JSON.stringify(response.data)}`);
       return response.data;
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to get employees', error);
-      throw error;
+      
+      if (error.response?.status) {
+        throw new HttpException(
+          error.response.data?.message || 'Failed to get employees',
+          error.response.status
+        );
+      }
+      
+      if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
+        throw new HttpException(
+          'Auth service is unavailable',
+          HttpStatus.BAD_GATEWAY
+        );
+      }
+      
+      throw new HttpException(
+        error.message || 'Failed to get employees',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
     }
   }
 

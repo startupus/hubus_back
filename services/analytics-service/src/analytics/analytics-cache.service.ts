@@ -215,7 +215,8 @@ export class AnalyticsCacheService {
         return [];
       }
 
-      const metrics = await this.redisService.mget<any>(keys);
+      // Получаем все метрики параллельно
+      const metrics = await Promise.all(keys.map(key => this.redisService.get<any>(key)));
       const now = Date.now();
       const cutoff = now - (timeWindow * 60 * 1000);
 

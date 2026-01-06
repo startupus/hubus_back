@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
@@ -40,9 +40,27 @@ export class ReferralService {
         })
       );
       return response.data;
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to get referral earnings', error);
-      throw error;
+      
+      if (error.response?.status) {
+        throw new HttpException(
+          error.response.data?.message || 'Failed to get referral earnings',
+          error.response.status
+        );
+      }
+      
+      if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
+        throw new HttpException(
+          'Billing service is unavailable',
+          HttpStatus.BAD_GATEWAY
+        );
+      }
+      
+      throw new HttpException(
+        error.message || 'Failed to get referral earnings',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
     }
   }
 
@@ -69,9 +87,27 @@ export class ReferralService {
         })
       );
       return response.data;
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to get referral earnings summary', error);
-      throw error;
+      
+      if (error.response?.status) {
+        throw new HttpException(
+          error.response.data?.message || 'Failed to get referral earnings summary',
+          error.response.status
+        );
+      }
+      
+      if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
+        throw new HttpException(
+          'Billing service is unavailable',
+          HttpStatus.BAD_GATEWAY
+        );
+      }
+      
+      throw new HttpException(
+        error.message || 'Failed to get referral earnings summary',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
     }
   }
 
@@ -117,9 +153,27 @@ export class ReferralService {
         })
       );
       return response.data;
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to get referral codes', error);
-      throw error;
+      
+      if (error.response?.status) {
+        throw new HttpException(
+          error.response.data?.message || 'Failed to get referral codes',
+          error.response.status
+        );
+      }
+      
+      if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
+        throw new HttpException(
+          'Auth service is unavailable',
+          HttpStatus.BAD_GATEWAY
+        );
+      }
+      
+      throw new HttpException(
+        error.message || 'Failed to get referral codes',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
     }
   }
 

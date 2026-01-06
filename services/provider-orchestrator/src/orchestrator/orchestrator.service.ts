@@ -70,9 +70,9 @@ export class OrchestratorService {
   ) {
     console.log('OrchestratorService: Constructor called');
     // Инициализация в асинхронном режиме, чтобы не блокировать запуск
-    Promise.resolve().then(() => {
+    Promise.resolve().then(async () => {
       console.log('OrchestratorService: Starting async initialization...');
-      this.initializeProviders();
+      await this.initializeProviders();
       this.startHealthMonitoring();
       console.log('OrchestratorService: Async initialization completed');
     }).catch(error => {
@@ -150,63 +150,78 @@ export class OrchestratorService {
 
   /**
    * Инициализация провайдеров из конфигурации
+   * Теперь используем только OpenRouter
    */
-  private initializeProviders(): void {
+  private async initializeProviders(): Promise<void> {
     console.log('OrchestratorService: initializeProviders called');
-    const providersConfig = this.configService.get('providers', {});
     
-    // OpenAI Provider
-    this.providers.set('openai', {
-      id: 'openai',
-      name: 'OpenAI',
-      baseUrl: 'https://api.openai.com/v1',
-      apiKey: this.configService.get('OPENAI_API_KEY', ''),
-      models: ['gpt-4', 'gpt-4-turbo', 'gpt-3.5-turbo'],
-      costPerToken: 0.00003,
-      maxTokens: 4096,
-      responseTime: 2000,
-      successRate: 0.98,
-      isActive: true,
-      priority: 1,
-      fallbackOrder: 1
-    });
-
+    // Загружаем модели из OpenRouter API
+    const models = await this.loadOpenRouterModels();
+    
     // OpenRouter Provider
     this.providers.set('openrouter', {
       id: 'openrouter',
       name: 'OpenRouter',
       baseUrl: 'https://openrouter.ai/api/v1',
       apiKey: this.configService.get('OPENROUTER_API_KEY', ''),
-      models: ['gpt-4', 'claude-3-sonnet', 'claude-3-haiku'],
-      costPerToken: 0.00002,
+      models: models,
+      costPerToken: 0.00002, // Средняя стоимость
       maxTokens: 4096,
       responseTime: 1500,
       successRate: 0.95,
       isActive: true,
-      priority: 2,
-      fallbackOrder: 2
-    });
-
-    // Yandex Provider
-    this.providers.set('yandex', {
-      id: 'yandex',
-      name: 'Yandex GPT',
-      baseUrl: 'https://llm.api.cloud.yandex.net/foundationModels/v1',
-      apiKey: this.configService.get('YANDEX_API_KEY', ''),
-      models: ['yandexgpt', 'yandexgpt-lite'],
-      costPerToken: 0.00001,
-      maxTokens: 2048,
-      responseTime: 3000,
-      successRate: 0.92,
-      isActive: true,
-      priority: 3,
-      fallbackOrder: 3
+      priority: 1,
+      fallbackOrder: 1
     });
 
     LoggerUtil.info('provider-orchestrator', 'Providers initialized', {
       count: this.providers.size,
-      providers: Array.from(this.providers.keys())
+      providers: Array.from(this.providers.keys()),
+      modelsCount: models.length
     });
+  }
+
+  /**
+   * Загружает модели из OpenRouter API
+   */
+  private async loadOpenRouterModels(): Promise<string[]> {
+    const apiKey = this.configService.get('OPENROUTER_API_KEY', '');
+    const baseUrl = 'https://openrouter.ai/api/v1';
+
+    if (!apiKey || apiKey.includes('your-') || apiKey.includes('sk-or-your-')) {
+      LoggerUtil.warn('provider-orchestrator', 'No valid OpenRouter API key, using default models');
+      return ['openai/gpt-4o', 'openai/gpt-4o-mini', 'anthropic/claude-3-5-sonnet'];
+    }
+
+    try {
+      const response = await firstValueFrom(
+        this.httpService.get(`${baseUrl}/models`, {
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'HTTP-Referer': 'https://ai-aggregator.com',
+            'X-Title': 'AI Aggregator'
+          },
+          timeout: 10000
+        })
+      );
+
+      const models = response.data?.data || [];
+      const modelIds = models.map((model: any) => model.id).filter(Boolean);
+      
+      LoggerUtil.info('provider-orchestrator', 'OpenRouter models loaded', {
+        count: modelIds.length
+      });
+
+      return modelIds;
+    } catch (error: any) {
+      LoggerUtil.error('provider-orchestrator', 'Failed to load OpenRouter models', error, {
+        status: error.response?.status,
+        message: error.message
+      });
+      
+      // Возвращаем список популярных моделей по умолчанию
+      return ['openai/gpt-4o', 'openai/gpt-4o-mini', 'anthropic/claude-3-5-sonnet', 'anthropic/claude-3-5-haiku'];
+    }
   }
 
   /**
@@ -313,7 +328,9 @@ export class OrchestratorService {
         this.httpService.post(`${provider.baseUrl}/chat/completions`, requestPayload, {
           headers: {
             'Authorization': `Bearer ${provider.apiKey}`,
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'HTTP-Referer': 'https://ai-aggregator.com',
+            'X-Title': 'AI Aggregator'
           },
           timeout: 30000
         })
@@ -429,21 +446,8 @@ export class OrchestratorService {
       stream: false
     };
 
-    // Специфичные настройки для разных провайдеров
-    switch (provider.id) {
-      case 'yandex':
-        return {
-          ...baseRequest,
-          folderId: this.configService.get('YANDEX_FOLDER_ID'),
-          completionOptions: {
-            stream: false,
-            temperature: baseRequest.temperature,
-            maxTokens: baseRequest.max_tokens
-          }
-        };
-      default:
-        return baseRequest;
-    }
+    // OpenRouter использует стандартный формат
+    return baseRequest;
   }
 
   /**
@@ -498,7 +502,11 @@ export class OrchestratorService {
       // Простая проверка доступности через ping
       const response = await firstValueFrom(
         this.httpService.get(`${provider.baseUrl}/models`, {
-          headers: { 'Authorization': `Bearer ${provider.apiKey}` },
+          headers: { 
+            'Authorization': `Bearer ${provider.apiKey}`,
+            'HTTP-Referer': 'https://ai-aggregator.com',
+            'X-Title': 'AI Aggregator'
+          },
           timeout: 5000
         })
       );

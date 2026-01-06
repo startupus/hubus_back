@@ -15,7 +15,9 @@ export class CryptoUtil {
   }
 
   static generateApiKey(): string {
-    return crypto.randomBytes(32).toString('hex');
+    const prefix = 'ak_';
+    const randomPart = crypto.randomBytes(32).toString('hex');
+    return `${prefix}${randomPart}`;
   }
 
   static generateToken(): string {

@@ -14,34 +14,33 @@ import { AnonymizationService } from '../anonymization/anonymization.service';
 
 @Injectable()
 export class ProxyService {
-  private readonly openaiApiKey: string;
   private readonly openrouterApiKey: string;
-  private readonly githubApiKey: string;
-  private readonly yandexApiKey: string;
-  private readonly yandexFolderId: string;
-  private readonly openaiBaseUrl: string;
   private readonly openrouterBaseUrl: string;
-  private readonly githubBaseUrl: string;
-  private readonly yandexBaseUrl: string;
   private readonly rabbitmqUrl: string;
   private connection: any = null;
   private channel: any = null;
+  
+  // Кэш для моделей OpenRouter (обновляется каждые 5 минут)
+  private openRouterModelsCache: any[] = [];
+  private modelsCacheTimestamp: number = 0;
+  private readonly MODELS_CACHE_TTL = 5 * 60 * 1000; // 5 минут
 
   constructor(
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
     private readonly anonymizationService: AnonymizationService,
   ) {
-    this.openaiApiKey = this.configService.get('OPENAI_API_KEY', '');
     this.openrouterApiKey = this.configService.get('OPENROUTER_API_KEY', '');
-    this.githubApiKey = this.configService.get('GITHUB_API_KEY', '');
-    this.yandexApiKey = this.configService.get('YANDEX_API_KEY', '');
-    this.yandexFolderId = this.configService.get('YANDEX_FOLDER_ID', '');
-    this.openaiBaseUrl = this.configService.get('OPENAI_BASE_URL', 'https://api.openai.com/v1');
     this.openrouterBaseUrl = this.configService.get('OPENROUTER_BASE_URL', 'https://openrouter.ai/api/v1');
-    this.githubBaseUrl = this.configService.get('GITHUB_BASE_URL', 'https://api.github.com');
-    this.yandexBaseUrl = this.configService.get('YANDEX_BASE_URL', 'https://llm.api.cloud.yandex.net/foundationModels/v1');
     this.rabbitmqUrl = this.configService.get('RABBITMQ_URL', 'amqp://guest:guest@rabbitmq:5672');
+    
+    // Загружаем модели при старте
+    this.loadOpenRouterModels().catch(error => {
+      LoggerUtil.warn('proxy-service', 'Failed to load OpenRouter models on startup', {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      });
+    });
   }
 
   /**
@@ -50,7 +49,7 @@ export class ProxyService {
   async processChatCompletion(
     request: any,
     userId: string,
-    provider: 'openai' | 'openrouter' | 'github' | 'yandex' = 'openai'
+    provider: 'openrouter' = 'openrouter'
   ): Promise<any> {
     const startTime = Date.now();
     
@@ -75,41 +74,89 @@ export class ProxyService {
         mappingKeys: Object.keys(anonymizedData.mapping).length
       });
 
-      // Шаг 2: Отправляем запрос к провайдеру с fallback логикой
-      let response;
-      try {
-        // Применяем маппинг модели для провайдера
-        const mappedRequest = {
-          ...anonymizedRequest,
-          model: this.mapModelForProvider(anonymizedRequest.model, provider)
-        };
-        response = await this.sendToProvider(mappedRequest, provider);
-      } catch (error: any) {
-        // Если OpenAI недоступен (квота, регион), пробуем OpenRouter или Yandex
-        if (provider === 'openai' && this.openrouterApiKey && 
-            !this.openrouterApiKey.includes('your-') && 
-            !this.openrouterApiKey.includes('sk-or-your-')) {
-          
-          LoggerUtil.warn('proxy-service', 'OpenAI failed, falling back to OpenRouter', {
-            originalError: error.message,
-            userId,
-            model: request.model
+      // Шаг 2: Отправляем запрос к провайдеру
+      // Применяем маппинг модели для провайдера
+      const mappedModel = await this.mapModelForProvider(anonymizedRequest.model, provider);
+      const modelInfo = this.openRouterModelsCache.find(m => m.id === mappedModel);
+      
+      // Получаем context_length модели (общий лимит: входные + выходные токены)
+      // Используем context_length если есть, иначе max_tokens (который тоже = context_length)
+      const contextLength = modelInfo?.context_length || modelInfo?.max_tokens || 32768;
+      
+      // Оцениваем количество токенов во входных сообщениях
+      const estimatedInputTokens = this.estimateTokens(anonymizedRequest);
+      
+      // Вычисляем максимальное количество выходных токенов с запасом
+      // Запас 200 токенов для системных сообщений и форматирования
+      const maxOutputTokens = Math.max(1, contextLength - estimatedInputTokens - 200);
+      
+      // Определяем max_tokens для запроса
+      let maxTokens: number;
+      if (anonymizedRequest.max_tokens) {
+        // Если max_tokens указан в запросе, используем его, но не превышаем доступный лимит
+        maxTokens = Math.min(anonymizedRequest.max_tokens, maxOutputTokens);
+        
+        if (anonymizedRequest.max_tokens > maxOutputTokens) {
+          LoggerUtil.warn('proxy-service', 'Requested max_tokens exceeds available context, reducing', {
+            requested: anonymizedRequest.max_tokens,
+            available: maxOutputTokens,
+            contextLength,
+            estimatedInputTokens
           });
-          
-          // Переключаем модель для OpenRouter с правильным маппингом
-          const openrouterRequest = {
-            ...anonymizedRequest,
-            model: this.mapModelForProvider(anonymizedRequest.model, 'openrouter')
-          };
-          
-          response = await this.sendToProvider(openrouterRequest, 'openrouter');
-        } else {
-          throw error;
         }
+      } else {
+        // Если max_tokens не указан, используем доступный лимит
+        maxTokens = maxOutputTokens;
       }
+      
+      const mappedRequest = {
+        ...anonymizedRequest,
+        model: mappedModel,
+        max_tokens: maxTokens
+      };
+      
+      LoggerUtil.debug('proxy-service', 'Request prepared with model mapping', {
+        originalModel: anonymizedRequest.model,
+        mappedModel: mappedModel,
+        maxTokens: mappedRequest.max_tokens,
+        contextLength: contextLength,
+        estimatedInputTokens: estimatedInputTokens,
+        maxOutputTokens: maxOutputTokens,
+        requestedMaxTokens: anonymizedRequest.max_tokens
+      });
+      
+      const response = await this.sendToProvider(mappedRequest, provider);
 
       // Шаг 3: Деобезличиваем ответ
       const deanonymizedResponse = this.deanonymizeResponse(response, anonymizedData.mapping);
+
+      // Проверяем, был ли ответ обрезан из-за ограничения длины
+      const isTruncated = deanonymizedResponse.choices?.some(
+        (choice: any) => choice.finish_reason === 'length'
+      );
+      
+      if (isTruncated) {
+        LoggerUtil.warn('proxy-service', 'Response was truncated due to max_tokens limit', {
+          userId,
+          provider,
+          model: request.model,
+          maxTokens: mappedRequest.max_tokens,
+          outputTokens: deanonymizedResponse.usage.completion_tokens,
+          contextLength: contextLength,
+          estimatedInputTokens: estimatedInputTokens
+        });
+        
+        // Если ответ был обрезан, но max_tokens уже был установлен на максимум доступных выходных токенов,
+        // это означает, что модель достигла своего лимита - не добавляем предупреждение
+        // так как это естественное ограничение модели
+        if (mappedRequest.max_tokens < maxOutputTokens) {
+          LoggerUtil.info('proxy-service', 'Response truncated, but max_tokens was below available maximum', {
+            currentMaxTokens: mappedRequest.max_tokens,
+            maxOutputTokens: maxOutputTokens,
+            contextLength: contextLength
+          });
+        }
+      }
 
       const processingTime = Date.now() - startTime;
 
@@ -119,7 +166,9 @@ export class ProxyService {
         model: request.model,
         processingTimeMs: processingTime,
         inputTokens: deanonymizedResponse.usage.prompt_tokens,
-        outputTokens: deanonymizedResponse.usage.completion_tokens
+        outputTokens: deanonymizedResponse.usage.completion_tokens,
+        isTruncated: isTruncated || false,
+        finishReason: deanonymizedResponse.choices?.[0]?.finish_reason
       });
 
       // Отправляем событие биллинга
@@ -132,7 +181,7 @@ export class ProxyService {
           inputTokens: deanonymizedResponse.usage.prompt_tokens,
           outputTokens: deanonymizedResponse.usage.completion_tokens,
           cost: this.calculateCost(deanonymizedResponse.usage, request.model),
-          provider: provider === 'openrouter' ? 'openrouter' : provider,
+          provider: 'openrouter',
           model: request.model,
           timestamp: new Date().toISOString()
         });
@@ -168,139 +217,62 @@ export class ProxyService {
   }
 
   /**
-   * Отправляет запрос к конкретному провайдеру
+   * Отправляет запрос к OpenRouter провайдеру
    */
   private async sendToProvider(
     request: ChatCompletionRequest, 
-    provider: 'openai' | 'openrouter' | 'github' | 'yandex'
+    provider: 'openrouter'
   ): Promise<ChatCompletionResponse> {
-    // Проверяем API ключи
-    LoggerUtil.debug('proxy-service', 'Checking API keys', {
-      openaiKey: this.openaiApiKey ? 'set' : 'not set',
-      openrouterKey: this.openrouterApiKey ? 'set' : 'not set',
-      githubKey: this.githubApiKey ? 'set' : 'not set',
-      yandexKey: this.yandexApiKey ? 'set' : 'not set',
-      yandexFolderId: this.yandexFolderId ? 'set' : 'not set',
-      openaiKeyValue: this.openaiApiKey,
-      openrouterKeyValue: this.openrouterApiKey,
-      githubKeyValue: this.githubApiKey,
-      yandexKeyValue: this.yandexApiKey
-    });
+    const apiKey = this.openrouterApiKey;
+    const baseUrl = this.openrouterBaseUrl;
 
-    // Если нет API ключей, используем mock-режим
-    let apiKey: string;
-    let baseUrl: string;
-    
-    if (provider === 'openai') {
-      apiKey = this.openaiApiKey;
-      baseUrl = this.openaiBaseUrl;
-    } else if (provider === 'openrouter') {
-      apiKey = this.openrouterApiKey;
-      baseUrl = this.openrouterBaseUrl;
-    } else if (provider === 'github') {
-      apiKey = this.githubApiKey;
-      baseUrl = this.githubBaseUrl;
-    } else if (provider === 'yandex') {
-      apiKey = this.yandexApiKey;
-      baseUrl = this.yandexBaseUrl;
-    }
-
-    if (!apiKey || apiKey.includes('your-') || apiKey.includes('sk-your-') || apiKey.includes('sk-or-your-') || apiKey.includes('github_pat_')) {
+    if (!apiKey || apiKey.includes('your-') || apiKey.includes('sk-or-your-')) {
       LoggerUtil.info('proxy-service', 'Using mock mode - no valid API key provided');
       return this.createMockResponse(request, provider);
     }
 
     const headers: any = {
       'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+      'HTTP-Referer': 'https://ai-aggregator.com',
+      'X-Title': 'AI Aggregator',
       'User-Agent': 'AI-Aggregator/1.0.0'
     };
 
-    // Добавляем специфичные заголовки для разных провайдеров
-    if (provider === 'openai' || provider === 'openrouter') {
-      headers['Authorization'] = `Bearer ${apiKey}`;
-    } else if (provider === 'github') {
-      headers['Authorization'] = `Bearer ${apiKey}`;
-    } else if (provider === 'yandex') {
-      headers['Authorization'] = `Api-Key ${apiKey}`;
-    }
-
-    if (provider === 'openrouter') {
-      headers['HTTP-Referer'] = 'https://ai-aggregator.com';
-      headers['X-Title'] = 'AI Aggregator';
-    }
-
     try {
-      let url: string;
-      let requestBody: any;
-
-      if (provider === 'yandex') {
-        // YandexGPT использует другой формат
-        url = `${baseUrl}/completion`;
-        requestBody = {
-          modelUri: `gpt://${this.yandexFolderId}/${request.model}`,
-          completionOptions: {
-            stream: false,
-            temperature: request.temperature || 0.6,
-            maxTokens: request.max_tokens || 2000
-          },
-          messages: request.messages.map(msg => ({
-            role: msg.role === 'assistant' ? 'assistant' : 'user',
-            text: msg.content
-          }))
-        };
-      } else if (provider === 'github') {
-        // GitHub Models использует другой формат
-        url = `${baseUrl}/chat/completions`;
-        requestBody = {
-          ...request,
-          model: this.mapModelForProvider(request.model, 'github')
-        };
-      } else {
-        // OpenAI и OpenRouter используют стандартный формат
-        url = `${baseUrl}/chat/completions`;
-        requestBody = request;
+      const url = `${baseUrl}/chat/completions`;
+      
+      // Валидируем модель перед отправкой
+      const modelExists = this.openRouterModelsCache.some(m => m.id === request.model);
+      if (!modelExists && this.openRouterModelsCache.length > 0) {
+        LoggerUtil.warn('proxy-service', 'Model not found in cache, attempting request anyway', {
+          model: request.model,
+          availableModelsCount: this.openRouterModelsCache.length,
+          suggestion: 'Model may still work, or cache needs refresh'
+        });
       }
+      
+      const requestBody = request;
 
       LoggerUtil.debug('proxy-service', `Sending request to ${provider}`, {
         url: url,
-        headers: headers,
-        request: requestBody
+        model: request.model,
+        messageCount: request.messages?.length || 0,
+        maxTokens: request.max_tokens,
+        modelExists: modelExists
       });
 
       const response: AxiosResponse<ChatCompletionResponse> = await firstValueFrom(
-        this.httpService.post(url, requestBody, { headers })
+        this.httpService.post(url, requestBody, { 
+          headers,
+          timeout: 600000 // 10 минут для длинных генераций
+        })
       );
 
       LoggerUtil.debug('proxy-service', `Received response from ${provider}`, {
         status: response.status,
-        data: response.data
+        model: response.data.model
       });
-
-      // Преобразуем ответ YandexGPT в стандартный формат
-      if (provider === 'yandex') {
-        const yandexResponse = response.data as any;
-        return {
-          id: yandexResponse.id || `yandex-${Date.now()}`,
-          object: 'chat.completion',
-          created: Math.floor(Date.now() / 1000),
-          model: request.model,
-          choices: [{
-            index: 0,
-            message: {
-              role: 'assistant',
-              content: yandexResponse.result?.alternatives?.[0]?.message?.text || 'No response'
-            },
-            finish_reason: 'stop'
-          }],
-          usage: {
-            prompt_tokens: yandexResponse.usage?.inputTextTokens || 0,
-            completion_tokens: yandexResponse.usage?.completionTokens || 0,
-            total_tokens: yandexResponse.usage?.totalTokens || 0
-          },
-          provider: 'yandex',
-          processing_time_ms: 100
-        };
-      }
 
       return response.data;
     } catch (error: any) {
@@ -325,13 +297,22 @@ export class ProxyService {
     response: ChatCompletionResponse, 
     mapping: Record<string, string>
   ): ChatCompletionResponse {
-    const deanonymizedChoices = response.choices.map(choice => ({
-      ...choice,
-      message: {
-        ...choice.message,
-        content: this.anonymizationService.deanonymizeText(choice.message.content, mapping)
+    const deanonymizedChoices = response.choices.map(choice => {
+      // Обезличивание применяется только к текстовому контенту
+      // Если content - массив (мультимодальный), не обезличиваем
+      let content = choice.message.content;
+      if (typeof content === 'string') {
+        content = this.anonymizationService.deanonymizeText(content, mapping);
       }
-    }));
+      
+      return {
+        ...choice,
+        message: {
+          ...choice.message,
+          content
+        }
+      };
+    });
 
     return {
       ...response,
@@ -400,301 +381,181 @@ export class ProxyService {
   }
 
   /**
-   * Получает список доступных моделей
+   * Получает список доступных моделей из OpenRouter API
    */
-  async getAvailableModels(provider?: 'openai' | 'openrouter' | 'github' | 'yandex'): Promise<any[]> {
-    const models = [];
-
-    if (!provider || provider === 'openai') {
-      models.push(...this.getOpenAIModels());
-    }
-
-    if (!provider || provider === 'openrouter') {
-      models.push(...this.getOpenRouterModels());
-    }
-
-    if (!provider || provider === 'github') {
-      models.push(...this.getGitHubModels());
-    }
-
-    if (!provider || provider === 'yandex') {
-      models.push(...this.getYandexModels());
-    }
-
-    return models;
+  async getAvailableModels(provider?: 'openrouter'): Promise<any[]> {
+    // Всегда используем OpenRouter
+    return await this.loadOpenRouterModels();
   }
 
   /**
-   * Получает модели OpenAI
+   * Загружает модели из OpenRouter API с кэшированием
    */
-  private getOpenAIModels(): any[] {
-    return [
-      {
-        id: 'gpt-4',
-        name: 'GPT-4',
-        provider: 'openai',
-        category: 'chat',
-        description: 'Most capable GPT-4 model',
-        max_tokens: 8192,
-        cost_per_input_token: 0.00003,
-        cost_per_output_token: 0.00006,
+  private async loadOpenRouterModels(): Promise<any[]> {
+    const now = Date.now();
+    
+    // Проверяем кэш
+    if (this.openRouterModelsCache.length > 0 && (now - this.modelsCacheTimestamp) < this.MODELS_CACHE_TTL) {
+      LoggerUtil.debug('proxy-service', 'Returning cached OpenRouter models', {
+        count: this.openRouterModelsCache.length,
+        cacheAge: Math.floor((now - this.modelsCacheTimestamp) / 1000) + 's'
+      });
+      return this.openRouterModelsCache;
+    }
+
+    // Если нет API ключа, возвращаем пустой массив или mock данные
+    if (!this.openrouterApiKey || this.openrouterApiKey.includes('your-') || this.openrouterApiKey.includes('sk-or-your-')) {
+      LoggerUtil.warn('proxy-service', 'No valid OpenRouter API key, returning empty models list');
+      return [];
+    }
+
+    try {
+      LoggerUtil.info('proxy-service', 'Fetching models from OpenRouter API');
+      
+      const response = await firstValueFrom(
+        this.httpService.get(`${this.openrouterBaseUrl}/models`, {
+          headers: {
+            'Authorization': `Bearer ${this.openrouterApiKey}`,
+            'HTTP-Referer': 'https://ai-aggregator.com',
+            'X-Title': 'AI Aggregator'
+          },
+          timeout: 600000 // 10 минут для длинных генераций
+        })
+      );
+
+      const openRouterModels = response.data?.data || [];
+      
+      // Преобразуем модели OpenRouter в наш формат
+      const formattedModels = openRouterModels.map((model: any) => ({
+        id: model.id,
+        name: model.name || model.id,
+        provider: 'openrouter',
+        category: this.detectCategory(model.id),
+        description: model.description || `Model ${model.id} via OpenRouter`,
+        // Сохраняем context_length как max_tokens для использования в расчетах
+        // context_length - это общий лимит контекста (входные + выходные токены)
+        max_tokens: model.context_length || 4096,
+        context_length: model.context_length || 4096, // Сохраняем отдельно для ясности
+        cost_per_input_token: model.pricing?.prompt ? parseFloat(model.pricing.prompt) : 0,
+        cost_per_output_token: model.pricing?.completion ? parseFloat(model.pricing.completion) : 0,
         currency: 'USD',
         is_available: true,
-        capabilities: ['chat', 'completion'],
-        created_at: '2023-03-14T00:00:00Z',
-        updated_at: '2023-03-14T00:00:00Z',
-      },
-      {
-        id: 'gpt-3.5-turbo',
-        name: 'GPT-3.5 Turbo',
-        provider: 'openai',
-        category: 'chat',
-        description: 'Fast and efficient GPT-3.5 model',
-        max_tokens: 4096,
-        cost_per_input_token: 0.0000015,
-        cost_per_output_token: 0.000002,
-        currency: 'USD',
-        is_available: true,
-        capabilities: ['chat', 'completion'],
-        created_at: '2022-11-30T00:00:00Z',
-        updated_at: '2022-11-30T00:00:00Z',
-      },
-      {
-        id: 'gpt-4-turbo-preview',
-        name: 'GPT-4 Turbo Preview',
-        provider: 'openai',
-        category: 'chat',
-        description: 'Latest GPT-4 Turbo model with improved capabilities',
-        max_tokens: 128000,
-        cost_per_input_token: 0.00001,
-        cost_per_output_token: 0.00003,
-        currency: 'USD',
-        is_available: true,
-        capabilities: ['chat', 'completion'],
-        created_at: '2023-11-06T00:00:00Z',
-        updated_at: '2023-11-06T00:00:00Z',
+        capabilities: this.detectCapabilities(model),
+        created_at: model.created_at || new Date().toISOString(),
+        updated_at: model.updated_at || new Date().toISOString(),
+        // Дополнительные поля из OpenRouter
+        architecture: model.architecture,
+        top_provider: model.top_provider,
+        moderation: model.moderation
+      }));
+
+      // Обновляем кэш
+      this.openRouterModelsCache = formattedModels;
+      this.modelsCacheTimestamp = now;
+
+      LoggerUtil.info('proxy-service', 'OpenRouter models loaded successfully', {
+        count: formattedModels.length
+      });
+
+      return formattedModels;
+    } catch (error: any) {
+      LoggerUtil.error('proxy-service', 'Failed to load models from OpenRouter API', error, {
+        status: error.response?.status,
+        message: error.message
+      });
+      
+      // Если кэш есть, возвращаем его даже если он устарел
+      if (this.openRouterModelsCache.length > 0) {
+        LoggerUtil.warn('proxy-service', 'Using stale cache due to API error');
+        return this.openRouterModelsCache;
       }
-    ];
+      
+      return [];
+    }
   }
 
   /**
-   * Получает модели OpenRouter
+   * Определяет категорию модели по её ID
    */
-  private getOpenRouterModels(): any[] {
-    return [
-      {
-        id: 'openai/gpt-4o',
-        name: 'GPT-4o',
-        provider: 'openrouter',
-        category: 'chat',
-        description: 'Latest GPT-4o model via OpenRouter',
-        max_tokens: 128000,
-        cost_per_input_token: 0.0000025,
-        cost_per_output_token: 0.00001,
-        currency: 'USD',
-        is_available: true,
-        capabilities: ['chat', 'completion', 'vision'],
-        created_at: '2024-05-13T00:00:00Z',
-        updated_at: '2024-05-13T00:00:00Z',
-      },
-      {
-        id: 'microsoft/phi-3-mini-4k-instruct',
-        name: 'Phi-3 Mini (Free)',
-        provider: 'openrouter',
-        category: 'chat',
-        description: 'Microsoft Phi-3 Mini - completely free model',
-        max_tokens: 4000,
-        cost_per_input_token: 0,
-        cost_per_output_token: 0,
-        currency: 'USD',
-        is_available: true,
-        capabilities: ['chat', 'completion'],
-        created_at: '2024-04-23T00:00:00Z',
-        updated_at: '2024-04-23T00:00:00Z',
-      },
-      {
-        id: 'groq/llama-3.1-8b-instant',
-        name: 'Llama 3.1 8B (Groq Free)',
-        provider: 'groq',
-        category: 'chat',
-        description: 'Meta Llama 3.1 8B via Groq - completely free and fast',
-        max_tokens: 8192,
-        cost_per_input_token: 0,
-        cost_per_output_token: 0,
-        currency: 'USD',
-        is_available: true,
-        capabilities: ['chat', 'completion'],
-        created_at: '2024-07-23T00:00:00Z',
-        updated_at: '2024-07-23T00:00:00Z',
-      },
-      {
-        id: 'openai/gpt-4o-mini',
-        name: 'GPT-4o Mini',
-        provider: 'openrouter',
-        category: 'chat',
-        description: 'Fast and efficient GPT-4o Mini model',
-        max_tokens: 128000,
-        cost_per_input_token: 0.00000015,
-        cost_per_output_token: 0.0000006,
-        currency: 'USD',
-        is_available: true,
-        capabilities: ['chat', 'completion', 'vision'],
-        created_at: '2024-07-18T00:00:00Z',
-        updated_at: '2024-07-18T00:00:00Z',
-      },
-      {
-        id: 'anthropic/claude-3-5-sonnet-20241022',
-        name: 'Claude 3.5 Sonnet',
-        provider: 'openrouter',
-        category: 'chat',
-        description: 'Latest Claude 3.5 Sonnet model',
-        max_tokens: 200000,
-        cost_per_input_token: 0.000003,
-        cost_per_output_token: 0.000015,
-        currency: 'USD',
-        is_available: true,
-        capabilities: ['chat', 'completion', 'vision'],
-        created_at: '2024-10-22T00:00:00Z',
-        updated_at: '2024-10-22T00:00:00Z',
-      },
-      {
-        id: 'anthropic/claude-3-5-haiku-20241022',
-        name: 'Claude 3.5 Haiku',
-        provider: 'openrouter',
-        category: 'chat',
-        description: 'Fast Claude 3.5 Haiku model',
-        max_tokens: 200000,
-        cost_per_input_token: 0.0000008,
-        cost_per_output_token: 0.000004,
-        currency: 'USD',
-        is_available: true,
-        capabilities: ['chat', 'completion', 'vision'],
-        created_at: '2024-10-22T00:00:00Z',
-        updated_at: '2024-10-22T00:00:00Z',
-      },
-      {
-        id: 'google/gemini-pro-1.5',
-        name: 'Gemini Pro 1.5',
-        provider: 'openrouter',
-        category: 'chat',
-        description: 'Google Gemini Pro 1.5 model',
-        max_tokens: 2000000,
-        cost_per_input_token: 0.00000125,
-        cost_per_output_token: 0.000005,
-        currency: 'USD',
-        is_available: true,
-        capabilities: ['chat', 'completion', 'vision'],
-        created_at: '2024-02-15T00:00:00Z',
-        updated_at: '2024-02-15T00:00:00Z',
-      },
-      {
-        id: 'meta-llama/llama-3.1-8b-instruct',
-        name: 'Llama 3.1 8B Instruct',
-        provider: 'openrouter',
-        category: 'chat',
-        description: 'Meta Llama 3.1 8B Instruct model',
-        max_tokens: 128000,
-        cost_per_input_token: 0.0000002,
-        cost_per_output_token: 0.0000002,
-        currency: 'USD',
-        is_available: true,
-        capabilities: ['chat', 'completion'],
-        created_at: '2024-01-29T00:00:00Z',
-        updated_at: '2024-01-29T00:00:00Z',
-      },
-      {
-        id: 'deepseek/deepseek-r1-0528',
-        name: 'DeepSeek R1 0528',
-        provider: 'openrouter',
-        category: 'chat',
-        description: 'DeepSeek R1 0528 model - free and powerful reasoning model',
-        max_tokens: 128000,
-        cost_per_input_token: 0,
-        cost_per_output_token: 0,
-        currency: 'USD',
-        is_available: true,
-        capabilities: ['chat', 'completion', 'reasoning'],
-        created_at: '2024-05-28T00:00:00Z',
-        updated_at: '2024-05-28T00:00:00Z',
-      }
-    ];
+  private detectCategory(modelId: string): string {
+    if (modelId.includes('gpt') || modelId.includes('claude') || modelId.includes('gemini') || modelId.includes('llama')) {
+      return 'chat';
+    }
+    if (modelId.includes('embedding') || modelId.includes('embed')) {
+      return 'embedding';
+    }
+    if (modelId.includes('image') || modelId.includes('dall-e') || modelId.includes('stable-diffusion')) {
+      return 'image';
+    }
+    if (modelId.includes('audio') || modelId.includes('whisper') || modelId.includes('tts')) {
+      return 'audio';
+    }
+    return 'chat';
   }
 
   /**
-   * Получает модели GitHub
+   * Определяет возможности модели
    */
-  private getGitHubModels(): any[] {
-    return [
-      {
-        id: 'github/github-copilot-chat',
-        name: 'GitHub Copilot Chat',
-        provider: 'github',
-        category: 'chat',
-        description: 'GitHub Copilot Chat model for code assistance',
-        max_tokens: 4096,
-        cost_per_input_token: 0.0001,
-        cost_per_output_token: 0.0001,
-        currency: 'USD',
-        is_available: true,
-        capabilities: ['chat', 'completion', 'code'],
-        created_at: '2023-10-01T00:00:00Z',
-        updated_at: '2023-10-01T00:00:00Z',
-      },
-      {
-        id: 'github/github-copilot-codex',
-        name: 'GitHub Copilot Codex',
-        provider: 'github',
-        category: 'completion',
-        description: 'GitHub Copilot Codex model for code completion',
-        max_tokens: 2048,
-        cost_per_input_token: 0.00005,
-        cost_per_output_token: 0.00005,
-        currency: 'USD',
-        is_available: true,
-        capabilities: ['completion', 'code'],
-        created_at: '2023-10-01T00:00:00Z',
-        updated_at: '2023-10-01T00:00:00Z',
-      }
-    ];
+  private detectCapabilities(model: any): string[] {
+    const capabilities: string[] = ['chat', 'completion'];
+    const modelId = model.id?.toLowerCase() || '';
+    const modelName = model.name?.toLowerCase() || '';
+    const description = model.description?.toLowerCase() || '';
+    const context = `${modelId} ${modelName} ${description}`;
+    
+    if (model.id.includes('vision') || model.id.includes('gpt-4') || model.id.includes('claude-3')) {
+      capabilities.push('vision');
+    }
+    
+    if (model.id.includes('embedding') || model.id.includes('embed')) {
+      capabilities.push('text_embedding');
+    }
+    
+    if (model.id.includes('function') || model.id.includes('gpt-4')) {
+      capabilities.push('function_calling');
+    }
+    
+    // Проверяем поддержку аудио
+    const audioKeywords = ['whisper', 'audio', 'transcription', 'speech', 'voice', 'opus'];
+    if (audioKeywords.some(keyword => context.includes(keyword))) {
+      capabilities.push('audio');
+      capabilities.push('audio_transcription');
+    }
+    
+    // GPT-4o и GPT-4 Turbo могут обрабатывать аудио
+    if (modelId.includes('gpt-4o') || modelId.includes('gpt-4-turbo')) {
+      capabilities.push('audio');
+      capabilities.push('multimodal');
+    }
+    
+    return capabilities;
   }
 
   /**
-   * Получает модели YandexGPT
+   * Получает модели с поддержкой аудио/видео
    */
-  private getYandexModels(): any[] {
-    return [
-      {
-        id: 'yandexgpt',
-        name: 'YandexGPT',
-        provider: 'yandex',
-        category: 'chat',
-        description: 'Основная модель YandexGPT для диалогов',
-        max_tokens: 8000,
-        cost_per_input_token: 0.0001,
-        cost_per_output_token: 0.0001,
-        currency: 'RUB',
-        is_available: true,
-        capabilities: ['chat', 'completion'],
-        created_at: '2023-05-01T00:00:00Z',
-        updated_at: '2023-05-01T00:00:00Z',
-      },
-      {
-        id: 'yandexgpt-lite',
-        name: 'YandexGPT Lite',
-        provider: 'yandex',
-        category: 'chat',
-        description: 'Быстрая и легкая модель YandexGPT',
-        max_tokens: 4000,
-        cost_per_input_token: 0.00005,
-        cost_per_output_token: 0.00005,
-        currency: 'RUB',
-        is_available: true,
-        capabilities: ['chat', 'completion'],
-        created_at: '2023-05-01T00:00:00Z',
-        updated_at: '2023-05-01T00:00:00Z',
-      }
-    ];
+  async getAudioCapableModels(): Promise<any[]> {
+    const allModels = await this.getAvailableModels();
+    
+    return allModels.filter(model => {
+      const capabilities = model.capabilities || [];
+      const hasAudio = capabilities.some((cap: string) => 
+        cap.toLowerCase().includes('audio') || 
+        cap.toLowerCase().includes('transcription')
+      );
+      
+      // Также проверяем по ID и названию
+      const modelId = model.id?.toLowerCase() || '';
+      const modelName = model.name?.toLowerCase() || '';
+      const audioKeywords = ['whisper', 'audio', 'transcription', 'speech', 'voice', 'opus', 'gpt-4o', 'gpt-4-turbo'];
+      const hasAudioKeyword = audioKeywords.some(keyword => 
+        modelId.includes(keyword) || modelName.includes(keyword)
+      );
+      
+      return hasAudio || hasAudioKeyword;
+    });
   }
+
 
   /**
    * Валидирует запрос перед обработкой
@@ -756,19 +617,30 @@ export class ProxyService {
 
   /**
    * Оценивает количество токенов в запросе
+   * Использует более точную оценку: учитывает пробелы, специальные символы и форматирование
    */
   private estimateTokens(request: ChatCompletionRequest): number {
     let totalTokens = 0;
 
     const messages = request.messages || [];
     messages.forEach(message => {
-      // Примерная оценка: 1 токен = 4 символа
       const content = message.content || '';
-      totalTokens += Math.ceil(content.length / 4);
+      
+      // Более точная оценка токенов:
+      // - Английский текст: ~4 символа на токен
+      // - Русский/китайский текст: ~2-3 символа на токен
+      // - Специальные символы и форматирование: больше токенов
+      // Используем консервативную оценку: 3 символа на токен для смешанного контента
+      const estimatedTokens = Math.ceil(content.length / 3);
+      totalTokens += estimatedTokens;
+      
+      // Добавляем токены для роли сообщения (role tokens)
+      totalTokens += 3; // ~3 токена на сообщение для форматирования (role, content, etc.)
     });
 
-    // Добавляем токены для системных сообщений
-    totalTokens += 10;
+    // Добавляем токены для системных сообщений и форматирования запроса
+    // OpenRouter добавляет служебные токены для структуры запроса
+    totalTokens += 15;
 
     return totalTokens;
   }
@@ -778,7 +650,7 @@ export class ProxyService {
    */
   private createMockResponse(
     request: ChatCompletionRequest, 
-    provider: 'openai' | 'openrouter' | 'github' | 'yandex'
+    provider: 'openrouter'
   ): ChatCompletionResponse {
     // Показываем, что данные были обезличены
     const messages = request.messages || [];
@@ -788,9 +660,19 @@ export class ProxyService {
       request: JSON.stringify(request, null, 2)
     });
     
-    const originalContent = messages.length > 0 ? (messages[0].content || 'No message content') : 'No message content';
+    // Для mock ответа берем только текстовый контент
+    let originalContent = 'No message content';
+    if (messages.length > 0 && messages[0].content) {
+      if (typeof messages[0].content === 'string') {
+        originalContent = messages[0].content;
+      } else if (Array.isArray(messages[0].content)) {
+        // Берем первый текстовый элемент из массива
+        const textItem = messages[0].content.find((item: any) => item.type === 'text') as any;
+        originalContent = (textItem && 'text' in textItem) ? textItem.text : 'No message content';
+      }
+    }
     
-    // Демонстрируем обезличивание
+    // Демонстрируем обезличивание (только для текста)
     const anonymizedContent = this.anonymizationService.anonymizeText(originalContent);
     
     return {
@@ -822,48 +704,96 @@ The anonymization system replaced personal information with placeholders before 
   }
 
   /**
-   * Маппинг моделей для разных провайдеров
+   * Маппинг моделей для OpenRouter
+   * Использует реальные ID моделей из OpenRouter API
+   * Если модель уже в формате OpenRouter (с префиксом), проверяет существование в кэше
+   * Иначе пытается найти модель по имени или ID в списке доступных моделей
    */
-  private mapModelForProvider(model: string, provider: 'openai' | 'openrouter' | 'github' | 'yandex'): string {
-    // Маппинг моделей для OpenRouter
-    if (provider === 'openrouter') {
-      const modelMapping: Record<string, string> = {
-        // OpenAI модели
-        'gpt-4o': 'openai/gpt-4o',
-        'gpt-4o-mini': 'openai/gpt-4o-mini',
-        'gpt-4-turbo': 'openai/gpt-4-turbo',
-        'gpt-3.5-turbo': 'openai/gpt-3.5-turbo',
-        
-        // Claude модели
-        'claude-3-5-sonnet-20241022': 'anthropic/claude-3.5-sonnet-20241022',
-        'claude-3-5-haiku-20241022': 'anthropic/claude-3.5-haiku-20241022',
-        'claude-3-opus-20240229': 'anthropic/claude-3-opus-20240229',
-        
-        // Gemini модели
-        'gemini-1.5-pro': 'google/gemini-1.5-pro',
-        'gemini-1.5-flash': 'google/gemini-1.5-flash',
-        
-        // Yandex модели
-        'yandexgpt': 'yandex/yandexgpt',
-        'gigachat': 'sber/gigachat'
-      };
-      
-      return modelMapping[model] || model; // Для OpenRouter возвращаем модель как есть
+  private async mapModelForProvider(model: string, provider: 'openrouter'): Promise<string> {
+    // Если кэш пуст, пытаемся загрузить модели
+    if (this.openRouterModelsCache.length === 0) {
+      LoggerUtil.debug('proxy-service', 'Model cache is empty, loading models', { model });
+      try {
+        await this.loadOpenRouterModels();
+      } catch (error) {
+        LoggerUtil.warn('proxy-service', 'Failed to load models for mapping', {
+          error: error instanceof Error ? error.message : String(error),
+          model
+        });
+      }
     }
     
-    // Маппинг моделей для GitHub
-    if (provider === 'github') {
-      const modelMapping: Record<string, string> = {
-        'github-copilot-chat': 'github/github-copilot-chat',
-        'github-copilot-codex': 'github/github-copilot-codex',
-        'copilot-chat': 'github/github-copilot-chat',
-        'copilot-codex': 'github/github-copilot-codex'
-      };
-      
-      return modelMapping[model] || `github/${model}`;
+    // Если модель уже содержит префикс провайдера (например, "openai/gpt-4o"), проверяем существование
+    if (model.includes('/')) {
+      // Проверяем, существует ли модель в кэше
+      const foundModel = this.openRouterModelsCache.find(m => m.id === model);
+      if (foundModel) {
+        return model;
+      }
+      // Если не найдена, возвращаем как есть - OpenRouter может принять
+      LoggerUtil.warn('proxy-service', 'Model not found in cache, using as-is', {
+        model,
+        cacheSize: this.openRouterModelsCache.length
+      });
+      return model;
     }
     
-    // Для других провайдеров возвращаем модель как есть
+    // Ищем модель в кэше по ID или имени (без префикса)
+    const foundModel = this.openRouterModelsCache.find(m => 
+      m.id === model || 
+      m.id.endsWith(`/${model}`) || 
+      m.name?.toLowerCase() === model.toLowerCase() ||
+      m.id.toLowerCase() === model.toLowerCase()
+    );
+    
+    if (foundModel) {
+      LoggerUtil.debug('proxy-service', 'Model mapped from cache', {
+        original: model,
+        mapped: foundModel.id
+      });
+      return foundModel.id;
+    }
+    
+    // Fallback: маппинг популярных моделей без префикса (для обратной совместимости)
+    const modelMapping: Record<string, string> = {
+      // OpenAI модели
+      'gpt-4o': 'openai/gpt-4o',
+      'gpt-4o-mini': 'openai/gpt-4o-mini',
+      'gpt-4-turbo': 'openai/gpt-4-turbo',
+      'gpt-4': 'openai/gpt-4',
+      'gpt-3.5-turbo': 'openai/gpt-3.5-turbo',
+      
+      // Claude модели - используем актуальные версии
+      'claude-3-5-sonnet': 'anthropic/claude-3-5-sonnet-20241022',
+      'claude-3-5-haiku': 'anthropic/claude-3-5-haiku-20241022',
+      'claude-3-opus': 'anthropic/claude-3-opus-20240229',
+      'claude-3-sonnet': 'anthropic/claude-3-sonnet-20240229',
+      'claude-3-haiku': 'anthropic/claude-3-haiku-20240307',
+      
+      // Gemini модели
+      'gemini-1.5-pro': 'google/gemini-1.5-pro',
+      'gemini-1.5-flash': 'google/gemini-1.5-flash',
+      'gemini-pro': 'google/gemini-pro',
+      
+      // Llama модели
+      'llama-3.1-8b': 'meta-llama/llama-3.1-8b-instruct',
+      'llama-3.1-70b': 'meta-llama/llama-3.1-70b-instruct',
+    };
+    
+    if (modelMapping[model]) {
+      // Проверяем, существует ли маппингованная модель в кэше
+      const mappedModel = this.openRouterModelsCache.find(m => m.id === modelMapping[model]);
+      if (mappedModel) {
+        return modelMapping[model];
+      }
+    }
+    
+    // Если ничего не найдено, возвращаем модель как есть и логируем предупреждение
+    LoggerUtil.warn('proxy-service', 'Model not found in cache or mapping, using as-is', {
+      model,
+      cacheSize: this.openRouterModelsCache.length,
+      suggestion: 'Model may not be available or cache needs refresh'
+    });
     return model;
   }
 
@@ -889,5 +819,295 @@ The anonymization system replaced personal information with placeholders before 
     const outputCost = (usage.completion_tokens || 0) * modelPricing.output;
     
     return inputCost + outputCost;
+  }
+
+  /**
+   * Обрабатывает запрос на генерацию эмбеддингов
+   */
+  async processEmbeddings(
+    request: { model: string; input: string | string[]; user?: string },
+    userId: string,
+    provider: 'openrouter' = 'openrouter'
+  ): Promise<any> {
+    const startTime = Date.now();
+    
+    try {
+      LoggerUtil.info('proxy-service', 'Processing embeddings request', {
+        userId,
+        provider,
+        model: request.model,
+        inputType: Array.isArray(request.input) ? 'array' : 'string',
+        inputLength: Array.isArray(request.input) ? request.input.length : 1
+      });
+
+      const apiKey = this.openrouterApiKey;
+      const baseUrl = this.openrouterBaseUrl;
+
+      if (!apiKey || apiKey.includes('your-') || apiKey.includes('sk-or-your-')) {
+        LoggerUtil.warn('proxy-service', 'Using mock mode for embeddings - no valid API key provided');
+        return this.createMockEmbeddingsResponse(request);
+      }
+
+      const headers: any = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+        'HTTP-Referer': 'https://ai-aggregator.com',
+        'X-Title': 'AI Aggregator',
+        'User-Agent': 'AI-Aggregator/1.0.0'
+      };
+
+      const url = `${baseUrl}/embeddings`;
+      const requestBody = {
+        model: request.model,
+        input: request.input,
+        ...(request.user && { user: request.user })
+      };
+
+      LoggerUtil.debug('proxy-service', `Sending embeddings request to ${provider}`, {
+        url,
+        model: request.model
+      });
+
+      const response: AxiosResponse<any> = await firstValueFrom(
+        this.httpService.post(url, requestBody, {
+          headers,
+          timeout: 300000 // 5 минут для embeddings
+        })
+      );
+
+      const responseTime = Date.now() - startTime;
+
+      LoggerUtil.info('proxy-service', 'Embeddings request completed', {
+        userId,
+        provider,
+        model: request.model,
+        responseTime,
+        embeddingCount: response.data?.data?.length || 0
+      });
+
+      // Отправляем событие биллинга
+      try {
+        await this.sendBillingEvent({
+          userId,
+          provider,
+          model: request.model,
+          requestType: 'embeddings',
+          usage: response.data?.usage || { prompt_tokens: 0, total_tokens: 0 },
+          cost: this.calculateEmbeddingsCost(response.data?.usage || {}, request.model),
+          responseTime
+        });
+      } catch (billingError) {
+        LoggerUtil.warn('proxy-service', 'Failed to send billing event for embeddings', {
+          error: billingError instanceof Error ? billingError.message : String(billingError)
+        });
+      }
+
+      return {
+        ...response.data,
+        processing_time_ms: responseTime
+      };
+    } catch (error: any) {
+      LoggerUtil.error('proxy-service', 'Embeddings request failed', error, {
+        userId,
+        provider,
+        model: request.model
+      });
+
+      throw new HttpException(
+        `Embeddings request failed: ${error.response?.data?.error?.message || error.message}`,
+        error.response?.status || HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  /**
+   * Обрабатывает запрос на транскрибацию аудио
+   */
+  async processAudioTranscription(
+    file: Buffer | Express.Multer.File,
+    request: { model: string; language?: string; prompt?: string; temperature?: number; response_format?: string },
+    userId: string,
+    provider: 'openrouter' = 'openrouter'
+  ): Promise<any> {
+    const startTime = Date.now();
+    
+    try {
+      LoggerUtil.info('proxy-service', 'Processing audio transcription request', {
+        userId,
+        provider,
+        model: request.model,
+        language: request.language,
+        fileSize: file instanceof Buffer ? file.length : (file as Express.Multer.File).size
+      });
+
+      const apiKey = this.openrouterApiKey;
+      const baseUrl = this.openrouterBaseUrl;
+
+      if (!apiKey || apiKey.includes('your-') || apiKey.includes('sk-or-your-')) {
+        LoggerUtil.warn('proxy-service', 'Using mock mode for audio transcription - no valid API key provided');
+        return this.createMockAudioTranscriptionResponse();
+      }
+
+      // Подготавливаем FormData для multipart/form-data запроса
+      const FormData = require('form-data');
+      const formData = new FormData();
+      
+      // Добавляем файл
+      const fileBuffer = file instanceof Buffer ? file : (file as Express.Multer.File).buffer;
+      const fileName = file instanceof Buffer ? 'audio.mp3' : ((file as Express.Multer.File).originalname || 'audio.mp3');
+      formData.append('file', fileBuffer, {
+        filename: fileName,
+        contentType: this.getContentType(fileName)
+      });
+
+      // Добавляем параметры
+      formData.append('model', request.model);
+      if (request.language) formData.append('language', request.language);
+      if (request.prompt) formData.append('prompt', request.prompt);
+      if (request.temperature !== undefined) formData.append('temperature', request.temperature.toString());
+      if (request.response_format) formData.append('response_format', request.response_format);
+
+      const headers: any = {
+        ...formData.getHeaders(),
+        'Authorization': `Bearer ${apiKey}`,
+        'HTTP-Referer': 'https://ai-aggregator.com',
+        'X-Title': 'AI Aggregator',
+        'User-Agent': 'AI-Aggregator/1.0.0'
+      };
+
+      const url = `${baseUrl}/audio/transcriptions`;
+
+      LoggerUtil.debug('proxy-service', `Sending audio transcription request to ${provider}`, {
+        url,
+        model: request.model,
+        fileSize: (fileBuffer as Buffer).length
+      });
+
+      const response: AxiosResponse<any> = await firstValueFrom(
+        this.httpService.post(url, formData, {
+          headers,
+          timeout: 300000 // 5 минут для транскрибации
+        })
+      );
+
+      const responseTime = Date.now() - startTime;
+
+      LoggerUtil.info('proxy-service', 'Audio transcription request completed', {
+        userId,
+        provider,
+        model: request.model,
+        responseTime
+      });
+
+      // Отправляем событие биллинга
+      try {
+        await this.sendBillingEvent({
+          userId,
+          provider,
+          model: request.model,
+          requestType: 'audio_transcription',
+          usage: { prompt_tokens: 0, total_tokens: 0 }, // Whisper не возвращает usage
+          cost: this.calculateAudioTranscriptionCost((fileBuffer as Buffer).length, request.model),
+          responseTime
+        });
+      } catch (billingError) {
+        LoggerUtil.warn('proxy-service', 'Failed to send billing event for audio transcription', {
+          error: billingError instanceof Error ? billingError.message : String(billingError)
+        });
+      }
+
+      return {
+        ...response.data,
+        processing_time_ms: responseTime
+      };
+    } catch (error: any) {
+      LoggerUtil.error('proxy-service', 'Audio transcription request failed', error, {
+        userId,
+        provider,
+        model: request.model
+      });
+
+      throw new HttpException(
+        `Audio transcription request failed: ${error.response?.data?.error?.message || error.message}`,
+        error.response?.status || HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  /**
+   * Создает mock ответ для embeddings (для тестирования)
+   */
+  private createMockEmbeddingsResponse(request: { model: string; input: string | string[] }): any {
+    const inputs = Array.isArray(request.input) ? request.input : [request.input];
+    const mockEmbedding = Array.from({ length: 1536 }, () => Math.random() * 0.01 - 0.005);
+
+    return {
+      object: 'list',
+      data: inputs.map((_, index) => ({
+        object: 'embedding',
+        embedding: mockEmbedding,
+        index
+      })),
+      model: request.model,
+      usage: {
+        prompt_tokens: inputs.reduce((sum, input) => sum + Math.ceil(input.length / 4), 0),
+        total_tokens: inputs.reduce((sum, input) => sum + Math.ceil(input.length / 4), 0)
+      },
+      processing_time_ms: 100
+    };
+  }
+
+  /**
+   * Создает mock ответ для audio transcription (для тестирования)
+   */
+  private createMockAudioTranscriptionResponse(): any {
+    return {
+      text: 'Это тестовая транскрипция аудио файла. В реальном режиме здесь будет транскрибированный текст.',
+      language: 'ru',
+      duration: 10.5,
+      processing_time_ms: 2000
+    };
+  }
+
+  /**
+   * Определяет Content-Type по имени файла
+   */
+  private getContentType(fileName: string): string {
+    const ext = fileName.split('.').pop()?.toLowerCase();
+    const contentTypes: Record<string, string> = {
+      'mp3': 'audio/mpeg',
+      'mp4': 'video/mp4',
+      'mpeg': 'audio/mpeg',
+      'mpga': 'audio/mpeg',
+      'm4a': 'audio/mp4',
+      'wav': 'audio/wav',
+      'webm': 'audio/webm'
+    };
+    return contentTypes[ext || ''] || 'audio/mpeg';
+  }
+
+  /**
+   * Рассчитывает стоимость embeddings
+   */
+  private calculateEmbeddingsCost(usage: any, model: string): number {
+    // Цены для embeddings моделей (за 1K токенов)
+    const pricing: Record<string, number> = {
+      'text-embedding-ada-002': 0.0001, // $0.0001 за 1K токенов
+      'text-embedding-3-small': 0.00002,
+      'text-embedding-3-large': 0.00013
+    };
+
+    const pricePer1K = pricing[model] || 0.0001;
+    return (usage.total_tokens || 0) / 1000 * pricePer1K;
+  }
+
+  /**
+   * Рассчитывает стоимость audio transcription
+   */
+  private calculateAudioTranscriptionCost(fileSizeBytes: number, model: string): number {
+    // Whisper API: $0.006 за минуту аудио
+    // Оцениваем длительность: примерно 1MB = 1 минута для MP3
+    const estimatedMinutes = fileSizeBytes / (1024 * 1024);
+    return estimatedMinutes * 0.006;
   }
 }

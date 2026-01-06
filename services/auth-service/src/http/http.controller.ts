@@ -276,6 +276,7 @@ export class HttpController {
         success: true,
         apiKeys: apiKeys.map(key => ({
           id: key.id,
+          key: key.key, // Возвращаем ключ для отображения
           name: key.name,
           description: key.description,
           isActive: key.isActive,

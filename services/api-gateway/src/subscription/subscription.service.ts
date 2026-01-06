@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
@@ -23,9 +23,27 @@ export class SubscriptionService {
         this.httpService.get(`${this.billingServiceUrl}/billing/subscription/plans`)
       );
       return response.data;
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to get available plans', error);
-      throw error;
+      
+      if (error.response?.status) {
+        throw new HttpException(
+          error.response.data?.message || 'Failed to get available plans',
+          error.response.status
+        );
+      }
+      
+      if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
+        throw new HttpException(
+          'Billing service is unavailable',
+          HttpStatus.BAD_GATEWAY
+        );
+      }
+      
+      throw new HttpException(
+        error.message || 'Failed to get available plans',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
     }
   }
 
@@ -37,9 +55,27 @@ export class SubscriptionService {
         this.httpService.get(`${this.billingServiceUrl}/billing/subscription/my/${companyId}`)
       );
       return response.data;
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to get current subscription', error);
-      throw error;
+      
+      if (error.response?.status) {
+        throw new HttpException(
+          error.response.data?.message || 'Failed to get current subscription',
+          error.response.status
+        );
+      }
+      
+      if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
+        throw new HttpException(
+          'Billing service is unavailable',
+          HttpStatus.BAD_GATEWAY
+        );
+      }
+      
+      throw new HttpException(
+        error.message || 'Failed to get current subscription',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
     }
   }
 
@@ -101,9 +137,27 @@ export class SubscriptionService {
         this.httpService.get(`${this.billingServiceUrl}/billing/subscription/usage/${companyId}`)
       );
       return response.data;
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to get usage stats', error);
-      throw error;
+      
+      if (error.response?.status) {
+        throw new HttpException(
+          error.response.data?.message || 'Failed to get usage stats',
+          error.response.status
+        );
+      }
+      
+      if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
+        throw new HttpException(
+          'Billing service is unavailable',
+          HttpStatus.BAD_GATEWAY
+        );
+      }
+      
+      throw new HttpException(
+        error.message || 'Failed to get usage stats',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
     }
   }
 }

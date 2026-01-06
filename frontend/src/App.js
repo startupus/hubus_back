@@ -19,6 +19,7 @@ import {
 
 // Настройка axios
 axios.defaults.baseURL = '/v1';
+axios.defaults.timeout = 600000; // 10 минут для длинных генераций
 
 // Компонент аутентификации
 function AuthComponent({ onLogin, onError, onSuccess }) {
@@ -298,7 +299,51 @@ function AIComponent({ user, onUserUpdate, onError, onSuccess }) {
   const [message, setMessage] = useState('');
   const [response, setResponse] = useState('');
   const [model, setModel] = useState('gpt-3.5-turbo');
+  const [models, setModels] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [loadingModels, setLoadingModels] = useState(true);
+
+  // Загружаем список моделей из API
+  useEffect(() => {
+    const loadModels = async () => {
+      try {
+        setLoadingModels(true);
+        const response = await axios.get('/models');
+        if (response.data && response.data.models) {
+          // Фильтруем только чат-модели и сортируем по популярности
+          const chatModels = response.data.models
+            .filter(m => m.category === 'chat' && m.isAvailable)
+            .sort((a, b) => {
+              // Приоритет популярным моделям
+              const popular = ['gpt-3.5-turbo', 'gpt-4', 'claude-3-5-sonnet', 'claude-3-5-haiku'];
+              const aIndex = popular.findIndex(p => a.id.includes(p) || a.name.includes(p));
+              const bIndex = popular.findIndex(p => b.id.includes(p) || b.name.includes(p));
+              if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex;
+              if (aIndex !== -1) return -1;
+              if (bIndex !== -1) return 1;
+              return a.name.localeCompare(b.name);
+            });
+          setModels(chatModels);
+          // Устанавливаем первую модель по умолчанию
+          if (chatModels.length > 0 && !model) {
+            setModel(chatModels[0].id);
+          }
+        }
+      } catch (err) {
+        console.error('Ошибка загрузки моделей:', err);
+        // Fallback на базовый список
+        setModels([
+          { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo' },
+          { id: 'gpt-4', name: 'GPT-4' },
+          { id: 'claude-3-sonnet', name: 'Claude 3 Sonnet' },
+          { id: 'claude-3-haiku', name: 'Claude 3 Haiku' }
+        ]);
+      } finally {
+        setLoadingModels(false);
+      }
+    };
+    loadModels();
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -309,11 +354,18 @@ function AIComponent({ user, onUserUpdate, onError, onSuccess }) {
       const aiResponse = await axios.post('/chat/completions', {
         model: model,
         messages: [{ role: 'user', content: message }],
-        max_tokens: 1000,
+        // Не передаем max_tokens - пусть используется максимум модели для полных ответов
         temperature: 0.7
       });
 
-      setResponse(aiResponse.data.choices[0].message.content);
+      // Убираем предупреждение об обрезке, если оно есть
+      let responseContent = aiResponse.data.choices[0].message.content;
+      if (responseContent) {
+        // Удаляем предупреждение об обрезке из ответа
+        responseContent = responseContent.replace(/\n\n\[⚠️.*?\]/g, '');
+        responseContent = responseContent.replace(/\[⚠️.*?\]/g, '');
+      }
+      setResponse(responseContent);
       onSuccess('Запрос выполнен успешно! Средства списаны с баланса.');
       
       // Обновляем баланс
@@ -350,20 +402,32 @@ function AIComponent({ user, onUserUpdate, onError, onSuccess }) {
       <form onSubmit={handleSubmit}>
         <div className="form-group">
           <label>Модель ИИ:</label>
-      <select 
-        className="input" 
-        value={model} 
-        onChange={(e) => setModel(e.target.value)}
-      >
-        <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
-        <option value="gpt-4">GPT-4</option>
-        <option value="claude-3-sonnet">Claude 3 Sonnet</option>
-        <option value="claude-3-haiku">Claude 3 Haiku</option>
-        <option value="github/github-copilot-chat">GitHub Copilot Chat</option>
-        <option value="github/github-copilot-codex">GitHub Copilot Codex</option>
-        <option value="deepseek/deepseek-r1-0528">DeepSeek R1 0528 (Free)</option>
-        <option value="microsoft/phi-3-mini-4k-instruct">Phi-3 Mini (Free)</option>
-      </select>
+          {loadingModels ? (
+            <select className="input" disabled>
+              <option>Загрузка моделей...</option>
+            </select>
+          ) : (
+            <select 
+              className="input" 
+              value={model} 
+              onChange={(e) => setModel(e.target.value)}
+            >
+              {models.length > 0 ? (
+                models.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name} {m.provider ? `(${m.provider})` : ''}
+                  </option>
+                ))
+              ) : (
+                <>
+                  <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                  <option value="gpt-4">GPT-4</option>
+                  <option value="claude-3-sonnet">Claude 3 Sonnet</option>
+                  <option value="claude-3-haiku">Claude 3 Haiku</option>
+                </>
+              )}
+            </select>
+          )}
         </div>
         
         <div className="form-group">
@@ -492,17 +556,48 @@ function CertificationComponent({ onError, onSuccess }) {
   const [selectedModel, setSelectedModel] = useState('');
   const [certificationResults, setCertificationResults] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [availableModels, setAvailableModels] = useState([]);
+  const [loadingModels, setLoadingModels] = useState(true);
 
-  // Список доступных моделей для сертификации
-  const availableModels = [
-    { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo', provider: 'OpenAI' },
-    { id: 'gpt-4', name: 'GPT-4', provider: 'OpenAI' },
-    { id: 'claude-3-sonnet', name: 'Claude 3 Sonnet', provider: 'Anthropic' },
-    { id: 'claude-3-haiku', name: 'Claude 3 Haiku', provider: 'Anthropic' },
-    { id: 'gemini-pro', name: 'Gemini Pro', provider: 'Google' },
-    { id: 'llama-2-70b', name: 'Llama 2 70B', provider: 'Meta' },
-    { id: 'mixtral-8x7b', name: 'Mixtral 8x7B', provider: 'Mistral' }
-  ];
+  // Загружаем список моделей из API (тот же, что и для запросов)
+  // Используем ту же логику, что и в AIComponent
+  useEffect(() => {
+    const loadModels = async () => {
+      try {
+        setLoadingModels(true);
+        const response = await axios.get('/models');
+        if (response.data && response.data.models) {
+          // Фильтруем только чат-модели и сортируем по популярности
+          // ТОЧНО ТА ЖЕ ЛОГИКА, что и в AIComponent
+          const chatModels = response.data.models
+            .filter(m => m.category === 'chat' && m.isAvailable)
+            .sort((a, b) => {
+              // Приоритет популярным моделям
+              const popular = ['gpt-3.5-turbo', 'gpt-4', 'claude-3-5-sonnet', 'claude-3-5-haiku'];
+              const aIndex = popular.findIndex(p => a.id.includes(p) || a.name.includes(p));
+              const bIndex = popular.findIndex(p => b.id.includes(p) || b.name.includes(p));
+              if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex;
+              if (aIndex !== -1) return -1;
+              if (bIndex !== -1) return 1;
+              return a.name.localeCompare(b.name);
+            });
+          setAvailableModels(chatModels);
+        }
+      } catch (err) {
+        console.error('Ошибка загрузки моделей:', err);
+        // Fallback на базовый список (без provider для совместимости)
+        setAvailableModels([
+          { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo' },
+          { id: 'gpt-4', name: 'GPT-4' },
+          { id: 'claude-3-sonnet', name: 'Claude 3 Sonnet' },
+          { id: 'claude-3-haiku', name: 'Claude 3 Haiku' }
+        ]);
+      } finally {
+        setLoadingModels(false);
+      }
+    };
+    loadModels();
+  }, []);
 
   const handleCertification = async () => {
     if (!selectedModel) {
@@ -647,11 +742,12 @@ function CertificationComponent({ onError, onSuccess }) {
           className="input"
           value={selectedModel}
           onChange={(e) => setSelectedModel(e.target.value)}
+          disabled={loadingModels}
         >
-          <option value="">-- Выберите модель --</option>
+          <option value="">-- {loadingModels ? 'Загрузка моделей...' : 'Выберите модель'} --</option>
           {availableModels.map((model) => (
             <option key={model.id} value={model.id}>
-              {model.name} ({model.provider})
+              {model.name} {model.provider ? `(${model.provider})` : ''}
             </option>
           ))}
         </select>
@@ -703,32 +799,85 @@ function CertificationComponent({ onError, onSuccess }) {
 function APIKeysComponent({ onError, onSuccess }) {
   const [apiKeys, setApiKeys] = useState([]);
   const [newKeyName, setNewKeyName] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [loadingKeys, setLoadingKeys] = useState(true);
 
+  // Загружаем API ключи из сервера
   useEffect(() => {
-    // Загружаем существующие API ключи
-    const savedKeys = JSON.parse(localStorage.getItem('apiKeys') || '[]');
-    setApiKeys(savedKeys);
+    const loadApiKeys = async () => {
+      try {
+        setLoadingKeys(true);
+        const token = localStorage.getItem('token');
+        if (!token) {
+          setLoadingKeys(false);
+          return;
+        }
+
+        const response = await axios.get('/auth/api-keys', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (response.data && response.data.apiKeys) {
+          setApiKeys(response.data.apiKeys);
+        } else if (response.data && Array.isArray(response.data)) {
+          setApiKeys(response.data);
+        }
+      } catch (err) {
+        console.error('Ошибка загрузки API ключей:', err);
+        onError('Не удалось загрузить API ключи');
+      } finally {
+        setLoadingKeys(false);
+      }
+    };
+
+    loadApiKeys();
   }, []);
 
-  const generateAPIKey = () => {
+  const generateAPIKey = async () => {
     if (!newKeyName) {
       onError('Введите название ключа');
       return;
     }
 
-    const newKey = {
-      id: Date.now(),
-      name: newKeyName,
-      key: 'ak_' + Math.random().toString(36).substr(2, 32),
-      created: new Date().toLocaleString(),
-      status: 'active'
-    };
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        onError('Необходима авторизация');
+        return;
+      }
 
-    const updatedKeys = [...apiKeys, newKey];
-    setApiKeys(updatedKeys);
-    localStorage.setItem('apiKeys', JSON.stringify(updatedKeys));
-    onSuccess('API ключ создан успешно!');
-    setNewKeyName('');
+      const response = await axios.post('/auth/api-keys', {
+        name: newKeyName,
+        description: ''
+      }, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.data && response.data.apiKey) {
+        const newKey = response.data.apiKey;
+        setApiKeys(prev => [...prev, {
+          id: newKey.id,
+          name: newKey.name,
+          key: newKey.key,
+          created: new Date(newKey.createdAt).toLocaleString(),
+          status: newKey.isActive ? 'active' : 'inactive'
+        }]);
+        onSuccess('API ключ создан успешно! Сохраните его - он больше не будет показан!');
+        setNewKeyName('');
+      } else {
+        onError('Не удалось создать API ключ');
+      }
+    } catch (err) {
+      console.error('Ошибка создания API ключа:', err);
+      onError(err.response?.data?.message || 'Не удалось создать API ключ');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const generateReferralCode = () => {
@@ -752,8 +901,8 @@ function APIKeysComponent({ onError, onSuccess }) {
           />
         </div>
         
-        <button className="btn" onClick={generateAPIKey}>
-          <Key size={20} /> Создать API ключ
+        <button className="btn" onClick={generateAPIKey} disabled={loading}>
+          <Key size={20} /> {loading ? 'Создание...' : 'Создать API ключ'}
         </button>
       </div>
 
@@ -768,26 +917,42 @@ function APIKeysComponent({ onError, onSuccess }) {
         </button>
       </div>
 
-      {apiKeys.length > 0 && (
+      {loadingKeys ? (
+        <div className="card">
+          <p>Загрузка API ключей...</p>
+        </div>
+      ) : apiKeys.length > 0 ? (
         <div className="card">
           <h3>📋 Ваши API ключи</h3>
           {apiKeys.map((key) => (
-            <div key={key.id} style={{ marginBottom: '15px' }}>
+            <div key={key.id || key.key} style={{ marginBottom: '15px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
                   <strong>{key.name}</strong>
                   <br />
-                  <small style={{ color: '#6c757d' }}>Создан: {key.created}</small>
+                  <small style={{ color: '#6c757d' }}>
+                    Создан: {key.createdAt ? new Date(key.createdAt).toLocaleString() : key.created || 'Неизвестно'}
+                  </small>
                 </div>
                 <span className={`status-badge ${
-                  key.status === 'active' ? 'status-success' : 'status-danger'
+                  (key.isActive !== false && key.status !== 'inactive') ? 'status-success' : 'status-danger'
                 }`}>
-                  {key.status === 'active' ? 'АКТИВЕН' : 'НЕАКТИВЕН'}
+                  {(key.isActive !== false && key.status !== 'inactive') ? 'АКТИВЕН' : 'НЕАКТИВЕН'}
                 </span>
               </div>
-              <div className="api-key">{key.key}</div>
+              {key.key ? (
+                <div className="api-key">{key.key}</div>
+              ) : (
+                <div className="api-key" style={{ color: '#6c757d', fontStyle: 'italic' }}>
+                  Ключ скрыт для безопасности. Используйте ключ, который вы сохранили при создании.
+                </div>
+              )}
             </div>
           ))}
+        </div>
+      ) : (
+        <div className="card">
+          <p style={{ color: '#6c757d' }}>У вас пока нет API ключей. Создайте первый ключ выше.</p>
         </div>
       )}
     </div>
@@ -1496,10 +1661,39 @@ function App() {
 
   // Проверяем авторизацию при загрузке
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (token) {
+    // Проверяем наличие токена в URL (после OAuth callback)
+    const urlParams = new URLSearchParams(window.location.search);
+    const token = urlParams.get('token');
+    const error = urlParams.get('error');
+    const success = urlParams.get('success');
+
+    if (token && success) {
+      // Сохраняем токен
+      localStorage.setItem('token', token);
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      fetchUserInfo();
+      
+      // Получаем информацию о пользователе и переключаемся на dashboard
+      fetchUserInfo().then(() => {
+        // Переключаемся на dashboard после успешной загрузки пользователя
+        setCurrentView('dashboard');
+      });
+      
+      // Показываем сообщение об успехе
+      showSuccess('Вход выполнен успешно!');
+      
+      // Очищаем URL
+      window.history.replaceState({}, document.title, '/');
+    } else if (error) {
+      showError(decodeURIComponent(error));
+      // Очищаем URL
+      window.history.replaceState({}, document.title, '/');
+    } else {
+      // Обычная проверка токена
+      const storedToken = localStorage.getItem('token');
+      if (storedToken) {
+        axios.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`;
+        fetchUserInfo();
+      }
     }
   }, []);
 
@@ -1530,12 +1724,18 @@ function App() {
         balance = balanceResponse.data.balance;
       }
       
-      setUser({
+      const userData = {
         id: userId || 'unknown',
         email: userEmail || 'unknown@example.com',
         balance: balance,
         currency: currency
-      });
+      };
+      setUser(userData);
+      
+      // Если пользователь установлен, переключаемся на dashboard
+      if (userData.id !== 'unknown') {
+        setCurrentView('dashboard');
+      }
     } catch (err) {
       console.error('Ошибка получения информации о пользователе:', err);
       // Если ошибка 401, токен недействителен - очищаем его
@@ -1617,7 +1817,10 @@ function App() {
         {!user ? (
           <button 
             className={currentView === 'auth' ? 'active' : ''}
-            onClick={() => setCurrentView('auth')}
+            onClick={() => {
+              // Редирект на API Gateway для инициации OAuth flow
+              window.location.href = '/v1/auth/login';
+            }}
           >
             <LogIn size={20} /> Вход/Регистрация
           </button>
@@ -1681,13 +1884,7 @@ function App() {
       {loading && <div className="loading">Загрузка...</div>}
 
       {currentView === 'home' && renderHome()}
-      {currentView === 'auth' && (
-        <AuthComponent 
-          onLogin={setUser}
-          onError={showError}
-          onSuccess={showSuccess}
-        />
-      )}
+      {/* Убрали локальную форму авторизации - теперь используется только Loginus OAuth */}
       {currentView === 'dashboard' && user && (
         <DashboardComponent 
           user={user}

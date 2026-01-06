@@ -5,7 +5,9 @@ import { HttpModule } from '@nestjs/axios';
 import { JwtModule } from '@nestjs/jwt';
 import { JwtStrategy } from './jwt.strategy';
 import { AuthController } from './auth.controller';
+import { OAuthController } from './oauth.controller';
 import { AuthService } from './auth.service';
+import { ApiKeyAuthGuard } from './api-key-auth.guard';
 
 @Module({
   imports: [
@@ -21,8 +23,8 @@ import { AuthService } from './auth.service';
       inject: [ConfigService],
     }),
   ],
-  controllers: [AuthController],
-  providers: [JwtStrategy, AuthService],
-  exports: [PassportModule, AuthService, JwtStrategy],
+  controllers: [AuthController, OAuthController],
+  providers: [JwtStrategy, AuthService, ApiKeyAuthGuard],
+  exports: [PassportModule, AuthService, JwtStrategy, ApiKeyAuthGuard],
 })
 export class AuthModule {}

@@ -64,7 +64,7 @@ export const configuration = (): MicroserviceConfig => ({
     openrouter: {
       apiKey: process.env.OPENROUTER_API_KEY || '',
       baseUrl: process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1',
-      timeout: parseInt(process.env.OPENROUTER_TIMEOUT || '60000', 10),
+      timeout: parseInt(process.env.OPENROUTER_TIMEOUT || '600000', 10), // 10 минут для длинных генераций
       maxRetries: parseInt(process.env.OPENROUTER_MAX_RETRIES || '3', 10),
       retryDelay: parseInt(process.env.OPENROUTER_RETRY_DELAY || '1000', 10),
     },
@@ -76,6 +76,13 @@ export const configuration = (): MicroserviceConfig => ({
       maxRetries: parseInt(process.env.YANDEX_MAX_RETRIES || '3', 10),
       retryDelay: parseInt(process.env.YANDEX_RETRY_DELAY || '1000', 10),
     },
+  },
+  loginus: {
+    baseUrl: process.env.LOGINUS_BASE_URL || 'https://loginus.startapus.com',
+    clientId: process.env.LOGINUS_CLIENT_ID || '',
+    clientSecret: process.env.LOGINUS_CLIENT_SECRET || '',
+    redirectUri: process.env.LOGINUS_REDIRECT_URI || 'http://localhost:3000/v1/auth/callback',
+    frontendUrl: process.env.FRONTEND_URL || 'http://localhost:80',
   },
   services: {
     auth: {
@@ -92,7 +99,7 @@ export const configuration = (): MicroserviceConfig => ({
     },
     proxy: {
       url: process.env.PROXY_SERVICE_URL || 'http://proxy-service:3003',
-      timeout: parseInt(process.env.PROXY_SERVICE_TIMEOUT || '30000', 10),
+      timeout: parseInt(process.env.PROXY_SERVICE_TIMEOUT || '600000', 10), // 10 минут для длинных генераций
     },
     classification: {
       url: process.env.CLASSIFICATION_SERVICE_URL || 'http://classification-service:3006',

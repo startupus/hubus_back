@@ -4,8 +4,10 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import helmet from 'helmet';
 import compression from 'compression';
+import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 import { LoggerUtil } from '@ai-aggregator/shared';
+import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -14,6 +16,14 @@ async function bootstrap() {
   // Security middleware
   app.use(helmet());
   app.use(compression());
+  app.use(cookieParser());
+  
+  // Body parser для JSON - увеличиваем лимит до 50MB для base64 аудио/видео
+  // Express body parser уже включен в NestJS по умолчанию через @nestjs/platform-express
+  // Но нужно явно настроить лимит для больших запросов
+  const jsonLimit = configService.get('BODY_SIZE_LIMIT', '50mb');
+  app.use(require('express').json({ limit: jsonLimit }));
+  app.use(require('express').urlencoded({ extended: true, limit: jsonLimit }));
 
   // CORS
   app.enableCors({
@@ -21,10 +31,21 @@ async function bootstrap() {
     credentials: true,
   });
 
-  // Global prefix (exclude health endpoints)
-  app.setGlobalPrefix('v1', {
-    exclude: ['health', 'health/ready', 'health/live']
+  // Middleware для обработки запросов с префиксом /v1/ (для прямых запросов от Loginus)
+  // Убираем префикс /v1/ из пути, так как маршруты зарегистрированы без него
+  // НЕ убираем /v1 для внешнего API (/api/v1/...)
+  app.use((req, res, next) => {
+    if (req.url.startsWith('/v1/') && !req.url.startsWith('/api/v1/')) {
+      req.url = req.url.replace('/v1', '');
+    }
+    next();
   });
+
+  // Global prefix removed - префикс v1 убран, все эндпоинты доступны напрямую
+  // Nginx будет проксировать /v1/* на api-gateway, убирая префикс /v1/
+
+  // Global exception filter
+  app.useGlobalFilters(new HttpExceptionFilter());
 
   // Global validation pipe
   app.useGlobalPipes(

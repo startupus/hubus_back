@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { LoggerUtil } from '@ai-aggregator/shared';
+import { ChatService } from '../chat/chat.service';
 
 export interface AIModel {
   id: string;
@@ -36,6 +37,8 @@ export interface ModelCategory {
 @Injectable()
 export class ModelsService {
   private readonly logger = new Logger(ModelsService.name);
+  
+  constructor(private readonly chatService: ChatService) {}
 
   // Mock data for AI models
   private readonly models: AIModel[] = [
@@ -345,7 +348,40 @@ export class ModelsService {
     try {
       LoggerUtil.debug('api-gateway', 'Getting AI models', { provider, category });
 
-      let filteredModels = [...this.models];
+      // Получаем модели из proxy-service через OpenRouter API
+      let openRouterModels: any[] = [];
+      try {
+        openRouterModels = await this.chatService.getModels('openrouter');
+        LoggerUtil.info('api-gateway', 'Models loaded from OpenRouter API', {
+          count: openRouterModels.length
+        });
+      } catch (error) {
+        LoggerUtil.warn('api-gateway', 'Failed to load models from OpenRouter, using fallback', {
+          error: error instanceof Error ? error.message : String(error)
+        });
+        // Fallback на жестко закодированный список, если API недоступен
+        openRouterModels = [];
+      }
+
+      // Преобразуем модели из OpenRouter в формат AIModel
+      const convertedModels: AIModel[] = openRouterModels.map((model: any) => ({
+        id: model.id,
+        name: model.name || model.id,
+        provider: this.extractProviderFromId(model.id) || 'openrouter',
+        category: model.category || 'chat',
+        description: model.description || `Model ${model.id} via OpenRouter`,
+        maxTokens: model.max_tokens || 8192,
+        inputCost: model.cost_per_input_token || 0,
+        outputCost: model.cost_per_output_token || 0,
+        isAvailable: model.is_available !== false,
+        capabilities: model.capabilities || ['chat', 'completion'],
+        contextWindow: model.max_tokens || 8192,
+        trainingData: 'Via OpenRouter',
+        lastUpdated: model.updated_at || new Date().toISOString()
+      }));
+
+      // Если модели из API не загрузились, используем fallback
+      let filteredModels = convertedModels.length > 0 ? convertedModels : [...this.models];
 
       // Apply filters
       if (provider) {
@@ -361,6 +397,7 @@ export class ModelsService {
 
       LoggerUtil.info('api-gateway', 'AI models retrieved successfully', {
         total: filteredModels.length,
+        fromOpenRouter: convertedModels.length,
         provider,
         category
       });
@@ -381,6 +418,22 @@ export class ModelsService {
       LoggerUtil.error('api-gateway', 'Failed to get AI models', error as Error, { provider, category });
       throw error;
     }
+  }
+
+  /**
+   * Извлекает название провайдера из ID модели OpenRouter
+   * Например: "openai/gpt-4o" -> "openai"
+   */
+  private extractProviderFromId(modelId: string): string {
+    if (modelId.includes('/')) {
+      return modelId.split('/')[0];
+    }
+    // Маппинг известных провайдеров
+    if (modelId.includes('gpt')) return 'openai';
+    if (modelId.includes('claude')) return 'anthropic';
+    if (modelId.includes('gemini')) return 'google';
+    if (modelId.includes('llama')) return 'meta';
+    return 'openrouter';
   }
 
   async getProviders(): Promise<{

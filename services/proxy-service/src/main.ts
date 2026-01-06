@@ -8,6 +8,11 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
 
+  // Body parser для JSON - увеличиваем лимит до 50MB для base64 аудио/видео
+  const jsonLimit = configService.get('BODY_SIZE_LIMIT', '50mb');
+  app.use(require('express').json({ limit: jsonLimit }));
+  app.use(require('express').urlencoded({ extended: true, limit: jsonLimit }));
+
   // Global validation pipe
   app.useGlobalPipes(
     new ValidationPipe({

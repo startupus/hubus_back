@@ -1,70 +1,80 @@
 # Multi-stage build for anonymization-service
-FROM node:18-alpine AS base
+FROM node:18-alpine AS development
 
-# Install dependencies only when needed
-FROM base AS deps
+# Install required dependencies
+RUN apk add --no-cache openssl python3 make g++
+
+# Настроить npm для увеличения таймаутов и retry
+RUN npm config set fetch-timeout 600000 && \
+    npm config set fetch-retries 5 && \
+    npm config set fetch-retry-mintimeout 20000 && \
+    npm config set fetch-retry-maxtimeout 120000
+
+WORKDIR /app
+
+# Copy shared package
+COPY services/shared ./shared
+WORKDIR /app/shared
+RUN npm install --legacy-peer-deps || npm install --legacy-peer-deps || npm install --legacy-peer-deps
+RUN npm run build
+
+# Copy anonymization service
+WORKDIR /app
+COPY services/anonymization-service/package*.json ./
+RUN npm install --legacy-peer-deps || npm install --legacy-peer-deps || npm install --legacy-peer-deps
+# Copy source files excluding dist and node_modules
+COPY services/anonymization-service/src ./src
+COPY services/anonymization-service/prisma ./prisma
+COPY services/anonymization-service/tsconfig*.json ./
+
+# Create directory for symlink and create link to shared package
+RUN mkdir -p /app/node_modules/@ai-aggregator && \
+    ln -sf /app/shared /app/node_modules/@ai-aggregator/shared
+
+# Generate Prisma client
+RUN npx prisma generate
+
+# Build the application
+RUN npm run build
+
+FROM node:18-alpine AS production
+
+# Install required dependencies
+RUN apk add --no-cache openssl python3 make g++
+
+# Настроить npm для увеличения таймаутов и retry
+RUN npm config set fetch-timeout 600000 && \
+    npm config set fetch-retries 5 && \
+    npm config set fetch-retry-mintimeout 20000 && \
+    npm config set fetch-retry-maxtimeout 120000
+
 WORKDIR /app
 
 # Copy package files
-COPY package*.json ./
-COPY services/shared/package*.json ./services/shared/
+COPY services/anonymization-service/package*.json ./
+RUN npm install --legacy-peer-deps --only=production || npm install --legacy-peer-deps --only=production || npm install --legacy-peer-deps --only=production
 
-# Install dependencies
-RUN npm install --legacy-peer-deps
-RUN cd services/shared && npm install --legacy-peer-deps
+# Copy built files from development stage
+COPY --from=development /app/dist ./dist
+COPY --from=development /app/shared ./shared
+COPY --from=development /app/prisma ./prisma
 
-# Development stage
-FROM base AS development
-WORKDIR /app
+# Create directory for symlink and create link to shared package
+RUN mkdir -p /app/node_modules/@ai-aggregator && \
+    ln -sf /app/shared /app/node_modules/@ai-aggregator/shared
 
-# Copy dependencies
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/services/shared/node_modules ./services/shared/node_modules
+# Reinstall and rebuild bcrypt for current architecture
+RUN cd /app/shared && npm install bcrypt --legacy-peer-deps --force && npm rebuild bcrypt
 
-# Copy source code
-COPY . .
-
-# Build shared package
-RUN cd services/shared && npm run build
-
-# Install and build anonymization service
-RUN cd services/anonymization-service && npm install --legacy-peer-deps && npm run build
+# Generate Prisma client
+RUN npx prisma generate
 
 # Expose port
 EXPOSE 3008
 
-# Start in development mode
-CMD ["npm", "run", "start:dev"]
-
-# Production stage
-FROM base AS production
-WORKDIR /app
-
-# Copy dependencies
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/services/shared/node_modules ./services/shared/node_modules
-
-# Copy built application
-COPY --from=development /app/services/anonymization-service/dist ./dist
-COPY --from=development /app/services/shared/dist ./services/shared/dist
-
-# Copy package files
-COPY package*.json ./
-
-# Create non-root user
-RUN addgroup -g 1001 -S nodejs
-RUN adduser -S nestjs -u 1001
-
-# Change ownership
-RUN chown -R nestjs:nodejs /app
-USER nestjs
-
-# Expose port
-EXPOSE 3008
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+# Health check using node instead of wget
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
   CMD node -e "require('http').get('http://localhost:3008/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
 
 # Start application
-CMD ["node", "dist/main"]
+CMD ["node", "dist/src/main"]

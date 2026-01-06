@@ -48,7 +48,25 @@ export class BillingService {
       if (error.response?.status === 404) {
         throw new HttpException('User balance not found', HttpStatus.NOT_FOUND);
       }
-      throw new HttpException('Failed to get balance', HttpStatus.INTERNAL_SERVER_ERROR);
+      
+      if (error.response?.status) {
+        throw new HttpException(
+          error.response.data?.message || 'Failed to get balance',
+          error.response.status
+        );
+      }
+      
+      if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
+        throw new HttpException(
+          'Billing service is unavailable',
+          HttpStatus.BAD_GATEWAY
+        );
+      }
+      
+      throw new HttpException(
+        error.message || 'Failed to get balance',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
     }
   }
 
@@ -65,7 +83,26 @@ export class BillingService {
       );
       return response.data;
     } catch (error: any) {
-      throw new HttpException('Failed to track usage', HttpStatus.INTERNAL_SERVER_ERROR);
+      this.logger.error('Failed to track usage', error);
+      
+      if (error.response?.status) {
+        throw new HttpException(
+          error.response.data?.message || 'Failed to track usage',
+          error.response.status
+        );
+      }
+      
+      if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
+        throw new HttpException(
+          'Billing service is unavailable',
+          HttpStatus.BAD_GATEWAY
+        );
+      }
+      
+      throw new HttpException(
+        error.message || 'Failed to track usage',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
     }
   }
 
@@ -76,7 +113,26 @@ export class BillingService {
       );
       return response.data;
     } catch (error: any) {
-      throw new HttpException('Failed to get billing report', HttpStatus.INTERNAL_SERVER_ERROR);
+      this.logger.error('Failed to get billing report', error);
+      
+      if (error.response?.status) {
+        throw new HttpException(
+          error.response.data?.message || 'Failed to get billing report',
+          error.response.status
+        );
+      }
+      
+      if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
+        throw new HttpException(
+          'Billing service is unavailable',
+          HttpStatus.BAD_GATEWAY
+        );
+      }
+      
+      throw new HttpException(
+        error.message || 'Failed to get billing report',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
     }
   }
 
@@ -98,7 +154,26 @@ export class BillingService {
       );
       return response.data;
     } catch (error: any) {
-      throw new HttpException('Failed to get transactions', HttpStatus.INTERNAL_SERVER_ERROR);
+      this.logger.error('Failed to get transactions', error);
+      
+      if (error.response?.status) {
+        throw new HttpException(
+          error.response.data?.message || 'Failed to get transactions',
+          error.response.status
+        );
+      }
+      
+      if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
+        throw new HttpException(
+          'Billing service is unavailable',
+          HttpStatus.BAD_GATEWAY
+        );
+      }
+      
+      throw new HttpException(
+        error.message || 'Failed to get transactions',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
     }
   }
 

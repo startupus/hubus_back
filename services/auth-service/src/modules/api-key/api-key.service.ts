@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
-import { LoggerUtil, ApiKey, Permission } from '@ai-aggregator/shared';
+import { LoggerUtil, ApiKey, Permission, ValidationUtil } from '@ai-aggregator/shared';
 import { CryptoUtil } from '../../common/utils/crypto.util';
 import { CreateApiKeyDto, UpdateApiKeyDto } from '@ai-aggregator/shared';
 
@@ -245,17 +245,56 @@ export class ApiKeyService {
    */
   async validateApiKey(key: string): Promise<{ isValid: boolean; companyId?: string; permissions?: Permission[] }> {
     try {
+      // Проверяем формат ключа: поддерживаем новый (40 символов) и старый (64 hex) форматы
+      if (!key.startsWith('ak_')) {
+        LoggerUtil.debug('auth-service', 'API key must start with "ak_" prefix', { 
+          keyLength: key.length,
+          keyPrefix: key.substring(0, 10) + '...'
+        });
+        return { isValid: false };
+      }
+      
+      // Новый формат: ak_[A-Za-z0-9]{40}
+      const newFormatRegex = /^ak_[A-Za-z0-9]{40}$/;
+      // Старый формат: ak_[a-f0-9]{64}
+      const oldFormatRegex = /^ak_[a-f0-9]{64}$/i;
+      
+      if (!newFormatRegex.test(key) && !oldFormatRegex.test(key)) {
+        LoggerUtil.debug('auth-service', 'Invalid API key format', { 
+          keyLength: key.length,
+          keyPrefix: key.substring(0, 10) + '...',
+          expectedFormat: 'ak_[A-Za-z0-9]{40} or ak_[a-f0-9]{64}'
+        });
+        return { isValid: false };
+      }
+
       const apiKey = await this.prisma.apiKey.findUnique({
         where: { key },
         include: { company: true },
       });
 
-      if (!apiKey || !apiKey.isActive || !apiKey.company.isActive) {
+      if (!apiKey) {
+        LoggerUtil.debug('auth-service', 'API key not found in database', { key: key.substring(0, 10) + '...' });
+        return { isValid: false };
+      }
+
+      if (!apiKey.isActive) {
+        LoggerUtil.debug('auth-service', 'API key is not active', { keyId: apiKey.id, isActive: apiKey.isActive });
+        return { isValid: false };
+      }
+
+      if (!apiKey.company.isActive) {
+        LoggerUtil.debug('auth-service', 'Company is not active', { companyId: apiKey.companyId, isActive: apiKey.company.isActive });
         return { isValid: false };
       }
 
       // Check if API key is expired
       if (apiKey.expiresAt && apiKey.expiresAt < new Date()) {
+        LoggerUtil.debug('auth-service', 'API key is expired', { 
+          keyId: apiKey.id, 
+          expiresAt: apiKey.expiresAt.toISOString(),
+          now: new Date().toISOString()
+        });
         return { isValid: false };
       }
 
@@ -265,13 +304,19 @@ export class ApiKeyService {
         data: { lastUsedAt: new Date() },
       });
 
+      LoggerUtil.debug('auth-service', 'API key validation successful', {
+        keyId: apiKey.id,
+        companyId: apiKey.companyId,
+        permissions: apiKey.permissions
+      });
+
       return {
         isValid: true,
         companyId: apiKey.companyId,
         permissions: apiKey.permissions as Permission[],
       };
     } catch (error) {
-      LoggerUtil.error('auth-service', 'Failed to validate API key', error as Error, { key });
+      LoggerUtil.error('auth-service', 'Failed to validate API key', error as Error, { key: key.substring(0, 10) + '...' });
       return { isValid: false };
     }
   }

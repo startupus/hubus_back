@@ -19,6 +19,7 @@ import { SubscriptionModule } from './subscription/subscription.module';
 import { EmployeeModule } from './employee/employee.module';
 import { EmployeeStatsModule } from './employee-stats/employee-stats.module';
 import { SyncModule } from './sync/sync.module';
+import { ExternalApiModule } from './external-api/external-api.module';
 import { JwtStrategy } from './auth/jwt.strategy';
 import { configuration } from './config/configuration';
 import { validationSchema } from './config/validation.schema';
@@ -55,6 +56,7 @@ import { validationSchema } from './config/validation.schema';
     EmployeeModule,
     EmployeeStatsModule,
     SyncModule,
+    ExternalApiModule,
   ],
   providers: [JwtStrategy],
 })

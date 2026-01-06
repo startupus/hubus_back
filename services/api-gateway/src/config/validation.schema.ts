@@ -36,7 +36,7 @@ export const validationSchema = Joi.object({
   JWT_REFRESH_EXPIRES_IN: Joi.string().default('7d'),
   
   // Providers
-  OPENAI_API_KEY: Joi.string().required(),
+  OPENAI_API_KEY: Joi.string().optional().allow(''),
   OPENROUTER_API_KEY: Joi.string().required(),
   ANTHROPIC_API_KEY: Joi.string().optional(),
   GOOGLE_API_KEY: Joi.string().optional(),

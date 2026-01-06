@@ -123,6 +123,16 @@ export interface ServiceConfig {
   };
 }
 
+export interface LoginusConfig {
+  baseUrl?: string;
+  oauthUrl?: string; // Deprecated, use baseUrl instead
+  frontendUrl?: string;
+  clientId?: string;
+  clientSecret?: string;
+  redirectUri?: string;
+  scope?: string; // Deprecated, scopes are now hardcoded in the controller
+}
+
 export interface MicroserviceConfig {
   service: ServiceConfig;
   database: DatabaseConfig;
@@ -141,6 +151,7 @@ export interface MicroserviceConfig {
     enabledForModel: string;
     preserveMetadata: boolean;
   };
+  loginus?: LoginusConfig;
 }
 
 export interface EnvironmentVariables {

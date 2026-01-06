@@ -33,15 +33,15 @@ export class ChatController {
   async createCompletion(
     @Body() request: any,
     @Request() req: any,
-    @Query('provider') provider?: 'openai' | 'openrouter' | 'yandex'
+    @Query('provider') provider?: 'openrouter'
   ): Promise<any> {
     const userId = req.user.id;
     const sessionId = req.user.sessionId || null;
     const startTime = Date.now();
     
-    // Определяем провайдера по модели, если не указан явно
+    // Всегда используем OpenRouter
     if (!provider) {
-      provider = this.determineProviderByModel(request.model || 'gpt-3.5-turbo');
+      provider = 'openrouter';
     }
     
     console.log('Chat completion request received:', JSON.stringify(request, null, 2));
@@ -207,10 +207,10 @@ export class ChatController {
   }
 
   @Get('models')
-  @ApiOperation({ summary: 'Get available models' })
+  @ApiOperation({ summary: 'Get available models from OpenRouter' })
   @ApiResponse({ status: 200, description: 'Models retrieved successfully' })
   async getModels(
-    @Query('provider') provider?: 'openai' | 'openrouter' | 'yandex'
+    @Query('provider') provider?: 'openrouter'
   ) {
     const models = await this.chatService.getModels(provider);
     return {
@@ -224,7 +224,7 @@ export class ChatController {
   @ApiOperation({ summary: 'Get model information' })
   @ApiResponse({ status: 200, description: 'Model info retrieved successfully' })
   async getModelInfo(
-    @Param('provider') provider: 'openai' | 'openrouter' | 'yandex',
+    @Param('provider') provider: 'openrouter',
     @Param('model') model: string
   ) {
     const modelInfo = await this.chatService.getModelInfo(provider, model);
@@ -293,41 +293,10 @@ export class ChatController {
         userId: req.user?.id
       });
       
-      // В случае ошибки возвращаем российские по умолчанию
-      const russianDefaults = [
-        {
-          provider: 'yandex',
-          model: 'yandex-gpt',
-          reason: 'russian',
-          score: 100,
-          isDefault: true,
-          description: 'Yandex GPT - российская языковая модель'
-        },
-        {
-          provider: 'sber',
-          model: 'gigachat',
-          reason: 'russian',
-          score: 95,
-          isDefault: true,
-          description: 'GigaChat - ИИ-модель от Сбера'
-        },
-        {
-          provider: 'sber',
-          model: 'kandinsky',
-          reason: 'russian',
-          score: 90,
-          isDefault: true,
-          description: 'Kandinsky - генерация изображений от Сбера'
-        }
-      ];
-
+      // В случае ошибки возвращаем пустой массив
       return {
         success: true,
-        data: {
-          recommendations: russianDefaults.slice(0, limit || 10),
-          total: russianDefaults.length,
-          hasRussianDefaults: true
-        }
+        data: []
       };
     }
   }
@@ -375,38 +344,4 @@ export class ChatController {
     }
   }
 
-  /**
-   * Определяет провайдера по модели
-   */
-  private determineProviderByModel(model: string): 'openai' | 'openrouter' | 'yandex' {
-    const modelLower = model.toLowerCase();
-    
-    // OpenRouter модели
-    if (modelLower.includes('deepseek/') || 
-        modelLower.includes('anthropic/') || 
-        modelLower.includes('google/') ||
-        modelLower.includes('meta/') ||
-        modelLower.includes('mistral/') ||
-        modelLower.includes('openai/gpt-4o') ||
-        modelLower.includes('openai/gpt-4o-mini')) {
-      return 'openrouter';
-    }
-    
-    // Yandex модели
-    if (modelLower.includes('yandex') || 
-        modelLower.includes('gigachat') ||
-        modelLower.includes('kandinsky')) {
-      return 'yandex';
-    }
-    
-    // OpenAI модели (по умолчанию)
-    if (modelLower.includes('gpt-3.5') || 
-        modelLower.includes('gpt-4') ||
-        modelLower.includes('dall-e')) {
-      return 'openai';
-    }
-    
-    // По умолчанию OpenRouter для неизвестных моделей
-    return 'openrouter';
-  }
 }

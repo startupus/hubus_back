@@ -1,48 +1,103 @@
-# ⚡ Быстрый запуск AI Aggregator
+# 🚀 Быстрый запуск проекта
 
-## 🚀 За 5 минут
+## Одна команда для запуска всего проекта
 
-### 1. Установите Docker Desktop
-- Скачайте с [docker.com](https://www.docker.com/products/docker-desktop/)
-- Установите и запустите
+### Windows PowerShell:
 
-### 2. Клонируйте и запустите
-```bash
-# Клонируем проект
-git clone https://github.com/teramisuslik/MVP.git
-cd MVP
-
-# Запускаем все сервисы
-docker-compose up -d
-
-# Ждем 3 минуты
-Start-Sleep -Seconds 180
-
-# Проверяем
-docker-compose ps
+```powershell
+.\start-project.ps1
 ```
 
-### 3. Тестируем
-```bash
-# Автоматический тест (Windows)
-.\test-complete-system.ps1
+### Альтернативные варианты:
 
-# Или проверяем вручную
-curl http://localhost:3000/health
-curl http://localhost:3000/v1/models
+```powershell
+# Без пересборки (использует существующие образы)
+.\start-project.ps1 -NoBuild
+
+# Пересборка без кэша (полная пересборка)
+.\start-project.ps1 -NoCache
 ```
 
-## ✅ Готово!
+## Что было исправлено
 
-**Доступные сервисы:**
-- API Gateway: http://localhost:3000
-- Auth Service: http://localhost:3001
-- Models (БЕЗ auth): http://localhost:3000/v1/models
+1. ✅ **Dockerfile для payment-service** - исправлен путь к main файлу
+2. ✅ **Зависимости в docker-compose.yml** - добавлены правильные зависимости между сервисами
+3. ✅ **Скрипт запуска** - создан улучшенный скрипт `start-project.ps1` с проверками и обработкой ошибок
 
-**Ожидаемый результат:**
-- 21/21 тестов пройдено ✅
-- 100% Success Rate 🎯
+## Требования
 
----
+- Docker Desktop установлен и запущен
+- Минимум 8GB RAM свободной памяти
+- Минимум 10GB свободного места на диске
 
-*Подробная инструкция: [README_DEPLOYMENT.md](README_DEPLOYMENT.md)*
+## После запуска
+
+Проект будет доступен по следующим адресам:
+
+- **Frontend**: http://localhost:80
+- **API Gateway**: http://localhost:3000
+- **Auth Service**: http://localhost:3001
+- **Provider Orchestrator**: http://localhost:3002
+- **Proxy Service**: http://localhost:3003
+- **Billing Service**: http://localhost:3004
+- **Analytics Service**: http://localhost:3005
+- **Payment Service**: http://localhost:3006
+- **Certification Service**: http://localhost:3007
+- **Anonymization Service**: http://localhost:3008
+- **Redis Service**: http://localhost:3009
+- **RabbitMQ Management**: http://localhost:15672 (guest/guest)
+
+## Управление
+
+```powershell
+# Остановить все контейнеры
+docker compose down
+
+# Просмотр логов
+docker compose logs -f api-gateway
+
+# Статус контейнеров
+docker compose ps
+
+# Перезапустить сервис
+docker compose restart api-gateway
+```
+
+## Решение проблем
+
+### Ошибка сборки
+
+```powershell
+# Полная пересборка без кэша
+.\start-project.ps1 -NoCache
+```
+
+### Порты заняты
+
+```powershell
+# Проверить, какие процессы используют порты
+netstat -ano | findstr :3000
+
+# Остановить процесс (замените <PID> на номер процесса)
+taskkill /PID <PID> /F
+```
+
+### Недостаточно памяти
+
+1. Увеличьте лимит RAM в Docker Desktop (Settings → Resources → Memory)
+2. Закройте другие приложения
+3. Перезапустите Docker Desktop
+
+### Контейнеры не запускаются
+
+```powershell
+# Проверить логи
+docker compose logs
+
+# Перезапустить конкретный сервис
+docker compose restart [service-name]
+
+# Пересобрать конкретный сервис
+docker compose build --no-cache [service-name]
+docker compose up -d [service-name]
+```

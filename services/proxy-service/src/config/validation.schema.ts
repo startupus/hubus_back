@@ -13,7 +13,7 @@ export const validationSchema = Joi.object({
   RABBITMQ_URL: Joi.string().required(),
   
   // Providers
-  OPENAI_API_KEY: Joi.string().required(),
+  OPENAI_API_KEY: Joi.string().optional().allow(''),
   OPENROUTER_API_KEY: Joi.string().required(),
   
   // Monitoring

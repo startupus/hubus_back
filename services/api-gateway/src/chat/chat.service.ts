@@ -23,7 +23,7 @@ export class ChatService {
   async createCompletion(
     request: any,
     userId: string,
-    provider: 'openai' | 'openrouter' | 'yandex' = 'openai'
+    provider: 'openrouter' = 'openrouter'
   ): Promise<any> {
     try {
       LoggerUtil.info('api-gateway', 'Creating chat completion', {
@@ -37,7 +37,10 @@ export class ChatService {
       const response: AxiosResponse<ChatCompletionResponse> = await firstValueFrom(
         this.httpService.post(
           `${this.proxyServiceUrl}/proxy/chat/completions?user_id=${userId}&provider=${provider}`,
-          request
+          request,
+          {
+            timeout: 600000 // 10 минут для длинных генераций
+          }
         )
       );
 
@@ -70,7 +73,7 @@ export class ChatService {
     }
   }
 
-  async getModels(provider?: 'openai' | 'openrouter' | 'yandex'): Promise<any[]> {
+  async getModels(provider?: 'openrouter'): Promise<any[]> {
     try {
       const response: AxiosResponse<{ success: boolean; models: any[] }> = await firstValueFrom(
         this.httpService.get(`${this.proxyServiceUrl}/proxy/models`, {
@@ -89,7 +92,7 @@ export class ChatService {
     }
   }
 
-  async getModelInfo(provider: 'openai' | 'openrouter' | 'yandex', model: string): Promise<any> {
+  async getModelInfo(provider: 'openrouter', model: string): Promise<any> {
     try {
       const response: AxiosResponse<{ success: boolean; model: any }> = await firstValueFrom(
         this.httpService.get(`${this.proxyServiceUrl}/proxy/models/${provider}/${model}`)

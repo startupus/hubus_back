@@ -11,6 +11,7 @@ import { RabbitMQModule } from '../common/rabbitmq/rabbitmq.module';
   imports: [ConfigModule, HttpModule, HistoryModule, AnonymizationModule, RabbitMQModule],
   controllers: [ChatController],
   providers: [ChatService],
+  exports: [ChatService],
 })
 export class ChatModule {}
 

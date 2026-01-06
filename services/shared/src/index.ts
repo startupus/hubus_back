@@ -19,6 +19,8 @@ export * from './dto/billing.dto';
 export * from './dto/providers.dto';
 export * from './dto/chat.dto';
 export * from './dto/ai-certification.dto';
+export * from './dto/embeddings.dto';
+export * from './dto/audio.dto';
 
 // Utilities (без нативных зависимостей)
 export * from './utils/crypto.util';
@@ -108,6 +110,7 @@ export type {
   MonitoringConfig,
   SecurityConfig,
   ServiceConfig,
+  LoginusConfig,
 } from './interfaces/config.interface';
 
 export {

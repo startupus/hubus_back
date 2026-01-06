@@ -1,4 +1,4 @@
-import { IsArray, IsString, IsOptional, IsNumber, IsEnum, ValidateNested, IsObject } from 'class-validator';
+import { IsArray, IsString, IsOptional, IsNumber, IsEnum, ValidateNested, IsObject, IsNotEmpty } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 
@@ -19,12 +19,106 @@ export enum ChatRole {
   ASSISTANT = 'assistant',
 }
 
+/**
+ * Content item for Vision API (image_url)
+ */
+export class ImageUrlContent {
+  @ApiProperty({ description: 'Тип контента', enum: ['image_url'] })
+  @IsString()
+  @IsNotEmpty()
+  type!: 'image_url';
+
+  @ApiProperty({ 
+    description: 'URL изображения в формате data URL',
+    example: 'data:image/jpeg;base64,/9j/4AAQSkZJRg...'
+  })
+  @IsObject()
+  image_url!: {
+    url: string;
+  };
+}
+
+/**
+ * Audio content item (для GPT-4o Audio Preview, Voxtral)
+ */
+export class AudioContent {
+  @ApiProperty({ description: 'Тип контента', enum: ['audio'] })
+  @IsString()
+  @IsNotEmpty()
+  type!: 'audio';
+
+  @ApiProperty({ 
+    description: 'URL аудио в формате data URL',
+    example: 'data:audio/mpeg;base64,...'
+  })
+  @IsObject()
+  audio!: {
+    url: string;
+  };
+}
+
+/**
+ * Video content item (для GPT-4o и других мультимодальных моделей)
+ */
+export class VideoContent {
+  @ApiProperty({ description: 'Тип контента', enum: ['video'] })
+  @IsString()
+  @IsNotEmpty()
+  type!: 'video';
+
+  @ApiProperty({ 
+    description: 'URL видео в формате data URL',
+    example: 'data:video/mp4;base64,...'
+  })
+  @IsObject()
+  video!: {
+    url: string;
+  };
+}
+
+/**
+ * Text content item
+ */
+export class TextContent {
+  @ApiProperty({ description: 'Тип контента', enum: ['text'] })
+  @IsString()
+  @IsNotEmpty()
+  type!: 'text';
+
+  @ApiProperty({ description: 'Текст сообщения' })
+  @IsString()
+  @IsNotEmpty()
+  text!: string;
+}
+
 export class ChatMessage {
   @ApiProperty({ description: 'Роль отправителя сообщения' })
+  @IsString()
+  @IsNotEmpty()
   role!: string;
 
-  @ApiProperty({ description: 'Содержимое сообщения' })
-  content!: string;
+  @ApiProperty({ 
+    description: 'Содержимое сообщения. Может быть строкой (обычный текст) или массивом объектов (для мультимодальных моделей). Поддерживаемые типы: "text", "image_url", "audio", "video". Для Vision API используйте type: "image_url", для аудио - type: "audio", для видео - type: "video"',
+    oneOf: [
+      { type: 'string' },
+      { 
+        type: 'array', 
+        items: { 
+          oneOf: [
+            { $ref: '#/components/schemas/TextContent' },
+            { $ref: '#/components/schemas/ImageUrlContent' },
+            { $ref: '#/components/schemas/AudioContent' },
+            { $ref: '#/components/schemas/VideoContent' }
+          ]
+        }
+      }
+    ],
+    example: 'Текст сообщения'
+  })
+  // Для обратной совместимости content может быть строкой или массивом
+  // Валидация будет более гибкой - не используем строгие декораторы
+  // Поддерживаемые типы контента: text, image_url, audio, video
+  content!: string | (TextContent | ImageUrlContent | AudioContent | VideoContent)[];
 
   @ApiProperty({ description: 'Имя отправителя (опционально)', required: false })
   @IsOptional()
@@ -33,9 +127,15 @@ export class ChatMessage {
 
 export class ChatCompletionRequest {
   @ApiProperty({ description: 'Модель для использования' })
+  @IsString()
+  @IsNotEmpty()
   model!: string;
 
   @ApiProperty({ description: 'Массив сообщений', type: [ChatMessage] })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ChatMessage)
+  @IsNotEmpty()
   messages!: ChatMessage[];
 
   @ApiProperty({ description: 'Максимальное количество токенов в ответе', required: false })

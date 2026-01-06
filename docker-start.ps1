@@ -17,6 +17,20 @@ if (-not (Get-Command docker-compose -ErrorAction SilentlyContinue)) {
     exit 1
 }
 
+# Проверка наличия .env файла
+if (-not (Test-Path ".env")) {
+    Write-Host "⚠️  Файл .env не найден. Создаю из env.example..." -ForegroundColor Yellow
+    if (Test-Path "env.example") {
+        Copy-Item "env.example" ".env"
+        Write-Host "✅ Файл .env создан. Пожалуйста, отредактируйте его и укажите ваши API ключи." -ForegroundColor Green
+        Write-Host "   Для продолжения нажмите Enter..." -ForegroundColor Yellow
+        Read-Host
+    } else {
+        Write-Host "❌ Файл env.example не найден!" -ForegroundColor Red
+        exit 1
+    }
+}
+
 # Остановить существующие контейнеры
 Write-Host "🛑 Остановка существующих контейнеров..." -ForegroundColor Yellow
 docker-compose down --remove-orphans
@@ -26,16 +40,16 @@ Write-Host "🧹 Очистка неиспользуемых образов..." 
 docker image prune -f
 
 # Собрать образы
-Write-Host "🔨 Сборка Docker образов..." -ForegroundColor Green
-docker-compose build --no-cache
+Write-Host "🔨 Сборка Docker образов (это может занять несколько минут)..." -ForegroundColor Green
+docker-compose build
 
 # Запустить сервисы
 Write-Host "🚀 Запуск сервисов..." -ForegroundColor Green
 docker-compose up -d
 
 # Ждать запуска сервисов
-Write-Host "⏳ Ожидание запуска сервисов..." -ForegroundColor Yellow
-Start-Sleep -Seconds 30
+Write-Host "⏳ Ожидание запуска сервисов (это может занять 1-2 минуты)..." -ForegroundColor Yellow
+Start-Sleep -Seconds 45
 
 # Проверить статус сервисов
 Write-Host "📊 Статус сервисов:" -ForegroundColor Cyan
@@ -74,10 +88,16 @@ Write-Host "  • Provider Orchestrator: http://localhost:3002" -ForegroundColor
 Write-Host "  • Proxy Service: http://localhost:3003" -ForegroundColor White
 Write-Host "  • Billing Service: http://localhost:3004" -ForegroundColor White
 Write-Host "  • Analytics Service: http://localhost:3005" -ForegroundColor White
+Write-Host "  • Payment Service: http://localhost:3006" -ForegroundColor White
+Write-Host "  • Certification Service: http://localhost:3007" -ForegroundColor White
+Write-Host "  • Anonymization Service: http://localhost:3008" -ForegroundColor White
+Write-Host "  • Frontend: http://localhost:80" -ForegroundColor White
 Write-Host "`n📊 Мониторинг:" -ForegroundColor Cyan
-Write-Host "  • RabbitMQ Management: http://localhost:15672" -ForegroundColor White
+Write-Host "  • RabbitMQ Management: http://localhost:15672 (guest/guest)" -ForegroundColor White
 Write-Host "  • Redis: localhost:6379" -ForegroundColor White
 Write-Host "`n🔧 Управление:" -ForegroundColor Cyan
 Write-Host "  • Остановить: docker-compose down" -ForegroundColor White
 Write-Host "  • Логи: docker-compose logs -f [service-name]" -ForegroundColor White
 Write-Host "  • Перезапустить: docker-compose restart [service-name]" -ForegroundColor White
+Write-Host "  • Статус: docker-compose ps" -ForegroundColor White
+Write-Host "`n📖 Документация: см. DOCKER_START.md" -ForegroundColor Cyan

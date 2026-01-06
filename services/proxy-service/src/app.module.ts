@@ -17,7 +17,7 @@ import { HealthModule } from './health/health.module';
       expandVariables: true,
     }),
     HttpModule.register({
-      timeout: 10000,
+      timeout: 600000, // 10 минут для длинных генераций
       maxRedirects: 3,
     }),
     ProxyModule,

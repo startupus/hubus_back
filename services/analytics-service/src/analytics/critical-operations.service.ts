@@ -88,10 +88,7 @@ export class CriticalOperationsService {
         {
           operation: 'critical_event',
           ...data,
-          timestamp: new Date().toISOString()
-        },
-        {
-          persistent: true,
+          timestamp: new Date().toISOString(),
           priority: this.getPriorityBySeverity(data.severity),
           expiration: '1800000' // 30 минут TTL
         }
@@ -129,10 +126,7 @@ export class CriticalOperationsService {
         {
           operation: 'performance_metrics',
           ...data,
-          timestamp: data.timestamp.toISOString()
-        },
-        {
-          persistent: true,
+          timestamp: data.timestamp.toISOString(),
           priority: 5, // Средний приоритет для метрик
           expiration: '900000' // 15 минут TTL
         }
@@ -171,10 +165,7 @@ export class CriticalOperationsService {
         {
           operation: 'security_audit',
           ...data,
-          timestamp: new Date().toISOString()
-        },
-        {
-          persistent: true,
+          timestamp: new Date().toISOString(),
           priority: this.getPriorityBySeverity(data.severity),
           expiration: '3600000' // 1 час TTL
         }

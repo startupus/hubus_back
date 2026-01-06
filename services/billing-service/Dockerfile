@@ -15,6 +15,12 @@ RUN apk add --no-cache \
     libssl3 \
     && rm -rf /var/cache/apk/*
 
+# Настроить npm для увеличения таймаутов и retry
+RUN npm config set fetch-timeout 600000 && \
+    npm config set fetch-retries 5 && \
+    npm config set fetch-retry-mintimeout 20000 && \
+    npm config set fetch-retry-maxtimeout 120000
+
 WORKDIR /app
 
 # ===========================================
@@ -28,19 +34,20 @@ COPY services/shared/package*.json ./services/shared/
 COPY services/billing-service/package*.json ./services/billing-service/
 
 # Установить зависимости
-RUN npm install --legacy-peer-deps --only=production --silent
-RUN cd services/shared && npm install --legacy-peer-deps --silent
-RUN cd services/billing-service && npm install --legacy-peer-deps --silent
+RUN npm install --legacy-peer-deps --only=production --silent || npm install --legacy-peer-deps --only=production --silent || npm install --legacy-peer-deps --only=production --silent
+RUN cd services/shared && (npm install --legacy-peer-deps --silent || npm install --legacy-peer-deps --silent || npm install --legacy-peer-deps --silent)
+RUN cd services/billing-service && (npm install --legacy-peer-deps --silent || npm install --legacy-peer-deps --silent || npm install --legacy-peer-deps --silent)
 
 # Копировать исходный код
 COPY services/shared ./services/shared
 COPY services/billing-service ./services/billing-service
 
-# Создать символическую ссылку на shared пакет
-RUN ln -sf /app/services/shared /app/services/billing-service/node_modules/@ai-aggregator/shared
-
 # Собрать shared пакет
 RUN cd services/shared && npm run build
+
+# Создать директорию для символической ссылки и создать ссылку на shared пакет
+RUN mkdir -p /app/services/billing-service/node_modules/@ai-aggregator && \
+    ln -sf /app/services/shared /app/services/billing-service/node_modules/@ai-aggregator/shared
 
 # Сгенерировать Prisma клиент
 RUN cd services/billing-service && npx prisma generate
@@ -61,7 +68,8 @@ RUN adduser -S nestjs -u 1001
 COPY services/billing-service/package*.json ./
 
 # Установить только production зависимости
-RUN npm install --legacy-peer-deps --only=production --silent && npm cache clean --force
+RUN npm install --legacy-peer-deps --only=production --silent || npm install --legacy-peer-deps --only=production --silent || npm install --legacy-peer-deps --only=production --silent
+RUN npm cache clean --force
 
 # Копировать собранные файлы из development stage
 COPY --from=development --chown=nestjs:nodejs /app/services/billing-service/dist ./dist
@@ -69,8 +77,9 @@ COPY --from=development --chown=nestjs:nodejs /app/services/shared ./shared
 # COPY --from=development --chown=nestjs:nodejs /app/services/billing-service/proto ./proto # Removed - no proto files
 COPY --from=development --chown=nestjs:nodejs /app/services/billing-service/prisma ./prisma
 
-# Создать символическую ссылку на shared пакет
-RUN ln -sf /app/shared /app/node_modules/@ai-aggregator/shared
+# Создать директорию для символической ссылки и создать ссылку на shared пакет
+RUN mkdir -p /app/node_modules/@ai-aggregator && \
+    ln -sf /app/shared /app/node_modules/@ai-aggregator/shared
 
 # Переустановить и пересобрать bcrypt для текущей архитектуры
 RUN cd /app/shared && npm install bcrypt --legacy-peer-deps --force && npm rebuild bcrypt

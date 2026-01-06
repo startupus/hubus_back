@@ -1,0 +1,55 @@
+# Build outputs
+build/
+dist/
+.next/
+.nuxt/
+out/
+
+# Node modules
+node_modules/
+
+# Tests
+*.test.ts
+*.test.tsx
+*.test.js
+*.test.jsx
+*.spec.ts
+*.spec.tsx
+*.spec.js
+*.spec.jsx
+**/__tests__/
+**/__mocks__/
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment files
+.env
+.env.*
+!.env.example
+!.env.production
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Coverage
+coverage/
+.nyc_output/
+
+# Misc
+*.md
+!README.md
+.eslintcache
+.cache/
+

@@ -1,0 +1,33 @@
+# Build outputs
+dist/
+*.tsbuildinfo
+
+# Node modules
+node_modules/
+
+# Tests
+*.test.ts
+*.spec.ts
+*.test.js
+*.spec.js
+tests/
+__tests__/
+
+# Logs
+*.log
+logs/
+
+# Documentation
+*.md
+!README.md
+
+# Scripts
+*.ps1
+*.bat
+*.cmd
+*.sh
+
+# Test configs
+jest.config.*
+tsconfig.test.json
+

@@ -1,0 +1,46 @@
+# Исключить все dist и build
+**/dist/
+**/build/
+*.tsbuildinfo
+
+# Исключить node_modules (устанавливаются в контейнере)
+**/node_modules/
+
+# Исключить тесты
+**/*.test.ts
+**/*.test.js
+**/*.spec.ts
+**/*.spec.js
+**/tests/
+**/__tests__/
+
+# Исключить логи
+**/*.log
+**/logs/
+
+# Исключить документацию
+**/*.md
+!**/README.md
+
+# Исключить скрипты
+**/*.ps1
+**/*.bat
+**/*.cmd
+**/*.sh
+**/*.sql
+
+# Исключить Prisma dev базы
+**/prisma/*.db
+**/prisma/*.db-journal
+**/prisma/migrations/
+
+# Исключить конфиги тестов
+**/jest.config.*
+**/tsconfig.test.json
+
+# Исключить env файлы (кроме примеров)
+**/.env
+**/.env.*
+!**/.env.example
+!**/env.example
+

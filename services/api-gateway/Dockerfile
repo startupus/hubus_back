@@ -17,11 +17,13 @@ WORKDIR /app/shared
 RUN npm install --legacy-peer-deps
 RUN npm run build
 
-# Копировать api-gateway
+# Копировать api-gateway (только нужные файлы)
 WORKDIR /app
 COPY services/api-gateway/package*.json ./
 RUN npm install --legacy-peer-deps || npm install --legacy-peer-deps || npm install --legacy-peer-deps
-COPY services/api-gateway ./
+COPY services/api-gateway/src ./src
+COPY services/api-gateway/prisma ./prisma
+COPY services/api-gateway/tsconfig*.json ./
 
 # Создать директорию для символической ссылки и создать ссылку на shared пакет
 RUN mkdir -p /app/node_modules/@ai-aggregator && \

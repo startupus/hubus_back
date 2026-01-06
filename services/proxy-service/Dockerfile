@@ -17,11 +17,13 @@ WORKDIR /app/shared
 RUN npm install --legacy-peer-deps || npm install --legacy-peer-deps || npm install --legacy-peer-deps
 RUN npm run build
 
-# Копировать proxy-service
+# Копировать proxy-service (только нужные файлы)
 WORKDIR /app
 COPY services/proxy-service/package*.json ./
 RUN npm install --legacy-peer-deps || npm install --legacy-peer-deps || npm install --legacy-peer-deps
-COPY services/proxy-service ./
+COPY services/proxy-service/src ./src
+COPY services/proxy-service/prisma ./prisma
+COPY services/proxy-service/tsconfig*.json ./
 
 # Создать директорию для символической ссылки и создать ссылку на shared пакет
 RUN mkdir -p /app/node_modules/@ai-aggregator && \

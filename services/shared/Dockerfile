@@ -11,7 +11,8 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install --legacy-peer-deps || npm install --legacy-peer-deps || npm install --legacy-peer-deps
 
-COPY . .
+COPY src ./src
+COPY tsconfig*.json ./
 RUN npm run build
 
 FROM node:18-alpine AS production

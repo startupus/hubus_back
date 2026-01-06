@@ -17,11 +17,13 @@ WORKDIR /app/shared
 RUN npm install --legacy-peer-deps || npm install --legacy-peer-deps || npm install --legacy-peer-deps
 RUN npm run build
 
-# Копировать provider-orchestrator
+# Копировать provider-orchestrator (только нужные файлы)
 WORKDIR /app
 COPY services/provider-orchestrator/package*.json ./
 RUN npm install --legacy-peer-deps || npm install --legacy-peer-deps || npm install --legacy-peer-deps
-COPY services/provider-orchestrator ./
+COPY services/provider-orchestrator/src ./src
+COPY services/provider-orchestrator/prisma ./prisma
+COPY services/provider-orchestrator/tsconfig*.json ./
 
 # Создать директорию для символической ссылки и создать ссылку на shared пакет
 RUN mkdir -p /app/node_modules/@ai-aggregator && \

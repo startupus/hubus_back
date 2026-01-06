@@ -38,9 +38,13 @@ RUN npm install --legacy-peer-deps --only=production --silent || npm install --l
 RUN cd services/shared && (npm install --legacy-peer-deps --silent || npm install --legacy-peer-deps --silent || npm install --legacy-peer-deps --silent)
 RUN cd services/billing-service && (npm install --legacy-peer-deps --silent || npm install --legacy-peer-deps --silent || npm install --legacy-peer-deps --silent)
 
-# Копировать исходный код
-COPY services/shared ./services/shared
-COPY services/billing-service ./services/billing-service
+# Копировать исходный код (только нужные файлы)
+COPY services/shared/src ./services/shared/src
+COPY services/shared/package*.json ./services/shared/
+COPY services/shared/tsconfig*.json ./services/shared/
+COPY services/billing-service/src ./services/billing-service/src
+COPY services/billing-service/prisma ./services/billing-service/prisma
+COPY services/billing-service/tsconfig*.json ./services/billing-service/
 
 # Собрать shared пакет
 RUN cd services/shared && npm run build

@@ -1,0 +1,42 @@
+# Build outputs
+dist/
+*.tsbuildinfo
+
+# Node modules
+node_modules/
+
+# Tests
+*.test.ts
+*.spec.ts
+tests/
+__tests__/
+
+# Logs
+*.log
+logs/
+
+# Documentation
+*.md
+!README.md
+
+# Scripts
+*.ps1
+*.bat
+*.cmd
+*.sh
+*.sql
+
+# Prisma
+prisma/migrations/
+prisma/*.db
+prisma/*.db-journal
+
+# Test configs
+jest.config.*
+tsconfig.test.json
+
+# Env files
+.env
+.env.*
+!.env.example
+

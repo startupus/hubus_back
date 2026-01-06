@@ -17,11 +17,13 @@ WORKDIR /app/shared
 RUN npm install --legacy-peer-deps || npm install --legacy-peer-deps || npm install --legacy-peer-deps
 RUN npm run build
 
-# Копировать auth-service
+# Копировать auth-service (только нужные файлы)
 WORKDIR /app
 COPY services/auth-service/package*.json ./
 RUN npm install --legacy-peer-deps || npm install --legacy-peer-deps || npm install --legacy-peer-deps
-COPY services/auth-service ./
+COPY services/auth-service/src ./src
+COPY services/auth-service/prisma ./prisma
+COPY services/auth-service/tsconfig*.json ./
 
 # Установить shared пакет как зависимость
 RUN npm install ./shared --legacy-peer-deps
